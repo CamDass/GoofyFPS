@@ -133,7 +133,7 @@ partial class Program
 
         Raylib.BeginMode3D(weaponCamera);
 
-            Vector3 weaponPos = new Vector3(0.4f, -0.4f, 1.2f);
+            Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
             Raylib.DrawModel(sniper, weaponPos, 1.0f, Color.White);
         Raylib.EndMode3D();
         

@@ -93,7 +93,7 @@ partial class Program
         background = Raylib.LoadTexture("src\\Background3.png");
 
         mapModel = Raylib.LoadModel("map.glb");
-        sniper = Raylib.LoadModel("sniper.glb");
+        sniper = Raylib.LoadModel("assets\\sniper.glb");
         // Nécessite lighting.vs et lighting.fs
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
 
