@@ -35,8 +35,10 @@ class Program
 
     static Texture2D background;
 
-
+    // models 3d
     static Model mapModel;
+    static Model sniper;
+
     static Shader lightShader;
     
 
@@ -88,8 +90,8 @@ class Program
 
         background = Raylib.LoadTexture("src\\Background3.png");
 
-        // On charge l'unique fichier map.glb pour le visuel ET la physique
         mapModel = Raylib.LoadModel("map.glb");
+        sniper = Raylib.LoadModel("sniper.glb");
         // Nécessite lighting.vs et lighting.fs
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
 
@@ -178,8 +180,9 @@ class Program
             Raylib.UnloadTexture(texture);
         }
         
-        // N'oublions pas de décharger la 3D
+        // on décharge la 3d
         Raylib.UnloadModel(mapModel);
+        Raylib.UnloadModel(sniper);
         Raylib.UnloadShader(lightShader);
 
         Raylib.CloseWindow();
@@ -304,6 +307,38 @@ class Program
             foreach (BoundingBox wall in walls)
                 Raylib.DrawBoundingBox(wall, Color.Red);
         Raylib.EndMode3D();
+
+        Camera3D weaponCamera = new Camera3D();
+        weaponCamera.Position = new Vector3(0,0,0);
+        weaponCamera.Target = new Vector3(0, 0, 1);
+        weaponCamera.Up = new Vector3(0, 1, 0);
+        weaponCamera.FovY = 45.0f;
+        weaponCamera.Projection = CameraProjection.Perspective;
+
+        Raylib.BeginMode3D(weaponCamera);
+
+            Vector3 weaponPos = new Vector3(0.4f, -0.4f, 1.2f);
+            Raylib.DrawModel(sniper, weaponPos, 1.0f, Color.White);
+        Raylib.EndMode3D();
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         // --- E. INTERFACE 2D (UI) ---
         Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
