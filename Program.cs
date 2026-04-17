@@ -48,6 +48,7 @@ class Program
     static Vector3 playerSize = new Vector3(1.0f, 2.0f, 1.0f);
 
     // --- 3. VARIABLES DE PHYSIQUE (SAUT ET GRAVITÉ) ---
+    static int NbJump = 2;
     static float gravity = 25.0f;
     static float jumpStrength = 10.0f;
     static float velocityY = 0.0f;     // Vitesse verticale
@@ -242,8 +243,16 @@ class Program
         }
 
         // --- B. GESTION DES MOUVEMENTS VERTICAUX (AXE Y) ---
-        if (isGrounded && Raylib.IsKeyPressed(KeyboardKey.Space))
-            velocityY = jumpStrength;
+        if (Raylib.IsKeyPressed(KeyboardKey.Space))
+        {
+            if (isGrounded || NbJump > 0)
+            {
+                NbJump -=1;
+                velocityY = jumpStrength;
+            }
+            
+        }
+            
 
         velocityY -= gravity * deltaTime;
 
@@ -265,6 +274,7 @@ class Program
                     camera.Target.Y += correction;
                     velocityY = 0.0f;
                     isGrounded = true;
+                    NbJump = 2;
                 }
                 else if (velocityY > 0)
                 {
