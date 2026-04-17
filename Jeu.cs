@@ -21,6 +21,7 @@ partial class Program
         if (Raylib.IsKeyDown(KeyboardKey.Tab)) 
         {
             Raylib.EnableCursor();
+            Raylib.PlaySound(unselect);
             endroit = "menu";
         }
 
@@ -37,14 +38,16 @@ partial class Program
             IsDashing = false;
             CountDash = 0;
         }
+        
+        if (CountDash == 1) // a la premiere frame ou il est activé 
+        {
+            Raylib.PlaySound(swoosh);
+        }
 
         if (Raylib.IsKeyPressed(KeyboardKey.LeftShift) && !IsDashing)
         {
             IsDashing = true;
-        }
-
-
-
+        };
 
         float deltaTime = Raylib.GetFrameTime(); 
 

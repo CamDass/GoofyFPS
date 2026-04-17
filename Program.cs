@@ -44,6 +44,10 @@ partial class Program
 
     // sons
     static Sound snipershot;
+    static Sound select;
+    static Sound unselect;
+    static Sound survole;
+    static Sound swoosh;
 
 
     static Shader lightShader;
@@ -106,6 +110,10 @@ partial class Program
         Raylib.InitAudioDevice();
         snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
 
+        select = Raylib.LoadSound("assets\\sounds\\select.mp3");
+        unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
+        survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
+        swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
 
 
         // Nécessite lighting.vs et lighting.fs
@@ -124,6 +132,7 @@ partial class Program
         ListeTexture.Add(quit_button);
 
         ListeTexture.Add(background);
+        
 
         // ==== CONFIGURATION DE LA SCÈNE 3D ====
         camera = new Camera3D();

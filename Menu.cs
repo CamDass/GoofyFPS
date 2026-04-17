@@ -18,6 +18,9 @@ partial class Program
             // pour "quitter"
             if (Raylib.IsKeyDown(KeyboardKey.Space)) 
             {
+                Raylib.PlaySound(select);
+                Raylib.DisableCursor();
+
                 endroit = "boucle";
             }
 
@@ -119,10 +122,12 @@ partial class Program
             if (Raylib.CheckCollisionPointRec(souris, boxPlay))
             {
                 Raylib.DrawTextureEx(play_active, positionPlay-ajustement_draw, rotation, echelleBoutonActif, Color.White);
+                //Raylib.PlaySound(survole);
                 //Console.WriteLine("play");
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
+                    Raylib.PlaySound(select);
                     Raylib.DisableCursor();
                     endroit = "boucle";
                 }
@@ -138,6 +143,7 @@ partial class Program
             if (Raylib.CheckCollisionPointRec(souris, boxOption))
             {
                 Raylib.DrawTextureEx(option_active, positionOption-ajustement_draw, rotation, echelleBoutonActif, Color.White);
+                //Raylib.PlaySound(survole);
                 //Console.WriteLine("option");
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
@@ -157,6 +163,7 @@ partial class Program
             {
                 //bouton quitter activé
                 Raylib.DrawTextureEx(quit_active, positionQuit+ajustement_quit, rotation, echelleQuit, Color.White);
+                //Raylib.PlaySound(survole);
                 //Console.WriteLine("quit");
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
