@@ -131,7 +131,12 @@ partial class Program
         weaponCamera.FovY = 45.0f;
         weaponCamera.Projection = CameraProjection.Perspective;
 
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right);
+
+
+
+        bool hasWeapon = true;   // à changer quand il y aura d'autres armes
+        bool hasAmmo = true;    // à changer quand il y aura le système de munitions
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
         bool showweapon = !isAiming;
         Vector2 positionViseurSniper = new Vector2(0,0);
 
@@ -151,12 +156,14 @@ partial class Program
                 Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
                 Raylib.DrawModel(sniper, weaponPos, 1.0f, Color.White);
             Raylib.EndMode3D();
+            Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
+            Raylib.DrawFPS(10, 10);
         }
-        
 
-        // --- E. INTERFACE 2D (UI) ---
-        Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
-        Raylib.DrawFPS(10, 10);
+        if (hasWeapon && hasAmmo && Raylib.IsMouseButtonPressed(MouseButton.Left))
+        {
+            Raylib.PlaySound(snipershot);
+        }
 
         Raylib.EndDrawing();
     }

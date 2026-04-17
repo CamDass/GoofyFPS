@@ -38,9 +38,13 @@ partial class Program
 
     static Texture2D background;
 
-    // models 3d
+    // modeles 3d
     static Model mapModel;
     static Model sniper;
+
+    // sons
+    static Sound snipershot;
+
 
     static Shader lightShader;
     
@@ -97,6 +101,9 @@ partial class Program
         mapModel = Raylib.LoadModel("map.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
+
+        Raylib.InitAudioDevice();
+        snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
 
 
 
@@ -192,6 +199,7 @@ partial class Program
         Raylib.UnloadModel(mapModel);
         Raylib.UnloadModel(sniper);
         Raylib.UnloadShader(lightShader);
+        Raylib.UnloadSound(snipershot);
 
         Raylib.CloseWindow();
     }

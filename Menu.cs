@@ -7,6 +7,9 @@ partial class Program
 {
     // ===== BOUCLE MENU =====
 
+
+    static float echelle = 0.2f; 
+    static bool agrandissement = true;
     public static void Menu()
     {
         // --- RENDU (Draw) ---
@@ -49,15 +52,14 @@ partial class Program
             Vector2 BackgroundPos = new Vector2(0,0);
 
             // === LOGO === (test vecteur)
-            int posX_logo = Raylib.GetScreenHeight() / 2 + 200;
-            int posY_logo = 100;
+            int posX_logo = Raylib.GetScreenHeight() - 140;
+            int posY_logo = 250;
 
             Vector2 positionLogo = new Vector2(posX_logo, posY_logo);
 
             float rotation = 0.0f;
-            float echelle = 0.2f; // 20% de la taille
 
-
+            
 
              // === BOUTON MENU ===
             float echelleBoutons = 0.2f;
@@ -91,7 +93,24 @@ partial class Program
             Raylib.DrawTextureEx(background, BackgroundPos, rotation, 1f,Color.White);
 
             //logo
-            Raylib.DrawTextureEx(Logo, positionLogo, rotation, echelle, Color.White);
+            if (agrandissement) 
+            {
+                echelle += 0.0002f;
+                if (echelle >= 0.21f) agrandissement = false;
+            } 
+            else 
+            {
+                echelle -= 0.0002f;
+                if (echelle <= 0.2f) agrandissement = true;
+            }
+
+            float largeuraffichee = Logo.Width * echelle;
+            float hauteurAffichee = Logo.Height * echelle;
+
+            Vector2 positionAjustee = new Vector2(posX_logo - (largeuraffichee / 2), (posY_logo - (hauteurAffichee / 2)));
+
+            // 2. Affichage (une seule ligne suffit, en dehors des if/else)
+            Raylib.DrawTextureEx(Logo, positionAjustee, rotation, echelle, Color.White);
         
 
             //======= vrai boutons =======
