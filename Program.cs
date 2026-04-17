@@ -166,7 +166,6 @@ class Program
             }
             else if (endroit == "boucle")
             {
-                Raylib.DisableCursor();
                 BouclePrincipale();
             }
             
@@ -403,6 +402,7 @@ class Program
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
+                    Raylib.DisableCursor();
                     endroit = "boucle";
                 }
             }
