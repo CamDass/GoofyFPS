@@ -26,6 +26,7 @@ partial class Program
     static Texture2D clic1;
     static Texture2D clic2;
     static Texture2D clic3;
+    static Texture2D sniperaim;
 
     //boutons
     static Texture2D play_button;
@@ -93,7 +94,11 @@ partial class Program
         background = Raylib.LoadTexture("src\\Background3.png");
 
         mapModel = Raylib.LoadModel("map.glb");
-        sniper = Raylib.LoadModel("assets\\sniper.glb");
+        sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
+        sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
+
+
+
         // Nécessite lighting.vs et lighting.fs
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
 
