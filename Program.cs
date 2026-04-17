@@ -57,7 +57,8 @@ partial class Program
     static Vector3 playerSize = new Vector3(1.0f, 2.0f, 1.0f);
 
     // --- 3. VARIABLES DE PHYSIQUE (SAUT ET GRAVITÉ) ---
-    static bool IsDashing = false;
+    static bool IsDashing = false; // il faudra ajouter un chrono de cb de temps le dash dur et faire avancer la personne extremeent plus vite pednant ce court laps de temps
+    static int CountDash = 0;
     static int NbJump = 2;
     static float gravity = 25.0f;
     static float jumpStrength = 10.0f;

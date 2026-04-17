@@ -12,6 +12,11 @@ partial class Program
         // ==========================================
         // --- BOUCLE PRINCIPALE DU JEU ---
         // ==========================================
+
+        /*
+        static bool IsDashing = false;
+        static int CountDash = 0;
+        */
             
         if (Raylib.IsKeyDown(KeyboardKey.Tab)) 
         {
@@ -19,13 +24,35 @@ partial class Program
             endroit = "menu";
         }
 
+        int DashSpeed = 1;
+
+        if (IsDashing) //si t'es en train de dash tu va bien plus vite
+        {
+            CountDash ++;
+            DashSpeed = 8; //vitesse du dash
+        }
+
+        if (CountDash >= 8) // si on atteint x/60 fps on remet a 0
+        {
+            IsDashing = false;
+            CountDash = 0;
+        }
+
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftShift) && !IsDashing)
+        {
+            IsDashing = true;
+        }
+
+
+
+
         float deltaTime = Raylib.GetFrameTime(); 
 
         // --- A. GESTION DES MOUVEMENTS HORIZONTAUX (X & Z) ---
         Vector3 oldPosition = camera.Position;
 
         Raylib.UpdateCamera(ref camera, CameraMode.FirstPerson);
-        Vector3 desiredMovement = camera.Position - oldPosition;
+        Vector3 desiredMovement = (camera.Position - oldPosition)*DashSpeed;
         
         // Tester chaque axe séparément pour les collisions
         camera.Position = oldPosition; 
