@@ -1,7 +1,9 @@
-﻿using Raylib_cs;
-using System.Numerics; // Très utile pour les vecteurs plus tard
+﻿using System;
+using System.Collections.Generic;
+using Raylib_cs;
+using System.Numerics;
 
-class Program
+partial class Program
 {
     //==== VARIABLES ====
     static int FPS = 60;
@@ -317,10 +319,23 @@ class Program
 
         Raylib.BeginMode3D(weaponCamera);
 
-            Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
+            Vector3 weaponPos = new Vector3(0.4f, -0.4f, 1.2f);
             Raylib.DrawModel(sniper, weaponPos, 1.0f, Color.White);
         Raylib.EndMode3D();
         
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
