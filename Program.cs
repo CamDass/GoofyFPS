@@ -15,12 +15,18 @@ partial class Program
 
     static string endroit = "menu";
 
+    // Variable pour gérer l'état du menu en jeu (pause)
+    static bool isMenuGameOpen = false;
+
     //pour avoir acces aux textures partout dans le code
     //fonctionne en 2 temps, ici elles sont reconnu pour tous, ensuite elles sont chargés
     static List<Texture2D> ListeTexture = new List<Texture2D>();
     
     // ===== images =====
     static Texture2D Logo;
+    static Texture2D startimg; // juste en dessous les variables pour afficher l'image de start
+    static float tempsAffichage = 3.0f; // ici
+    static float opaciteImage = 255.0f; // et ici
 
     //clic
     static Texture2D clic1;
@@ -93,6 +99,7 @@ partial class Program
         clic1 = Raylib.LoadTexture("src\\img\\clic-blanc.png");
         clic2 = Raylib.LoadTexture("src\\img\\clic2-blanc.png");
         clic3 = Raylib.LoadTexture("src\\img\\clic3-blanc.png");
+        startimg = Raylib.LoadTexture("assets\\2D\\epsteintrump.png");
 
         play_active = Raylib.LoadTexture("src\\boutons\\play-active.png");
         play_button = Raylib.LoadTexture("src\\boutons\\play-base.png");

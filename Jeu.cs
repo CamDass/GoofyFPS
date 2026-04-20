@@ -17,8 +17,32 @@ partial class Program
         static bool IsDashing = false;
         static int CountDash = 0;
         */
+
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftAlt))
+        {
+            isMenuGameOpen = !isMenuGameOpen; // Bascule l'état du menu
+            if (isMenuGameOpen)
+            {
+                Raylib.EnableCursor();
+                Raylib.PlaySound(unselect);
+            }
+            else
+            {
+                Raylib.DisableCursor();
+                Raylib.PlaySound(select);
+            }
+        }
+
+        // Si le menu en jeu est ouvert, on l'affiche et on bloque le jeu
+        if (isMenuGameOpen)
+        {
+            Menugame();
+            return; // Sort de la boucle principale pour ne pas mettre à jour le jeu
+        }
+
+        
             
-        if (Raylib.IsKeyDown(KeyboardKey.Tab)) 
+        if (Raylib.IsKeyDown(KeyboardKey.Tab))
         {
             Raylib.EnableCursor();
             Raylib.PlaySound(unselect);
@@ -140,6 +164,8 @@ partial class Program
         // --- C. MISE À JOUR DE LA LUMIÈRE ---
         Raylib.SetShaderValue(lightShader, lightPosLoc, lightPosition, ShaderUniformDataType.Vec3);
 
+
+
         // --- D. RENDU GRAPHIQUE ---
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Color.SkyBlue);
@@ -194,6 +220,7 @@ partial class Program
         {
             Raylib.PlaySound(snipershot);
         }
+
 
         Raylib.EndDrawing();
     }
