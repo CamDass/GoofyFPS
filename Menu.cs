@@ -148,6 +148,7 @@ partial class Program
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
+                    //endroit = "option";
                     Console.WriteLine("option");
                 }
             }

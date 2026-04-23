@@ -203,6 +203,10 @@ partial class Program
             {
                 BouclePrincipale();
             }
+            else if (endroit == "option")
+            {
+                Menugame();
+            }
             
         }
 
