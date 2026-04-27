@@ -10,8 +10,3 @@ public class Weapon
     int range;
     float fireRate;
 }
-
-
-
-
-
