@@ -4,7 +4,12 @@ using Raylib_cs;
 using System.Numerics;
 
 partial class Program
-{
+{   
+
+
+    static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 2.0f, 5, 3, sniper, snipershot);
+
+    static Weapon karambitknife = new Weapon("Karambit", 75, 1, 0.5f, 1, 0, karambit, karambitshot);
     //===== BOUCLE DU JEU =====
 
     public static void BouclePrincipale()
@@ -189,11 +194,13 @@ partial class Program
 
 
 
-
+        
         bool hasWeapon = true;   // à changer quand il y aura d'autres armes
         bool hasAmmo = true;    // à changer quand il y aura le système de munitions
         bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
         bool showweapon = !isAiming;
+        Model actualWeapon = karambitknife.modelname;
+        Sound actualSound = karambitknife.soundname;
         Vector2 positionViseurSniper = new Vector2(0,0);
 
         if (isAiming)
@@ -210,7 +217,7 @@ partial class Program
         {
             Raylib.BeginMode3D(weaponCamera);
                 Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
-                Raylib.DrawModel(sniper, weaponPos, 1.0f, Color.White);
+                Raylib.DrawModel(actualWeapon, weaponPos, 1.0f, Color.White);
             Raylib.EndMode3D();
             Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
             Raylib.DrawFPS(10, 10);
@@ -218,7 +225,7 @@ partial class Program
 
         if (hasWeapon && hasAmmo && Raylib.IsMouseButtonPressed(MouseButton.Left))
         {
-            Raylib.PlaySound(snipershot);
+            Raylib.PlaySound(actualSound);
         }
 
 

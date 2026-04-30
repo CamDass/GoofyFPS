@@ -47,9 +47,11 @@ partial class Program
     // modeles 3d
     static Model mapModel;
     static Model sniper;
+    static Model karambit;
 
     // sons
     static Sound snipershot;
+    static Sound karambitshot;
     static Sound select;
     static Sound unselect;
     static Sound survole;
@@ -85,6 +87,8 @@ partial class Program
     static List<BoundingBox> walls = new List<BoundingBox>();
 
 
+
+
     static void Main()
     {
 
@@ -112,10 +116,16 @@ partial class Program
 
         mapModel = Raylib.LoadModel("map.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
+        sniperrifle.modelname = sniper;
+        karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");
+        karambitknife.modelname = karambit;
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
 
         Raylib.InitAudioDevice();
         snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
+        sniperrifle.soundname = snipershot;
+        karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
+        karambitknife.soundname = karambitshot;
 
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
@@ -190,6 +200,17 @@ partial class Program
         X_carre = Raylib.GetScreenWidth()/2;
         Y_carre = Raylib.GetScreenHeight()/2;
 
+        // Création des armes
+        // Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D)
+
+        
+
+
+        
+
+
+
+
         // 2. La Boucle de Jeu (Game Loop)
         // Elle tourne en continu tant qu'on n'appuie pas sur Echap ou la croix rouge
         while (!Raylib.WindowShouldClose())
@@ -221,6 +242,7 @@ partial class Program
         Raylib.UnloadModel(sniper);
         Raylib.UnloadShader(lightShader);
         Raylib.UnloadSound(snipershot);
+        Raylib.UnloadSound(karambitshot);
 
         Raylib.CloseWindow();
     }
