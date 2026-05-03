@@ -9,7 +9,13 @@ partial class Program
 
     static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 2.0f, 5, 3, sniper, snipershot);
 
-    static Weapon karambitknife = new Weapon("Karambit", 75, 1, 0.5f, 1, 0, karambit, karambitshot);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.5f, 1, 0, karambit, karambitshot);
+
+    static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife };
+    static Weapon currentWeapon = karambitknife;
+    static float laserTimer = 0.0f;
+    static Vector3 laserStart = new Vector3();
+    static Vector3 laserEnd = new Vector3();
     //===== BOUCLE DU JEU =====
 
     public static void BouclePrincipale()
@@ -43,6 +49,14 @@ partial class Program
         {
             Menugame();
             return; // Sort de la boucle principale pour ne pas mettre à jour le jeu
+        }
+
+        // Changement d'arme aléatoire avec la touche G
+        if (Raylib.IsKeyPressed(KeyboardKey.G))
+        {
+            Random rand = new Random();
+            int randomIndex = rand.Next(weapons.Count);
+            currentWeapon = weapons[randomIndex];
         }
 
         
@@ -79,6 +93,10 @@ partial class Program
         };
 
         float deltaTime = Raylib.GetFrameTime(); 
+
+        // Mise à jour du timer du laser
+        laserTimer -= deltaTime;
+        if (laserTimer < 0) laserTimer = 0;
 
         // --- A. GESTION DES MOUVEMENTS HORIZONTAUX (X & Z) ---
         Vector3 oldPosition = camera.Position;
@@ -183,6 +201,17 @@ partial class Program
             // Lignes de debug pour voir les boîtes
             foreach (BoundingBox wall in walls)
                 Raylib.DrawBoundingBox(wall, Color.Red);
+
+            // Dessiner les ennemis
+            foreach (Enemy enemy in enemies)
+                Raylib.DrawBoundingBox(enemy.GetBoundingBox(), Color.Blue);
+
+            // Dessiner le laser rouge pendant 1 seconde après le tir
+            if (laserTimer > 0)
+            {
+                Raylib.DrawLine3D(laserStart, laserEnd, Color.Red);
+                Raylib.DrawSphere(laserEnd, 0.2f, Color.Red);
+            }
         Raylib.EndMode3D();
 
         Camera3D weaponCamera = new Camera3D();
@@ -199,8 +228,8 @@ partial class Program
         bool hasAmmo = true;    // à changer quand il y aura le système de munitions
         bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
         bool showweapon = !isAiming;
-        Model actualWeapon = karambitknife.modelname;
-        Sound actualSound = karambitknife.soundname;
+        Model actualWeapon = currentWeapon.modelname;
+        Sound actualSound = currentWeapon.soundname;
         Vector2 positionViseurSniper = new Vector2(0,0);
 
         if (isAiming)
@@ -226,6 +255,36 @@ partial class Program
         if (hasWeapon && hasAmmo && Raylib.IsMouseButtonPressed(MouseButton.Left))
         {
             Raylib.PlaySound(actualSound);
+            laserTimer = 1.0f;
+            Vector3 direction = Vector3.Normalize(camera.Target - camera.Position);
+            Vector3 right = Vector3.Normalize(Vector3.Cross(direction, camera.Up));
+            laserStart = camera.Position + direction * 0.5f + right * 0.25f;
+            laserEnd = laserStart + direction * currentWeapon.range;
+
+            // Calculer les dégâts sur les ennemis touchés
+            foreach (Enemy enemy in enemies.ToList())
+            {
+                float distanceToEnemy = Vector3.Distance(laserStart, enemy.position);
+                if (distanceToEnemy <= currentWeapon.range)
+                {
+                    Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
+                    float dot = Vector3.Dot(direction, toEnemy);
+                    if (dot > 0.99f)
+                    {
+                        enemy.health -= currentWeapon.damage;
+                        if (enemy.health <= 0)
+                        {
+                            enemies.Remove(enemy);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Debug: afficher le timer du laser pour vérifier l'activation
+        if (laserTimer > 0)
+        {
+            Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 40, 20, Color.Red);
         }
 
 

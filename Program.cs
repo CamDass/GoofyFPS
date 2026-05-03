@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
+using System.Linq;
 
 partial class Program
 {
@@ -85,6 +86,32 @@ partial class Program
 
     // --- 5. GÉNÉRATION AUTOMATIQUE DES MURS (AUTO-BOUNDING BOX) ---
     static List<BoundingBox> walls = new List<BoundingBox>();
+
+    // --- 6. ENNEMIS ---
+    public class Enemy
+    {
+        public Vector3 position;
+        public int health;
+        public Vector3 size;
+
+        public Enemy(Vector3 pos, int hp, Vector3 sz)
+        {
+            position = pos;
+            health = hp;
+            size = sz;
+        }
+
+        public BoundingBox GetBoundingBox()
+        {
+            return new BoundingBox(position - size / 2, position + size / 2);
+        }
+    }
+
+    static List<Enemy> enemies = new List<Enemy>
+    {
+        new Enemy(new Vector3(5.0f, 1.0f, 5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f)),
+        new Enemy(new Vector3(-5.0f, 1.0f, -5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f))
+    };
 
 
 
