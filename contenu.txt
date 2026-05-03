@@ -1,0 +1,1042 @@
+EffetClic.cs
+
+using Raylib_cs;
+using System.Numerics;
+
+public class EffetClic
+{
+    public Vector2 Position;
+    public Texture2D Texture;
+    public int Opacite;
+
+    // Le Constructeur : ce qui se passe quand le clic naît
+    public EffetClic(Vector2 pos, Texture2D tex)
+    {
+        Position = pos;
+        Texture = tex;
+        Opacite = 255; // 255 = Totalement opaque (visible)
+    }
+}
+
+========
+
+Jeu.cs
+
+using System;
+using System.Collections.Generic;
+using Raylib_cs;
+using System.Numerics;
+using System.Linq;
+
+partial class Program
+{   
+
+
+    static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 1.0f, 5, 3, sniper, snipershot);
+
+    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot);
+
+    static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife };
+    static Weapon currentWeapon = karambitknife;
+    static float laserTimer = 0.0f;
+    static Vector3 laserStart = new Vector3();
+    static Vector3 laserEnd = new Vector3();
+    static float recoilAngle = 0.0f;
+    //===== BOUCLE DU JEU =====
+
+    public static void BouclePrincipale()
+    {
+        // ==========================================
+        // --- BOUCLE PRINCIPALE DU JEU ---
+        // ==========================================
+
+        /*
+        static bool IsDashing = false;
+        static int CountDash = 0;
+        */
+
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftAlt))
+        {
+            isMenuGameOpen = !isMenuGameOpen; // Bascule l'état du menu
+            if (isMenuGameOpen)
+            {
+                Raylib.EnableCursor();
+                Raylib.PlaySound(unselect);
+            }
+            else
+            {
+                Raylib.DisableCursor();
+                Raylib.PlaySound(select);
+            }
+        }
+
+        // Si le menu en jeu est ouvert, on l'affiche et on bloque le jeu
+        if (isMenuGameOpen)
+        {
+            Menugame();
+            return; // Sort de la boucle principale pour ne pas mettre à jour le jeu
+        }
+
+        // Changement d'arme aléatoire avec la touche G
+        if (Raylib.IsKeyPressed(KeyboardKey.G))
+        {
+            Random rand = new Random();
+            int randomIndex = rand.Next(weapons.Count);
+            currentWeapon = weapons[randomIndex];
+        }
+
+        
+            
+        if (Raylib.IsKeyDown(KeyboardKey.Tab))
+        {
+            Raylib.EnableCursor();
+            Raylib.PlaySound(unselect);
+            endroit = "menu";
+        }
+
+        int DashSpeed = 1;
+
+        if (IsDashing) //si t'es en train de dash tu va bien plus vite
+        {
+            CountDash ++;
+            DashSpeed = 8; //vitesse du dash
+        }
+
+        if (CountDash >= 8) // si on atteint x/60 fps on remet a 0
+        {
+            IsDashing = false;
+            CountDash = 0;
+        }
+        
+        if (CountDash == 1) // a la premiere frame ou il est activé 
+        {
+            Raylib.PlaySound(swoosh);
+        }
+
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftShift) && !IsDashing)
+        {
+            IsDashing = true;
+        };
+
+        float deltaTime = Raylib.GetFrameTime(); 
+
+        // Mise à jour du timer du laser
+        laserTimer -= deltaTime;
+        if (laserTimer < 0) laserTimer = 0;
+
+        // Mise à jour du recul de l'arme
+        if (recoilAngle < 0) recoilAngle += deltaTime * 30.0f;
+        if (recoilAngle > 0) recoilAngle = 0;
+
+        // --- A. GESTION DES MOUVEMENTS HORIZONTAUX (X & Z) ---
+        Vector3 oldPosition = camera.Position;
+
+        Raylib.UpdateCamera(ref camera, CameraMode.FirstPerson);
+        Vector3 desiredMovement = (camera.Position - oldPosition)*DashSpeed;
+        
+        // Tester chaque axe séparément pour les collisions
+        camera.Position = oldPosition; 
+        camera.Target -= desiredMovement;
+
+        // Collision X
+        camera.Position.X += desiredMovement.X;
+        camera.Target.X += desiredMovement.X;
+        BoundingBox playerBoxX = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
+        
+        foreach (BoundingBox wall in walls)
+        {
+            if (Raylib.CheckCollisionBoxes(playerBoxX, wall))
+            {
+                camera.Position.X -= desiredMovement.X;
+                camera.Target.X -= desiredMovement.X;
+                break;
+            }
+        }
+
+        // Collision Z
+        camera.Position.Z += desiredMovement.Z;
+        camera.Target.Z += desiredMovement.Z;
+        BoundingBox playerBoxZ = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
+        
+        foreach (BoundingBox wall in walls)
+        {
+            if (Raylib.CheckCollisionBoxes(playerBoxZ, wall))
+            {
+                camera.Position.Z -= desiredMovement.Z;
+                camera.Target.Z -= desiredMovement.Z;
+                break;
+            }
+        }
+
+        // --- B. GESTION DES MOUVEMENTS VERTICAUX (AXE Y) ---
+        if (Raylib.IsKeyPressed(KeyboardKey.Space))
+        {
+            if (isGrounded || NbJump > 0)
+            {
+                NbJump -=1;
+                velocityY = jumpStrength;
+            }
+            
+        }
+            
+
+        velocityY -= gravity * deltaTime;
+
+        float moveY = velocityY * deltaTime;
+        camera.Position.Y += moveY;
+        camera.Target.Y += moveY;
+        BoundingBox playerBoxY = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
+        isGrounded = false; 
+
+        foreach (BoundingBox wall in walls)
+        {
+            if (Raylib.CheckCollisionBoxes(playerBoxY, wall))
+            {
+                if (velocityY < 0) 
+                {
+                    // Collision en tombant (atterrissage)
+                    float correction = wall.Max.Y - (camera.Position.Y - playerSize.Y / 2);
+                    camera.Position.Y += correction;
+                    camera.Target.Y += correction;
+                    velocityY = 0.0f;
+                    isGrounded = true;
+                    NbJump = 2;
+                }
+                else if (velocityY > 0)
+                {
+                    // Collision en montant (plafond)
+                    float correction = (camera.Position.Y + playerSize.Y / 2) - wall.Min.Y;
+                    camera.Position.Y -= correction;
+                    camera.Target.Y -= correction;
+                    velocityY = 0.0f;
+                }
+                break; 
+            }
+        }
+
+        // --- C. MISE À JOUR DE LA LUMIÈRE ---
+        Raylib.SetShaderValue(lightShader, lightPosLoc, lightPosition, ShaderUniformDataType.Vec3);
+
+
+
+        // --- D. RENDU GRAPHIQUE ---
+        Raylib.BeginDrawing();
+        Raylib.ClearBackground(Color.SkyBlue);
+
+        Raylib.BeginMode3D(camera);
+            // On dessine la map (qui contient maintenant aussi les collisions)
+            // On garde la couleur blanche pour que les textures du .glb s'affichent correctement
+            Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.White); 
+            
+            // Lignes de debug pour voir les boîtes
+            foreach (BoundingBox wall in walls)
+                Raylib.DrawBoundingBox(wall, Color.Red);
+
+            // Dessiner les ennemis
+            foreach (Enemy enemy in enemies)
+            {
+                Raylib.DrawBoundingBox(enemy.GetBoundingBox(), Color.Blue);
+                Raylib.DrawModel(enemyModel, enemy.position, 1.0f, Color.White);
+            }
+            // Dessiner le laser rouge pendant 1 seconde après le tir
+            if (laserTimer > 0)
+            {
+                byte alpha = (byte)(laserTimer * 255);
+                Color laserColor = new Color((byte)255, (byte)0, (byte)0, alpha);
+                Raylib.DrawLine3D(laserStart, laserEnd, laserColor);
+                Raylib.DrawSphere(laserEnd, 0.2f, laserColor);
+            }
+        Raylib.EndMode3D();
+
+        Camera3D weaponCamera = new Camera3D();
+        weaponCamera.Position = new Vector3(0,0,0);
+        weaponCamera.Target = new Vector3(0, 0, 1);
+        weaponCamera.Up = new Vector3(0, 1, 0);
+        weaponCamera.FovY = 45.0f;
+        weaponCamera.Projection = CameraProjection.Perspective;
+
+
+
+        
+        bool hasWeapon = true;   // à changer quand il y aura d'autres armes
+        bool hasAmmo = currentWeapon.ammo > 0;    // vérifie les munitions
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
+        bool showweapon = !isAiming;
+        Model actualWeapon = currentWeapon.modelname;
+        Sound actualSound = currentWeapon.soundname;
+        Vector2 positionViseurSniper = new Vector2(0,0);
+
+        if (isAiming)
+        {
+            Raylib.DrawTextureEx(sniperaim, positionViseurSniper, 0, 1, Color.White);
+            camera.FovY = 20.0f;
+        }
+        else
+        {
+            camera.FovY = 60.0f;
+        }
+
+        if (showweapon)
+        {
+            Raylib.BeginMode3D(weaponCamera);
+                Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
+                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, Vector3.One, Color.White);
+            Raylib.EndMode3D();
+            Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
+            Raylib.DrawFPS(10, 10);
+            string texteMunitions = $"Munitions: {currentWeapon.ammo}/{currentWeapon.maxammo}";
+            int posX = Raylib.GetScreenWidth() - 400;
+            int posY = Raylib.GetScreenHeight() - 450;
+            Raylib.DrawText(texteMunitions, posX, posY, 30, Color.Gray);
+        }
+
+        if (hasWeapon && hasAmmo && !currentWeapon.isReloading && Raylib.IsMouseButtonDown(MouseButton.Left) && ((float)Raylib.GetTime() - currentWeapon.lastShotTime >= currentWeapon.fireRate))
+        {
+            Raylib.PlaySound(actualSound);
+            laserTimer = 1.0f;
+            recoilAngle = -15.0f;
+            currentWeapon.lastShotTime = (float)Raylib.GetTime();
+            currentWeapon.ammo--;
+            Vector3 direction = Vector3.Normalize(camera.Target - camera.Position);
+            Vector3 right = Vector3.Normalize(Vector3.Cross(direction, camera.Up));
+            laserStart = camera.Position + direction * 0.5f + right * 0.25f;
+            laserEnd = laserStart + direction * currentWeapon.range;
+
+            // Calculer les dégâts sur les ennemis touchés
+            foreach (Enemy enemy in enemies.ToList())
+            {
+                float distanceToEnemy = Vector3.Distance(laserStart, enemy.position);
+                if (distanceToEnemy <= currentWeapon.range)
+                {
+                    Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
+                    float dot = Vector3.Dot(direction, toEnemy);
+                    if (dot > 0.99f)
+                    {
+                        enemy.health -= currentWeapon.damage;
+                        if (enemy.health <= 0)
+                        {
+                            enemies.Remove(enemy);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Gestion du rechargement
+        currentWeapon.Reload();
+
+        // Debug: afficher le timer du laser pour vérifier l'activation
+        if (laserTimer > 0)
+        {
+            Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 40, 20, Color.Red);
+        }
+
+
+        Raylib.EndDrawing();
+    }
+}
+
+========
+
+Menu.cs
+
+using System;
+using System.Collections.Generic;
+using Raylib_cs;
+using System.Numerics;
+
+partial class Program
+{
+    // ===== BOUCLE MENU =====
+
+
+    static float echelle = 0.2f; 
+    static bool agrandissement = true;
+    public static void Menu()
+    {
+        // --- RENDU (Draw) ---
+            Raylib.BeginDrawing();
+
+            // pour "quitter"
+            if (Raylib.IsKeyDown(KeyboardKey.Space)) 
+            {
+                Raylib.PlaySound(select);
+                Raylib.DisableCursor();
+
+                endroit = "boucle";
+            }
+
+            // pour gerer les clic 
+            // --- ÉTAPE 3 : LA CRÉATION (Quand on clique) ---
+            // On utilise Pressed (1 seule fois) et non Down (en continu)
+            if (Raylib.IsMouseButtonPressed(MouseButton.Left)) 
+            {
+                int randValue = Raylib.GetRandomValue(1, 3);
+                Texture2D textureChoisie = clic1; // Par défaut
+                
+                if (randValue == 2) textureChoisie = clic2;
+                if (randValue == 3) textureChoisie = clic3;
+
+                // calcule position
+                float x_clic = textureChoisie.Width * 0.2f;
+                float y_clic = textureChoisie.Height * 0.2f;
+                Vector2 tailleImage = new Vector2(x_clic, y_clic);
+                Vector2 positionCentree = Raylib.GetMousePosition() - (tailleImage / 2f);
+
+                // ajouter à la liste le nouveau clic
+                ListeEffets.Add(new EffetClic(positionCentree, textureChoisie));
+            }
+
+
+            // ===== Vecteurs =====
+
+            Vector2 souris = Raylib.GetMousePosition();
+            //float echelle_background = 0.2f;
+
+            // background 
+            Vector2 BackgroundPos = new Vector2(0,0);
+
+            // === LOGO === (test vecteur)
+            int posX_logo = Raylib.GetScreenHeight() - 140;
+            int posY_logo = 250;
+
+            Vector2 positionLogo = new Vector2(posX_logo, posY_logo);
+
+            float rotation = 0.0f;
+
+            
+
+             // === BOUTON MENU ===
+            float echelleBoutons = 0.2f;
+            float echelleBoutonActif = 0.205f;
+            float echelleQuit = 0.190f;
+            int posX_boutons = Raylib.GetScreenHeight()/2 + 250;
+            
+            int posY_play = 450;
+            Vector2 positionPlay = new Vector2(posX_boutons, posY_play);
+
+            int posY_option = 600;
+            Vector2 positionOption = new Vector2(posX_boutons, posY_option);
+
+            int posY_quit = 750;
+            Vector2 positionQuit = new Vector2(posX_boutons, posY_quit);
+
+            Vector2 ajustement = new Vector2(0,20);
+            Vector2 ajustement_draw = new Vector2(5,5);
+            Vector2 ajustement_quit = new Vector2(10,5);
+            //collisions 
+            Rectangle boxPlay = new Rectangle(positionPlay+ajustement, 300,120);
+            Rectangle boxOption = new Rectangle(positionOption+ajustement, 300,120);
+            Rectangle boxQuit = new Rectangle(positionQuit+ajustement, 300,120);
+
+
+
+            // ==== debut du draw ====
+
+            // On nettoie l'écran à chaque frame avec une couleur de fond
+            Raylib.ClearBackground(Color.DarkGray);
+            Raylib.DrawTextureEx(background, BackgroundPos, rotation, 1f,Color.White);
+
+            //logo
+            if (agrandissement) 
+            {
+                echelle += 0.0002f;
+                if (echelle >= 0.21f) agrandissement = false;
+            } 
+            else 
+            {
+                echelle -= 0.0002f;
+                if (echelle <= 0.2f) agrandissement = true;
+            }
+
+            float largeuraffichee = Logo.Width * echelle;
+            float hauteurAffichee = Logo.Height * echelle;
+
+            Vector2 positionAjustee = new Vector2(posX_logo - (largeuraffichee / 2), (posY_logo - (hauteurAffichee / 2)));
+
+            // 2. Affichage (une seule ligne suffit, en dehors des if/else)
+            Raylib.DrawTextureEx(Logo, positionAjustee, rotation, echelle, Color.White);
+        
+
+            //======= vrai boutons =======
+            
+            //play
+            if (Raylib.CheckCollisionPointRec(souris, boxPlay))
+            {
+                Raylib.DrawTextureEx(play_active, positionPlay-ajustement_draw, rotation, echelleBoutonActif, Color.White);
+                //Raylib.PlaySound(survole);
+                //Console.WriteLine("play");
+
+                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                {
+                    Raylib.PlaySound(select);
+                    Raylib.DisableCursor();
+                    endroit = "boucle";
+                }
+            }
+            else 
+            {
+                Raylib.DrawTextureEx(play_button, positionPlay, rotation, echelleBoutons, Color.White);
+            }
+
+
+
+            //option
+            if (Raylib.CheckCollisionPointRec(souris, boxOption))
+            {
+                Raylib.DrawTextureEx(option_active, positionOption-ajustement_draw, rotation, echelleBoutonActif, Color.White);
+                //Raylib.PlaySound(survole);
+                //Console.WriteLine("option");
+
+                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                {
+                    //endroit = "option";
+                    Console.WriteLine("option");
+                }
+            }
+            else 
+            {
+                Raylib.DrawTextureEx(option_button, positionOption, rotation, echelleBoutons, Color.White);
+            }
+
+
+
+            //quit
+            if (Raylib.CheckCollisionPointRec(souris, boxQuit))
+            {
+                //bouton quitter activé
+                Raylib.DrawTextureEx(quit_active, positionQuit+ajustement_quit, rotation, echelleQuit, Color.White);
+                //Raylib.PlaySound(survole);
+                //Console.WriteLine("quit");
+
+                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                {
+                    //quitter le jeu
+                    foreach(var texture in ListeTexture)
+                    {
+                        Raylib.UnloadTexture(texture);
+                    }
+                    
+                    Raylib.CloseWindow();
+                }
+            }
+            else 
+            {
+                Raylib.DrawTextureEx(quit_button, positionQuit, rotation, echelleBoutons, Color.White);
+            }
+
+            /*
+            Raylib.DrawTextureEx(play_button, positionPlay, rotation, echelleBoutons, Color.White);
+            Raylib.DrawTextureEx(option_button, positionOption, rotation, echelleBoutons, Color.White);
+            Raylib.DrawTextureEx(quit_button, positionQuit, rotation, echelleBoutons, Color.White);
+
+
+            
+            //boutons place holders
+            Raylib.DrawRectangle(LargeurFenetre/2 + 150, 500, 300, 100, Color.Gray);
+            Raylib.DrawRectangle(LargeurFenetre/2 + 150, 650, 300, 100, Color.Gray);
+            Raylib.DrawRectangle(LargeurFenetre/2 + 150, 800, 300, 100, Color.Gray);
+            */
+
+        
+            // === AFFICHAGE CLIC ===
+
+            for (int i = ListeEffets.Count - 1; i >= 0; i--)
+            {
+                // effet fondu
+                ListeEffets[i].Opacite -= 5; 
+
+                if (ListeEffets[i].Opacite <= 0)
+                {
+                    ListeEffets.RemoveAt(i);
+                }
+                else 
+                {
+                    //ici la couleur marche comme un masque sur photoshop : de blanc visible à noir invisible, donc on modifie l'alpha pour faire l'effet "opacité"
+                    Color couleurFondu = new Color(255, 255, 255, ListeEffets[i].Opacite);
+                    
+                    Raylib.DrawTextureEx(ListeEffets[i].Texture, ListeEffets[i].Position, 0.0f, 0.2f, couleurFondu);
+                }
+            }
+
+
+            Raylib.EndDrawing();
+    }
+}
+
+========
+
+Menugame.cs
+
+using System;
+using System.Collections.Generic;
+using Raylib_cs;
+using System.Numerics;
+
+
+partial class Program
+{
+  
+    public static void Menugame()
+    {
+        // Le menu reste ouvert jusqu'à ce qu'on l'explicite via les boutons ou autre logique
+        // On ne vérifie pas LeftAlt ici pour éviter les conflits avec la logique d'ouverture
+
+        // ===== Vecteurs =====
+        Vector2 souris = Raylib.GetMousePosition();
+
+        float rotation = 0.0f;
+
+        // === BOUTON MENU PAUSE ===
+        float echelleBoutons = 0.2f;
+        float echelleBoutonActif = 0.205f;
+        float echelleQuit = 0.190f;
+        int posX_boutons = Raylib.GetScreenWidth() / 2 - 150; // Centre horizontal
+        
+        int posY_reprendre = 300; // Position verticale pour le bouton reprendre
+        Vector2 positionReprendre = new Vector2(posX_boutons, posY_reprendre);
+
+        int posY_option = 450; // Position verticale pour le bouton option
+        Vector2 positionOption = new Vector2(posX_boutons, posY_option);
+
+        int posY_quit = 600; // Position verticale pour le bouton quit
+        Vector2 positionQuit = new Vector2(posX_boutons, posY_quit);
+
+        Vector2 ajustement = new Vector2(0, 20);
+        Vector2 ajustement_draw = new Vector2(5, 5);
+        Vector2 ajustement_quit = new Vector2(10, 5);
+        
+        // Collisions 
+        Rectangle boxReprendre = new Rectangle(positionReprendre + ajustement, 300, 120);
+        Rectangle boxOption = new Rectangle(positionOption + ajustement, 300, 120);
+        Rectangle boxQuit = new Rectangle(positionQuit + ajustement, 300, 120);
+
+        // Le curseur est déjà activé dans Jeu.cs quand on ouvre le menu
+        
+        Raylib.BeginDrawing();
+
+        
+
+        // === BOUTON OPTION ===
+        if (Raylib.CheckCollisionPointRec(souris, boxOption))
+        {
+            Raylib.DrawTextureEx(option_active, positionOption, rotation, echelleBoutonActif, Color.White);
+            //Raylib.PlaySound(survole);
+
+            if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+            {
+                isMenuGameOpen = false; // Fermer le menu
+                Raylib.DisableCursor();
+                Raylib.PlaySound(select);
+                return;
+            }
+        }
+        else
+        {
+            Raylib.DrawTextureEx(option_button, positionOption, rotation, echelleBoutons, Color.White);
+        }
+
+
+
+        if (Raylib.CheckCollisionPointRec(souris, boxQuit))
+        {
+            //bouton quitter activé
+            Raylib.DrawTextureEx(quit_active, positionQuit, rotation, echelleQuit, Color.White);
+            
+
+            if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+            {
+                //quitter le jeu
+                foreach(var texture in ListeTexture)
+                {
+                    Raylib.UnloadTexture(texture);
+                }
+                
+                Raylib.CloseWindow();
+            }
+        }
+        else 
+        {
+            Raylib.DrawTextureEx(quit_button, positionQuit, rotation, echelleBoutons, Color.White);
+        }
+
+
+
+        
+        Raylib.EndDrawing();
+        
+
+        
+
+
+
+
+
+
+
+    }
+}
+
+========
+
+Physics.cs
+
+
+========
+
+Program.cs
+
+﻿using System;
+using System.Collections.Generic;
+using Raylib_cs;
+using System.Numerics;
+using System.Linq;
+
+partial class Program
+{
+    //==== VARIABLES ====
+    static int FPS = 60;
+    static int HauteurFenetre = 1920;
+    static int LargeurFenetre = 1080;
+
+    static int X_carre;
+    static int Y_carre;
+
+    static string endroit = "menu";
+
+    // Variable pour gérer l'état du menu en jeu (pause)
+    static bool isMenuGameOpen = false;
+
+    //pour avoir acces aux textures partout dans le code
+    //fonctionne en 2 temps, ici elles sont reconnu pour tous, ensuite elles sont chargés
+    static List<Texture2D> ListeTexture = new List<Texture2D>();
+    
+    // ===== images =====
+    static Texture2D Logo;
+    static Texture2D startimg; // juste en dessous les variables pour afficher l'image de start
+    static float tempsAffichage = 3.0f; // ici
+    static float opaciteImage = 255.0f; // et ici
+
+    //clic
+    static Texture2D clic1;
+    static Texture2D clic2;
+    static Texture2D clic3;
+    static Texture2D sniperaim;
+
+    //boutons
+    static Texture2D play_button;
+    static Texture2D play_active;
+    static Texture2D option_button;
+    static Texture2D option_active;
+    static Texture2D quit_button;
+    static Texture2D quit_active;
+
+    static Texture2D background;
+
+    // modeles 3d
+    static Model mapModel;
+    static Model enemyModel;
+    static Model sniper;
+    static Model karambit;
+
+    // sons
+    static Sound snipershot;
+    static Sound karambitshot;
+    static Sound select;
+    static Sound unselect;
+    static Sound survole;
+    static Sound swoosh;
+
+
+    static Shader lightShader;
+    
+
+    // la liste des clic en cours sur le menu
+    static List<EffetClic> ListeEffets = new List<EffetClic>();
+
+    // --- 2. CONFIGURATION DE LA CAMÉRA (LE JOUEUR) ---
+    static Camera3D camera;
+    static Vector3 playerSize = new Vector3(1.0f, 2.0f, 1.0f);
+
+    // --- 3. VARIABLES DE PHYSIQUE (SAUT ET GRAVITÉ) ---
+    static bool IsDashing = false; // il faudra ajouter un chrono de cb de temps le dash dur et faire avancer la personne extremeent plus vite pednant ce court laps de temps
+    static int CountDash = 0;
+    static int NbJump = 2;
+    static float gravity = 25.0f;
+    static float jumpStrength = 10.0f;
+    static float velocityY = 0.0f;     // Vitesse verticale
+    static bool isGrounded = true;     // Touche le sol ?
+
+    // --- 4. CHARGEMENT DES ASSETS (MAP ET SHADERS) ---
+    static Vector3 mapPosition = new Vector3(0.0f, 0.0f, 0.0f);
+    static float mapScale = 1f;
+    static int lightPosLoc;
+    static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
+
+    // --- 5. GÉNÉRATION AUTOMATIQUE DES MURS (AUTO-BOUNDING BOX) ---
+    static List<BoundingBox> walls = new List<BoundingBox>();
+
+    // --- 6. ENNEMIS ---
+    public class Enemy
+    {
+        public Vector3 position;
+        public int health;
+        public Vector3 size;
+
+        public Enemy(Vector3 pos, int hp, Vector3 sz)
+        {
+            position = pos;
+            health = hp;
+            size = sz;
+        }
+
+        public BoundingBox GetBoundingBox()
+        {
+            return new BoundingBox(position - size / 2, position + size / 2);
+        }
+    }
+
+    static List<Enemy> enemies = new List<Enemy>
+    {
+        new Enemy(new Vector3(5.0f, 1.0f, 5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f)),
+        new Enemy(new Vector3(-5.0f, 1.0f, -5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f))
+    };
+
+
+
+
+    static void Main()
+    {
+
+        // 1. Initialisation de la fenêtre (Largeur, Hauteur, Titre)
+        //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
+
+        Raylib.InitWindow(HauteurFenetre, LargeurFenetre, "GoofyFPS - Moteur de test");
+
+        // ==== IMAGES ====
+
+        Logo = Raylib.LoadTexture("src\\GoofyFPS.png");
+        clic1 = Raylib.LoadTexture("src\\img\\clic-blanc.png");
+        clic2 = Raylib.LoadTexture("src\\img\\clic2-blanc.png");
+        clic3 = Raylib.LoadTexture("src\\img\\clic3-blanc.png");
+        startimg = Raylib.LoadTexture("assets\\2D\\epsteintrump.png");
+
+        play_active = Raylib.LoadTexture("src\\boutons\\play-active.png");
+        play_button = Raylib.LoadTexture("src\\boutons\\play-base.png");
+        option_button = Raylib.LoadTexture("src\\boutons\\option-base.png");
+        option_active = Raylib.LoadTexture("src\\boutons\\option-active.png");
+        quit_active = Raylib.LoadTexture("src\\boutons\\quit-active.png");
+        quit_button = Raylib.LoadTexture("src\\boutons\\quit-base.png");
+
+        background = Raylib.LoadTexture("src\\Background3.png");
+
+        mapModel = Raylib.LoadModel("map.glb");
+        enemyModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
+        sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
+        sniperrifle.modelname = sniper;
+        karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");
+        karambitknife.modelname = karambit;
+        sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
+
+        Raylib.InitAudioDevice();
+        snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
+        sniperrifle.soundname = snipershot;
+        karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
+        karambitknife.soundname = karambitshot;
+
+        select = Raylib.LoadSound("assets\\sounds\\select.mp3");
+        unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
+        survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
+        swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
+
+
+        // Nécessite lighting.vs et lighting.fs
+        lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
+
+        ListeTexture.Add(Logo); // on ajoute a la list afin de pouvoir unload facilement
+        ListeTexture.Add(clic1);
+        ListeTexture.Add(clic2);
+        ListeTexture.Add(clic3);
+
+        ListeTexture.Add(play_active);
+        ListeTexture.Add(play_button);
+        ListeTexture.Add(option_active);
+        ListeTexture.Add(option_button);
+        ListeTexture.Add(quit_active);
+        ListeTexture.Add(quit_button);
+
+        ListeTexture.Add(background);
+        
+
+        // ==== CONFIGURATION DE LA SCÈNE 3D ====
+        camera = new Camera3D();
+        camera.Position = new Vector3(0.0f, 15.0f, 5.0f); 
+        camera.Target = new Vector3(0.0f, 2.0f, 0.0f);   
+        camera.Up = new Vector3(0.0f, 1.0f, 0.0f);       
+        camera.FovY = 60.0f;                                          
+        camera.Projection = CameraProjection.Perspective;
+
+        lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
+
+        // Appliquer le shader aux matériaux de la map
+        // Note: map.glb peut avoir plusieurs matériaux, il faudrait idéalement boucler dessus.
+        // On le garde sur le premier pour le moment selon ton code original.
+        unsafe
+        {
+            if (mapModel.MaterialCount > 0)
+            {
+                mapModel.Materials[0].Shader = lightShader;
+            }
+        }
+
+        Console.WriteLine($"[DEBUG] Nombre de Mesh détectés dans map.glb pour les collisions : {mapModel.MeshCount}");
+
+        unsafe 
+        {
+            // Cette boucle parcourt chaque partie (Mesh) de ton fichier map.glb
+            for (int i = 0; i < mapModel.MeshCount; i++)
+            {
+                // Récupère la boîte locale pour la partie 'i'
+                BoundingBox wallBox = Raylib.GetMeshBoundingBox(mapModel.Meshes[i]);
+                
+                // 1. On applique l'échelle (Scale)
+                wallBox.Min *= mapScale;
+                wallBox.Max *= mapScale;
+
+                // 2. On applique la position dans le monde (Translation)
+                wallBox.Min += mapPosition;
+                wallBox.Max += mapPosition;
+
+                walls.Add(wallBox);
+            }
+        }
+
+        // On bloque le jeu à 60 FPS pour éviter que la boucle tourne trop vite
+        Raylib.SetTargetFPS(FPS); 
+
+        X_carre = Raylib.GetScreenWidth()/2;
+        Y_carre = Raylib.GetScreenHeight()/2;
+
+        // Création des armes
+        // Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D)
+
+        
+
+
+        
+
+
+
+
+        // 2. La Boucle de Jeu (Game Loop)
+        // Elle tourne en continu tant qu'on n'appuie pas sur Echap ou la croix rouge
+        while (!Raylib.WindowShouldClose())
+        {
+            // --- LOGIQUE (Update) ---
+            // C'est ici qu'on mettra les calculs de déplacement plus tard
+            if (endroit == "menu") {
+                Menu();
+            }
+            else if (endroit == "boucle")
+            {
+                BouclePrincipale();
+            }
+            else if (endroit == "option")
+            {
+                Menugame();
+            }
+            
+        }
+
+        // 3. Fermeture propre pour libérer la mémoire
+        foreach(var texture in ListeTexture)
+        {
+            Raylib.UnloadTexture(texture);
+        }
+        
+        // on décharge la 3d
+        Raylib.UnloadModel(mapModel);
+        Raylib.UnloadModel(sniper);
+        Raylib.UnloadShader(lightShader);
+        Raylib.UnloadSound(snipershot);
+        Raylib.UnloadSound(karambitshot);
+
+        Raylib.CloseWindow();
+    }
+}
+
+========
+
+Weapon.cs
+
+using System;
+using System.Collections.Generic;
+using Raylib_cs;
+using System.Numerics;
+
+
+
+using Raylib_cs; // Indispensable pour que le type "Model" soit reconnu
+
+public class Weapon
+{
+    // parametres
+    public string name;
+    public int damage;
+    public int range;
+    public float fireRate;
+    public int maxammo;
+    public int ammo;
+    public int reloadtime;
+    public Model modelname;
+    public Sound soundname;
+    public float lastShotTime;
+    public bool isReloading;
+    public float reloadStartTime;
+
+    // constructeur
+    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son)
+    {
+        name = nom;
+        damage = degats;
+        range = portee;
+        fireRate = cadence;
+        maxammo = munitionsMax;
+        reloadtime = tempsRecharge;
+        modelname = modele3D;
+        soundname = son;
+        lastShotTime = 0.0f;
+        isReloading = false;
+        reloadStartTime = 0.0f;
+    }
+
+
+
+    public void Shoot()
+    {
+        
+    }
+    
+
+    public void Reload()
+    {
+        if ((Raylib.IsKeyPressed(KeyboardKey.R) || ammo <= 0) && !isReloading)
+        {
+            isReloading = true;
+            reloadStartTime = (float)Raylib.GetTime();
+        }
+        if (isReloading && (float)Raylib.GetTime() - reloadStartTime >= reloadtime)
+        {
+            ammo = maxammo;
+            isReloading = false;
+        }
+    }
+
+    public void Switch()
+    {
+        
+    }
+}
+
+
+
