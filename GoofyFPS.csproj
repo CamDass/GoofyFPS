@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BepuPhysics" Version="2.4.0" />
     <PackageReference Include="Raylib-cs" Version="7.0.2" />
   </ItemGroup>
 

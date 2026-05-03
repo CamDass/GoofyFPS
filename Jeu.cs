@@ -4,12 +4,16 @@ using Raylib_cs;
 using System.Numerics;
 using System.Linq;
 
+// Moteur Physique
+using BepuPhysics;
+using BepuPhysics.Collidables;
+
 partial class Program
 {   
-
-
+    // ========================================================
+    // VARIABLES DES ARMES (ILIAN)
+    // ========================================================
     static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 1.0f, 5, 3, sniper, snipershot);
-
     static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife };
@@ -18,51 +22,28 @@ partial class Program
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
     static float recoilAngle = 0.0f;
-    //===== BOUCLE DU JEU =====
 
+    //===== BOUCLE DU JEU =====
     public static void BouclePrincipale()
     {
-        // ==========================================
-        // --- BOUCLE PRINCIPALE DU JEU ---
-        // ==========================================
-
-        /*
-        static bool IsDashing = false;
-        static int CountDash = 0;
-        */
-
+        // ========================================================
+        // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
+        // ========================================================
         if (Raylib.IsKeyPressed(KeyboardKey.LeftAlt))
         {
-            isMenuGameOpen = !isMenuGameOpen; // Bascule l'état du menu
-            if (isMenuGameOpen)
-            {
-                Raylib.EnableCursor();
-                Raylib.PlaySound(unselect);
-            }
-            else
-            {
-                Raylib.DisableCursor();
-                Raylib.PlaySound(select);
-            }
+            isMenuGameOpen = !isMenuGameOpen; 
+            if (isMenuGameOpen) { Raylib.EnableCursor(); Raylib.PlaySound(unselect); }
+            else { Raylib.DisableCursor(); Raylib.PlaySound(select); }
         }
 
-        // Si le menu en jeu est ouvert, on l'affiche et on bloque le jeu
-        if (isMenuGameOpen)
-        {
-            Menugame();
-            return; // Sort de la boucle principale pour ne pas mettre à jour le jeu
-        }
+        if (isMenuGameOpen) { Menugame(); return; }
 
-        // Changement d'arme aléatoire avec la touche G
         if (Raylib.IsKeyPressed(KeyboardKey.G))
         {
             Random rand = new Random();
-            int randomIndex = rand.Next(weapons.Count);
-            currentWeapon = weapons[randomIndex];
+            currentWeapon = weapons[rand.Next(weapons.Count)];
         }
 
-        
-            
         if (Raylib.IsKeyDown(KeyboardKey.Tab))
         {
             Raylib.EnableCursor();
@@ -70,151 +51,265 @@ partial class Program
             endroit = "menu";
         }
 
-        int DashSpeed = 1;
-
-        if (IsDashing) //si t'es en train de dash tu va bien plus vite
-        {
-            CountDash ++;
-            DashSpeed = 8; //vitesse du dash
-        }
-
-        if (CountDash >= 8) // si on atteint x/60 fps on remet a 0
-        {
-            IsDashing = false;
-            CountDash = 0;
-        }
-        
-        if (CountDash == 1) // a la premiere frame ou il est activé 
-        {
-            Raylib.PlaySound(swoosh);
-        }
-
-        if (Raylib.IsKeyPressed(KeyboardKey.LeftShift) && !IsDashing)
-        {
-            IsDashing = true;
-        };
-
         float deltaTime = Raylib.GetFrameTime(); 
-
-        // Mise à jour du timer du laser
         laserTimer -= deltaTime;
         if (laserTimer < 0) laserTimer = 0;
 
-        // Mise à jour du recul de l'arme
         if (recoilAngle < 0) recoilAngle += deltaTime * 30.0f;
         if (recoilAngle > 0) recoilAngle = 0;
 
-        // --- A. GESTION DES MOUVEMENTS HORIZONTAUX (X & Z) ---
-        Vector3 oldPosition = camera.Position;
 
-        Raylib.UpdateCamera(ref camera, CameraMode.FirstPerson);
-        Vector3 desiredMovement = (camera.Position - oldPosition)*DashSpeed;
-        
-        // Tester chaque axe séparément pour les collisions
-        camera.Position = oldPosition; 
-        camera.Target -= desiredMovement;
+        // ========================================================
+        // [ZONE BEPU] 2. PHYSIQUE ET MOUVEMENTS (TON CODE COMPLET)
+        // ========================================================
+        float hauteurVoulue = 0.8f; 
+        bool IsWallRunning = false;
 
-        // Collision X
-        camera.Position.X += desiredMovement.X;
-        camera.Target.X += desiredMovement.X;
-        BoundingBox playerBoxX = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
-        
-        foreach (BoundingBox wall in walls)
-        {
-            if (Raylib.CheckCollisionBoxes(playerBoxX, wall))
+        BodyReference espionCube = simulation.Bodies.GetBodyReference(PlayerId);
+        espionCube.Awake = true;
+        Vector3 posCube = espionCube.Pose.Position; 
+
+        GroundSensor capteurSol = new GroundSensor(espionCube.CollidableReference);
+        Vector3 directionLaser = new Vector3(0, -1f, 0);
+        float longueurLaser = 0.6f + 0.5f;
+        simulation.RayCast(posCube, directionLaser, longueurLaser, ref capteurSol);
+
+        GroundSensor capteurGlissade = new GroundSensor(espionCube.CollidableReference);
+        float longueurLaserGlissade = 1.2f;
+        simulation.RayCast(posCube, directionLaser, longueurLaserGlissade, ref capteurGlissade);
+
+        if (capteurSol.toucheSol) NbJump = NbJumpMax + 1;
+
+        // LE CERVEAU DE LA CAMÉRA FPS
+        Vector2 mouseDelta = Raylib.GetMouseDelta();
+        CameraYaw -= mouseDelta.X * MouseSensi;
+        CameraPitch -= mouseDelta.Y * MouseSensi;
+
+        float PitchLimit = 1.55f;
+        if (CameraPitch > PitchLimit) CameraPitch = PitchLimit;
+        if (CameraPitch < -PitchLimit) CameraPitch = -PitchLimit;
+
+        Vector3 CamFroward = new Vector3(
+            MathF.Cos(CameraPitch) * MathF.Sin(CameraYaw),
+            MathF.Sin(CameraPitch),
+            MathF.Cos(CameraPitch) * MathF.Cos(CameraYaw)
+        );
+
+        // LES JAMBES DU JOUEUR 
+        Vector3 GroundForward = new Vector3(CamFroward.X, 0, CamFroward.Z);
+        if (GroundForward.LengthSquared() > 0.0001f) GroundForward = Vector3.Normalize(GroundForward); 
+
+        Vector3 GroundRight = Vector3.Cross(GroundForward, new Vector3(0, 1f, 0));
+        GroundRight = Vector3.Normalize(GroundRight);
+        Vector3 deplacementVoulu = Vector3.Zero; 
+
+        GroundSensor capteurMurDroit = new GroundSensor(espionCube.CollidableReference);
+        GroundSensor capteurMurGauche = new GroundSensor(espionCube.CollidableReference);
+        float longueurLaserMur = 0.8f;
+        simulation.RayCast(posCube, GroundRight, longueurLaserMur, ref capteurMurDroit);
+        simulation.RayCast(posCube, -GroundRight, longueurLaserMur, ref capteurMurGauche);
+
+
+
+        //vide
+        if (Raylib.IsKeyPressed(KeyboardKey.P))
             {
-                camera.Position.X -= desiredMovement.X;
-                camera.Target.X -= desiredMovement.X;
-                break;
+                // 1. On modifie les coordonnées instantanément (ex: on le remet à 10m de haut au centre)
+                espionCube.Pose.Position = new Vector3(0, 10f, 0); 
+                
+                // 2. On remet l'inertie et la vitesse à zéro pour un arrêt net !
+                espionCube.Velocity.Linear = Vector3.Zero;  // Stop le déplacement
+                espionCube.Velocity.Angular = Vector3.Zero; // Stop la rotation sur lui-même
+
             }
+
+        if (espionCube.Pose.Position.Y < -50f)
+        {
+            // 1. On modifie les coordonnées instantanément (ex: on le remet à 10m de haut au centre)
+                espionCube.Pose.Position = new Vector3(0, 10f, 0); 
+                
+                // 2. On remet l'inertie et la vitesse à zéro pour un arrêt net !
+                espionCube.Velocity.Linear = Vector3.Zero;  // Stop le déplacement
+                espionCube.Velocity.Angular = Vector3.Zero; // Stop la rotation sur lui-même
+
         }
 
-        // Collision Z
-        camera.Position.Z += desiredMovement.Z;
-        camera.Target.Z += desiredMovement.Z;
-        BoundingBox playerBoxZ = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
-        
-        foreach (BoundingBox wall in walls)
-        {
-            if (Raylib.CheckCollisionBoxes(playerBoxZ, wall))
-            {
-                camera.Position.Z -= desiredMovement.Z;
-                camera.Target.Z -= desiredMovement.Z;
-                break;
-            }
-        }
 
-        // --- B. GESTION DES MOUVEMENTS VERTICAUX (AXE Y) ---
+
+
+
+
+        // Saut
         if (Raylib.IsKeyPressed(KeyboardKey.Space))
         {
-            if (isGrounded || NbJump > 0)
+            if (capteurMurGauche.toucheSol || capteurMurDroit.toucheSol) espionCube.Velocity.Linear.Y = 5f;
+            else if (NbJump > NbJumpMax)
             {
-                NbJump -=1;
-                velocityY = jumpStrength;
+                NbJump--;
+                if (espionCube.Velocity.Linear.Y > 0) { espionCube.Velocity.Linear.Y += 5f; } else { espionCube.Velocity.Linear.Y = 5f; }
             }
-            
         }
-            
 
-        velocityY -= gravity * deltaTime;
-
-        float moveY = velocityY * deltaTime;
-        camera.Position.Y += moveY;
-        camera.Target.Y += moveY;
-        BoundingBox playerBoxY = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
-        isGrounded = false; 
-
-        foreach (BoundingBox wall in walls)
+        // Déplacements & WallRun
+        if (!capteurSol.toucheSol)
         {
-            if (Raylib.CheckCollisionBoxes(playerBoxY, wall))
-            {
-                if (velocityY < 0) 
-                {
-                    // Collision en tombant (atterrissage)
-                    float correction = wall.Max.Y - (camera.Position.Y - playerSize.Y / 2);
-                    camera.Position.Y += correction;
-                    camera.Target.Y += correction;
-                    velocityY = 0.0f;
-                    isGrounded = true;
-                    NbJump = 2;
-                }
-                else if (velocityY > 0)
-                {
-                    // Collision en montant (plafond)
-                    float correction = (camera.Position.Y + playerSize.Y / 2) - wall.Min.Y;
-                    camera.Position.Y -= correction;
-                    camera.Target.Y -= correction;
-                    velocityY = 0.0f;
-                }
-                break; 
-            }
+            if ((capteurMurDroit.toucheSol && Raylib.IsKeyDown(KeyboardKey.D)) || (capteurMurGauche.toucheSol && Raylib.IsKeyDown(KeyboardKey.A))) IsWallRunning = true; 
         }
 
-        // --- C. MISE À JOUR DE LA LUMIÈRE ---
+        if (Raylib.IsKeyDown(KeyboardKey.W) || Raylib.IsKeyDown(KeyboardKey.Up)) deplacementVoulu += GroundForward;
+        if (Raylib.IsKeyDown(KeyboardKey.S) || Raylib.IsKeyDown(KeyboardKey.Down)) deplacementVoulu -= GroundForward;
+        if ((Raylib.IsKeyDown(KeyboardKey.A) || Raylib.IsKeyDown(KeyboardKey.Left)) && !capteurMurGauche.toucheSol) deplacementVoulu -= GroundRight; 
+        if ((Raylib.IsKeyDown(KeyboardKey.D) || Raylib.IsKeyDown(KeyboardKey.Right)) && !capteurMurDroit.toucheSol) deplacementVoulu += GroundRight;
+
+        if (deplacementVoulu.LengthSquared() > 0) deplacementVoulu = Vector3.Normalize(deplacementVoulu);
+
+        bool IsSprinting = Raylib.IsKeyDown(KeyboardKey.LeftShift);
+        float SpeedCoef = IsSprinting ? 1.7f : 1f;
+        float vMax = 8f; 
+        float fAcceleration = 0.2f; 
+        float rollActuel = 0f;
+
+        if (IsWallRunning)
+        {
+            NbJump = NbJumpMax + 1;
+            fAcceleration = 0.1f;
+            if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
+            if (Raylib.IsKeyDown(KeyboardKey.A)) rollActuel = 0.25f;
+            else if (Raylib.IsKeyDown(KeyboardKey.D)) rollActuel = -0.25f;
+        } 
+        else { rollActuel = 0f; fAcceleration = 0.2f; }
+
+        // Accroupir & Glissade
+        float vitesseHorizontale = new Vector2(espionCube.Velocity.Linear.X, espionCube.Velocity.Linear.Z).Length();
+        float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
+        float vitesseDescente = 0f;
+
+        if (Raylib.IsKeyDown(KeyboardKey.C) && !Raylib.IsKeyDown(KeyboardKey.Space))
+        {
+            if (!capteurGlissade.toucheSol) 
+            {
+                vitesseDescente--;
+                if (vitesseDescente < -20) vitesseDescente = -20; 
+                espionCube.Velocity.Linear.Y += vitesseDescente;
+            } 
+            else 
+            {
+                hauteurVoulue = 0.5f;
+                if (vitesseVerticale > 0) { espionCube.Velocity.Linear += GroundForward * (vitesseVerticale / 2); espionCube.Velocity.Linear.Y = 0.1f; }
+                espionCube.SetShape(PlayerTicketAccroupi);
+                if (vitesseHorizontale > 4) fAcceleration = 0.01f; else vMax = 3f;
+            }
+            if (Raylib.IsKeyPressed(KeyboardKey.C) && !Raylib.IsKeyDown(KeyboardKey.Space) && capteurSol.toucheSol && vitesseHorizontale > 4) espionCube.Velocity.Linear += GroundForward * 5;
+        } 
+        else 
+        {
+            espionCube.SetShape(PlayerTicket);
+            hauteurVoulue = 0.8f; vMax = 8f; fAcceleration = 0.2f; vitesseDescente = 0;
+        }
+
+        Vector3 targetVelocity = deplacementVoulu * vMax * SpeedCoef;
+        espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
+        espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
+
+        // Dash
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftControl)) espionCube.Velocity.Linear += GroundForward * 30;
+
+        // Jump pad (Sandbox)
+        if (posCube.X > 9 && posCube.X < 11 && posCube.Z > -1 && posCube.Z < 1 && capteurSol.toucheSol) espionCube.Velocity.Linear.Y += 20f;
+
+        // On fait passer le temps
+        simulation.Timestep(1f / 60f);
+
+        // Application finale de la Caméra
+        camera.Position = new Vector3(posCube.X, posCube.Y + hauteurVoulue, posCube.Z);
+        camera.Up = Vector3.Transform(new Vector3(0, 1f, 0), Matrix4x4.CreateFromAxisAngle(CamFroward, rollActuel));
+        camera.Target = camera.Position + CamFroward;
+
+
+        // ========================================================
+        // [ZONE MIXTE] 3. RENDU GRAPHIQUE (RAYLIB)
+        // ========================================================
         Raylib.SetShaderValue(lightShader, lightPosLoc, lightPosition, ShaderUniformDataType.Vec3);
 
-
-
-        // --- D. RENDU GRAPHIQUE ---
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Color.SkyBlue);
 
         Raylib.BeginMode3D(camera);
-            // On dessine la map (qui contient maintenant aussi les collisions)
-            // On garde la couleur blanche pour que les textures du .glb s'affichent correctement
-            Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.White); 
             
-            // Lignes de debug pour voir les boîtes
-            foreach (BoundingBox wall in walls)
-                Raylib.DrawBoundingBox(wall, Color.Red);
+            // NOTE : On ne dessine pas mapModel car BEPU ne le calcule pas encore !
+            // On dessine tes objets de test physique à la place :
 
-            // Dessiner les ennemis
+            //sol 
+            float taillePlatforme = 200f;
+            Raylib.DrawCube(new Vector3(0,-taillePlatforme/2,0), taillePlatforme, taillePlatforme, taillePlatforme, Color.Gray);
+            Raylib.DrawGrid((int)taillePlatforme, 1f); 
+
+
+            //vide 
+            int nbrCouche = 50;
+            float espaceCouche = 1f;
+            float hauteurVide = -30f;
+
+            
+
+            //COUCHES TRANSPARENTES (bas vers le haut)
+            Color gazRouge = new Color(255, 50, 50, 8); 
+
+            //boucle commence au fond (i = 50) et remonte jusqu'à la surface (i = 1)
+            if (espionCube.Pose.Position.Y <= 0)
+            {
+                for (int i = nbrCouche; i > 0; i--)
+                {
+                    float hauteur = hauteurVide - (i * espaceCouche);
+                    
+                    // On dessine une plaque très fine (épaisseur 0.1f au lieu de 1f)
+                    Raylib.DrawCube(new Vector3(0, hauteur, 0), 1000f, 0.1f, 1000f, gazRouge);
+                }
+            }
+                
+
+            
+            //mur 
+            Vector3 PosMur = new Vector3(-9.5f,2.5f,0);
+            Vector3 PosMur2 = new Vector3(-9.5f,20f,0);
+            Raylib.DrawCube(PosMur,1f,5f,20f,Color.Gray);
+            Raylib.DrawCubeWires(PosMur,1f,5f,20f,Color.White);
+
+            Raylib.DrawCube(PosMur2,1f,5f,20f,Color.Gray);
+            Raylib.DrawCubeWires(PosMur2,1f,5f,20f,Color.White);
+
+            Raylib.DrawCube(new Vector3(10f,-0.3f,0), 2f, 1f, 2f, Color.Blue); // Jump Pad
+
+
+            Vector3 PosPlatforme1 = new Vector3(25,4,0);
+            Vector3 PosPlatforme2 = new Vector3(22,10,-15);
+            Vector3 PosPlatforme3 = new Vector3(10,18,-20);
+            //Box Platforme = new Box(10f, 1f , 10f)
+            Raylib.DrawCube(PosPlatforme1,10f, 1f , 10f,Color.Gray);
+            Raylib.DrawCubeWires(PosPlatforme1,10f, 1f , 10f,Color.White);
+
+            Raylib.DrawCube(PosPlatforme2,10f, 1f , 10f,Color.Gray);
+            Raylib.DrawCubeWires(PosPlatforme2,10f, 1f , 10f,Color.White);
+
+            Raylib.DrawCube(PosPlatforme3,10f, 1f , 10f,Color.Gray);
+            Raylib.DrawCubeWires(PosPlatforme3,10f, 1f , 10f,Color.White);
+
+            //dessiner le model du joueur
+            Vector3 PointHaut = new Vector3(posCube.X, posCube.Y + 0.5f, posCube.Z);
+            Vector3 PointBas = new Vector3(posCube.X, posCube.Y - 0.5f, posCube.Z);
+            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8,Color.White); 
+
+
+
+
+            // Dessiner les ennemis (Code ILIAN)
             foreach (Enemy enemy in enemies)
             {
                 Raylib.DrawBoundingBox(enemy.GetBoundingBox(), Color.Blue);
                 Raylib.DrawModel(enemyModel, enemy.position, 1.0f, Color.White);
             }
-            // Dessiner le laser rouge pendant 1 seconde après le tir
+            
+            // Dessiner le laser (Code ILIAN)
             if (laserTimer > 0)
             {
                 byte alpha = (byte)(laserTimer * 255);
@@ -224,6 +319,9 @@ partial class Program
             }
         Raylib.EndMode3D();
 
+        // ========================================================
+        // [ZONE ILIAN] 4. HUD ET ARMES 2D
+        // ========================================================
         Camera3D weaponCamera = new Camera3D();
         weaponCamera.Position = new Vector3(0,0,0);
         weaponCamera.Target = new Vector3(0, 0, 1);
@@ -231,11 +329,8 @@ partial class Program
         weaponCamera.FovY = 45.0f;
         weaponCamera.Projection = CameraProjection.Perspective;
 
-
-
-        
-        bool hasWeapon = true;   // à changer quand il y aura d'autres armes
-        bool hasAmmo = currentWeapon.ammo > 0;    // vérifie les munitions
+        bool hasWeapon = true;   
+        bool hasAmmo = currentWeapon.ammo > 0;    
         bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
         bool showweapon = !isAiming;
         Model actualWeapon = currentWeapon.modelname;
@@ -247,10 +342,7 @@ partial class Program
             Raylib.DrawTextureEx(sniperaim, positionViseurSniper, 0, 1, Color.White);
             camera.FovY = 20.0f;
         }
-        else
-        {
-            camera.FovY = 60.0f;
-        }
+        else camera.FovY = 60.0f;
 
         if (showweapon)
         {
@@ -259,13 +351,16 @@ partial class Program
                 Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, Vector3.One, Color.White);
             Raylib.EndMode3D();
             Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
-            Raylib.DrawFPS(10, 10);
+            
             string texteMunitions = $"Munitions: {currentWeapon.ammo}/{currentWeapon.maxammo}";
             int posX = Raylib.GetScreenWidth() - 400;
-            int posY = Raylib.GetScreenHeight() - 450;
-            Raylib.DrawText(texteMunitions, posX, posY, 30, Color.Gray);
+            int posY = Raylib.GetScreenHeight() - 100;
+            Raylib.DrawText(texteMunitions, posX, posY, 30, Color.Black);
         }
 
+        // ========================================================
+        // [ZONE ILIAN] 5. LOGIQUE DES TIRS
+        // ========================================================
         if (hasWeapon && hasAmmo && !currentWeapon.isReloading && Raylib.IsMouseButtonDown(MouseButton.Left) && ((float)Raylib.GetTime() - currentWeapon.lastShotTime >= currentWeapon.fireRate))
         {
             Raylib.PlaySound(actualSound);
@@ -273,12 +368,13 @@ partial class Program
             recoilAngle = -15.0f;
             currentWeapon.lastShotTime = (float)Raylib.GetTime();
             currentWeapon.ammo--;
-            Vector3 direction = Vector3.Normalize(camera.Target - camera.Position);
+            
+            // LA SEULE MODIFICATION POUR LE ILIAN : On utilise le regard BEPU (CamFroward)
+            Vector3 direction = CamFroward; 
             Vector3 right = Vector3.Normalize(Vector3.Cross(direction, camera.Up));
             laserStart = camera.Position + direction * 0.5f + right * 0.25f;
             laserEnd = laserStart + direction * currentWeapon.range;
 
-            // Calculer les dégâts sur les ennemis touchés
             foreach (Enemy enemy in enemies.ToList())
             {
                 float distanceToEnemy = Vector3.Distance(laserStart, enemy.position);
@@ -286,28 +382,83 @@ partial class Program
                 {
                     Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
                     float dot = Vector3.Dot(direction, toEnemy);
-                    if (dot > 0.99f)
+                    if (dot > 0.99f) // Hitbox précise
                     {
                         enemy.health -= currentWeapon.damage;
-                        if (enemy.health <= 0)
-                        {
-                            enemies.Remove(enemy);
-                        }
+                        if (enemy.health <= 0) enemies.Remove(enemy);
                     }
                 }
             }
         }
 
-        // Gestion du rechargement
         currentWeapon.Reload();
 
-        // Debug: afficher le timer du laser pour vérifier l'activation
-        if (laserTimer > 0)
+        //infos 
+        Raylib.DrawText("le moteur tourne.", 10,10,20, Color.DarkGreen);
+        Raylib.DrawText($"Hauteur du cube : {posCube.Y:F2}", 10,40,20,Color.DarkGreen);
+        if (NbJump >NbJumpMax)
         {
-            Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 40, 20, Color.Red);
+            Raylib.DrawText("Jump allowed", 10,80,20,Color.DarkGreen);
+        }
+        else
+        {
+            Raylib.DrawText("Jump not allowed", 10,80,20,Color.Red);
         }
 
+        //wall jump 
+        if (capteurMurDroit.toucheSol)
+        {
+            Raylib.DrawText("saut droit", 10,110,20,Color.DarkGreen);
+            Raylib.DrawRectangle(LargeurFenetre/2+50,HauteurFenetre/2-5,3,10,Color.White);
+        }
+        else
+        {
+            Raylib.DrawText("saut droit",10,110,20,Color.Red);
+        }
+        if (capteurMurGauche.toucheSol)
+        {
+            Raylib.DrawText("saut gauche", 10,140,20,Color.DarkGreen);
+            Raylib.DrawRectangle(LargeurFenetre/2-50,HauteurFenetre/2-5,3,10,Color.White);
+        }
+        else
+        {
+            Raylib.DrawText("saut gauche",10,140,20,Color.Red);
+        }
 
+        //sprint 
+        if (IsSprinting)
+        {
+            Raylib.DrawText("sprint", 10,170,20,Color.DarkGreen);
+        }
+        else
+        {
+            Raylib.DrawText("sprint",10,170,20,Color.Red);
+        }
+
+        if (IsWallRunning)
+        {
+            Raylib.DrawText("WallRun", 10,200,20,Color.DarkGreen);
+        }
+        else
+        {
+            Raylib.DrawText("WallRun",10,200,20,Color.Red);
+        }
+
+        Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10,240,20,Color.DarkGreen);
+        Raylib.DrawText($"Vitesse verticale : {vitesseVerticale:F2}", 10,270,20,Color.DarkGreen);
+        
+        if (capteurGlissade.toucheSol) Raylib.DrawText("touche sol glissade", 10,300,20,Color.DarkGreen);
+        else Raylib.DrawText("touche sol glissade", 10,300,20,Color.Red);
+        //crosshair 
+        Raylib.DrawCircle(LargeurFenetre/2,HauteurFenetre/2,3f,Color.White);
+
+
+        if (laserTimer > 0) Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 380, 20, Color.Red);
+
+        // Vitesse Debug BEPU
+        Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10, 340, 20, Color.DarkGreen);
+        
+        Raylib.DrawFPS(LargeurFenetre-90,10);
         Raylib.EndDrawing();
     }
 }
