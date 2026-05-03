@@ -47,6 +47,7 @@ partial class Program
 
     // modeles 3d
     static Model mapModel;
+    static Model enemyModel;
     static Model sniper;
     static Model karambit;
 
@@ -142,6 +143,7 @@ partial class Program
         background = Raylib.LoadTexture("src\\Background3.png");
 
         mapModel = Raylib.LoadModel("map.glb");
+        enemyModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
         sniperrifle.modelname = sniper;
         karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");

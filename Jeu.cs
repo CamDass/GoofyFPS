@@ -2,20 +2,22 @@ using System;
 using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
+using System.Linq;
 
 partial class Program
 {   
 
 
-    static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 2.0f, 5, 3, sniper, snipershot);
+    static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 1.0f, 5, 3, sniper, snipershot);
 
-    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.5f, 1, 0, karambit, karambitshot);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife };
     static Weapon currentWeapon = karambitknife;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
+    static float recoilAngle = 0.0f;
     //===== BOUCLE DU JEU =====
 
     public static void BouclePrincipale()
@@ -97,6 +99,10 @@ partial class Program
         // Mise à jour du timer du laser
         laserTimer -= deltaTime;
         if (laserTimer < 0) laserTimer = 0;
+
+        // Mise à jour du recul de l'arme
+        if (recoilAngle < 0) recoilAngle += deltaTime * 30.0f;
+        if (recoilAngle > 0) recoilAngle = 0;
 
         // --- A. GESTION DES MOUVEMENTS HORIZONTAUX (X & Z) ---
         Vector3 oldPosition = camera.Position;
@@ -204,13 +210,17 @@ partial class Program
 
             // Dessiner les ennemis
             foreach (Enemy enemy in enemies)
+            {
                 Raylib.DrawBoundingBox(enemy.GetBoundingBox(), Color.Blue);
-
+                Raylib.DrawModel(enemyModel, enemy.position, 1.0f, Color.White);
+            }
             // Dessiner le laser rouge pendant 1 seconde après le tir
             if (laserTimer > 0)
             {
-                Raylib.DrawLine3D(laserStart, laserEnd, Color.Red);
-                Raylib.DrawSphere(laserEnd, 0.2f, Color.Red);
+                byte alpha = (byte)(laserTimer * 255);
+                Color laserColor = new Color((byte)255, (byte)0, (byte)0, alpha);
+                Raylib.DrawLine3D(laserStart, laserEnd, laserColor);
+                Raylib.DrawSphere(laserEnd, 0.2f, laserColor);
             }
         Raylib.EndMode3D();
 
@@ -225,7 +235,7 @@ partial class Program
 
         
         bool hasWeapon = true;   // à changer quand il y aura d'autres armes
-        bool hasAmmo = true;    // à changer quand il y aura le système de munitions
+        bool hasAmmo = currentWeapon.ammo > 0;    // vérifie les munitions
         bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
         bool showweapon = !isAiming;
         Model actualWeapon = currentWeapon.modelname;
@@ -246,16 +256,23 @@ partial class Program
         {
             Raylib.BeginMode3D(weaponCamera);
                 Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
-                Raylib.DrawModel(actualWeapon, weaponPos, 1.0f, Color.White);
+                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, Vector3.One, Color.White);
             Raylib.EndMode3D();
             Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
             Raylib.DrawFPS(10, 10);
+            string texteMunitions = $"Munitions: {currentWeapon.ammo}/{currentWeapon.maxammo}";
+            int posX = Raylib.GetScreenWidth() - 400;
+            int posY = Raylib.GetScreenHeight() - 450;
+            Raylib.DrawText(texteMunitions, posX, posY, 30, Color.Gray);
         }
 
-        if (hasWeapon && hasAmmo && Raylib.IsMouseButtonPressed(MouseButton.Left))
+        if (hasWeapon && hasAmmo && !currentWeapon.isReloading && Raylib.IsMouseButtonDown(MouseButton.Left) && ((float)Raylib.GetTime() - currentWeapon.lastShotTime >= currentWeapon.fireRate))
         {
             Raylib.PlaySound(actualSound);
             laserTimer = 1.0f;
+            recoilAngle = -15.0f;
+            currentWeapon.lastShotTime = (float)Raylib.GetTime();
+            currentWeapon.ammo--;
             Vector3 direction = Vector3.Normalize(camera.Target - camera.Position);
             Vector3 right = Vector3.Normalize(Vector3.Cross(direction, camera.Up));
             laserStart = camera.Position + direction * 0.5f + right * 0.25f;
@@ -280,6 +297,9 @@ partial class Program
                 }
             }
         }
+
+        // Gestion du rechargement
+        currentWeapon.Reload();
 
         // Debug: afficher le timer du laser pour vérifier l'activation
         if (laserTimer > 0)
