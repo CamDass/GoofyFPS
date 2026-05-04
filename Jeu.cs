@@ -355,7 +355,7 @@ partial class Program
         Sound actualSound = currentWeapon.soundname;
         Vector2 positionViseurSniper = new Vector2(0,0);
 
-        if (isAiming)
+        if (isAiming && currentWeapon == sniperrifle)
         {
             Raylib.DrawTextureEx(sniperaim, positionViseurSniper, 0, 1, Color.White);
             camera.FovY = 20.0f;
@@ -400,7 +400,7 @@ partial class Program
                 {
                     Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
                     float dot = Vector3.Dot(direction, toEnemy);
-                    if (dot > 0.99f) // Hitbox précise
+                    if (dot > 0.995) // Hitbox précise
                     {
                         enemy.health -= currentWeapon.damage;
                         if (enemy.health <= 0) enemies.Remove(enemy);
