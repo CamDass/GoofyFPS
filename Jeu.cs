@@ -228,6 +228,14 @@ partial class Program
 
         if (IsWallRunning)
         {
+            if (Raylib.IsKeyPressed(KeyboardKey.Space))
+            {
+                espionCube.Velocity.Linear.Y += 5f;
+                if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
+                if (capteurMurGauche.toucheMur) deplacementVoulu += GroundRight*20;
+                Console.WriteLine("wall jump");
+            }
+
             NbJump = NbJumpMax + 1;
             fAcceleration = 0.1f;
             if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;

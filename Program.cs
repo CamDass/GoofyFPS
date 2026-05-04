@@ -113,7 +113,7 @@ partial class Program
 
         Model Map = Raylib.LoadModel("map.glb"); // On la charge toujours pour plus tard
         Model MapTest = Raylib.LoadModel("test.glb"); // On la charge toujours pour plus tard
-        mapModel = MapTest;
+        mapModel = Map;
 
         enemyModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
