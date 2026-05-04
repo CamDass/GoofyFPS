@@ -40,6 +40,8 @@ partial class Program
     static float mapScale = 1f;
     static Vector3 mapPosition = new Vector3(0.0f, 0.0f, 0.0f);
 
+
+
     // Ennemis
     public class Enemy
     {
@@ -130,6 +132,16 @@ partial class Program
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
 
+        //APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE
+        unsafe
+        {
+            // On boucle sur TOUS les matériaux du modèle Blender
+            for (int i = 0; i < mapModel.MaterialCount; i++)
+            {
+                mapModel.Materials[i].Shader = lightShader;
+            }
+        }
+
         ListeTexture.Add(Logo); ListeTexture.Add(clic1); ListeTexture.Add(clic2); ListeTexture.Add(clic3);
         ListeTexture.Add(play_active); ListeTexture.Add(play_button); ListeTexture.Add(option_active);
         ListeTexture.Add(option_button); ListeTexture.Add(quit_active); ListeTexture.Add(quit_button);
@@ -185,58 +197,52 @@ partial class Program
 
         unsafe 
         {
-            // 1. On compte combien il y a de triangles au total dans toute la carte
             int totalTriangles = 0;
-            for (int i = 0; i < mapModel.MeshCount; i++)
-            {
-                totalTriangles += mapModel.Meshes[i].TriangleCount;
-            }
+            for (int i = 0; i < mapModel.MeshCount; i++) totalTriangles += mapModel.Meshes[i].TriangleCount;
 
-            // 2. On demande à BEPU de nous réserver une liste de la bonne taille
             pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
             int triangleActuel = 0;
 
-            // 3. On fouille dans chaque partie de la carte
             for (int m = 0; m < mapModel.MeshCount; m++)
             {
                 Raylib_cs.Mesh raylibMesh = mapModel.Meshes[m];
-                
-                // On récupère les adresses mémoires (Pointeurs) brutes de Raylib
                 float* vertices = raylibMesh.Vertices;
                 ushort* indices = raylibMesh.Indices; 
 
-                // S'il n'y a pas d'indices (rare, mais possible), on passe
-                if (indices == null) continue; 
-
-                // 4. On lit les triangles un par un
                 for (int t = 0; t < raylibMesh.TriangleCount; t++)
                 {
-                    // Récupère les numéros des 3 points du triangle
-                    int index1 = indices[t * 3 + 0];
-                    int index2 = indices[t * 3 + 1];
-                    int index3 = indices[t * 3 + 2];
+                    int index1, index2, index3;
 
-                    // Récupère les coordonnées X, Y, Z de chaque point et on applique l'échelle (mapScale)
+                    // Si Blender a bien fait son travail (Mesh indexé)
+                    if (indices != null)
+                    {
+                        index1 = indices[t * 3 + 0];
+                        index2 = indices[t * 3 + 1];
+                        index3 = indices[t * 3 + 2];
+                    }
+                    // Si Blender a exporté "en vrac" (Vertices purs)
+                    else
+                    {
+                        index1 = t * 3 + 0;
+                        index2 = t * 3 + 1;
+                        index3 = t * 3 + 2;
+                    }
+
                     Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
                     Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
                     Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
 
-                    // 5. On crée le vrai triangle BEPU et on le range dans la liste
                     bepuTriangles[triangleActuel] = new Triangle(point1, point2, point3);
                     triangleActuel++;
                 }
             }
 
-            // 6. LA MAGIE BEPU : On moule toute cette liste en un seul Mesh géant !
-            // (L'échelle est à 1 car on a déjà multiplié les points par mapScale au-dessus)
-            var cartePhysiqueBEPU = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
-            
-            // 7. On génère le ticket et on l'ajoute au monde Static à la bonne position
-            TypedIndex ticketCarte = simulation.Shapes.Add(cartePhysiqueBEPU);
-            simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+    var cartePhysiqueBEPU = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
+    TypedIndex ticketCarte = simulation.Shapes.Add(cartePhysiqueBEPU);
+    simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
 
-            Console.WriteLine($"[DEBUG] Map chargée en physique avec {totalTriangles} triangles !");
-        }
+    Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
+}
 
         // Le Joueur
         Capsule PlayerFrom = new Capsule(0.5f, 1f);
@@ -245,7 +251,7 @@ partial class Program
         PlayerTicketAccroupi = simulation.Shapes.Add(PlayerFromAccroupi);
 
         BodyInertia PlayerInertie = new BodyInertia { InverseMass = 1f / 10f, InverseInertiaTensor = new BepuUtilities.Symmetric3x3() };
-        BodyDescription Playerdescription = BodyDescription.CreateDynamic(new Vector3(0, 2, 0), PlayerInertie, PlayerTicket, 0.01f);
+        BodyDescription Playerdescription = BodyDescription.CreateDynamic(new Vector3(0, 100, 0), PlayerInertie, PlayerTicket, 0.01f);
         PlayerId = simulation.Bodies.Add(Playerdescription);
 
         // Cube Spawner
