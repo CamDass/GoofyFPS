@@ -7,6 +7,7 @@ using BepuPhysics.Constraints;
 using BepuPhysics.Trees;
 using BepuUtilities;
 
+
 // ========================================================================================
 // LES CONTRATS DE PHYSIQUE
 // ========================================================================================
@@ -62,37 +63,53 @@ public struct PoseIntegratorCallbacks : IPoseIntegratorCallbacks
     }
 }
 
-public struct GroundSensor : IRayHitHandler
-{
-    public bool toucheSol;
-    public CollidableReference IdJoueur ;
 
-    public GroundSensor(CollidableReference idJoueur)
+// On ajoute le "diplôme" ISweepHitHandler (et on garde IRayHitHandler au cas où tu en aurais besoin ailleurs)// On déclare fièrement les DEUX interfaces (Le diplôme Sphère ET le diplôme Laser)
+public struct GroundSensor : ISweepHitHandler, IRayHitHandler
+{
+    public CollidableReference IgnoreCollidable;
+    public bool toucheSol;
+
+    public GroundSensor(CollidableReference ignoreCollidable)
     {
+        IgnoreCollidable = ignoreCollidable;
         toucheSol = false;
-        IdJoueur = idJoueur;
     }
 
+    // Filtre 1 : On ignore le joueur lui-même
     public bool AllowTest(CollidableReference collidable)
     {
-        //comparer le code bare de l'objet touché et celui du joueur pour eviter de bloquer le saut
-        //.packed est une maniere qu'a bepu de comaprer rapidement les id
-        //si c nous meme, c faux donc le laser passe a travers. 
-        return collidable.Packed != IdJoueur.Packed;
+        return collidable != IgnoreCollidable;
     }
 
-    //garder pour plustard si on a des objets complexe
+    // Filtre 2 : On teste bien les sous-parties de la carte
     public bool AllowTest(CollidableReference collidable, int childIndex)
     {
-        //pour l'instant on garde ça simple, on autorise le laser a toucher toutes les sous parties
         return true;
     }
 
-    public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 normal, CollidableReference collidable, int childIndex)
+    // ==========================================
+    // LES FONCTIONS POUR LA BALLE (SWEEP - Sauts)
+    // ==========================================
+    public void OnHit(ref float maximumT, float t, in Vector3 hitLocation, in Vector3 hitNormal, CollidableReference collidable)
     {
-        //si bepu appel cette fonction c que ça a touché le sol
         toucheSol = true;
-        //on dit au laser de s'arreter net a la distance de l'impact. 
-        maximumT = t;
+        if (t < maximumT) maximumT = t;
+    }
+
+    public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
+    {
+        toucheSol = true;
+    }
+
+    // ==========================================
+    // LA FONCTION POUR LE LASER (RAYCAST - Glissade)
+    // ==========================================
+    // On n'oublie pas le "int childIndex" à la toute fin !
+    public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
+    {
+        toucheSol = true;
+        if (t < maximumT) maximumT = t;
     }
 }
+
