@@ -14,14 +14,161 @@ partial class Program
     // VARIABLES DES ARMES (ILIAN)
     // ========================================================
     static Weapon sniperrifle = new Weapon("Sniper", 100, 500, 1.0f, 5, 3, sniper, snipershot);
-    static Weapon karambitknife = new Weapon("Karambit", 75, 2, 0.4f, 1, 0, karambit, karambitshot);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 10, 0.4f, 1, 0, karambit, karambitshot);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife };
-    static Weapon currentWeapon = karambitknife;
+    static Weapon currentWeapon = sniperrifle;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
     static float recoilAngle = 0.0f;
+
+    static Random random = new Random();
+    static float barrelRespawnSeconds = 30.0f;
+    static float barrelScale = 1.0f;
+    static int initialBarrelCount = 10;
+
+    public class BarrelSpot
+    {
+        public Vector3 position;
+        public bool hasBarrel;
+        public float respawnTimer;
+        public bool respawnPending;
+
+        public BarrelSpot(Vector3 position, bool hasBarrel = false)
+        {
+            this.position = position;
+            this.hasBarrel = hasBarrel;
+            respawnTimer = 0f;
+            respawnPending = false;
+        }
+    }
+
+    static List<BarrelSpot> barrelSpots = new List<BarrelSpot>
+    {
+        // Remplace ces coordonnées par tes propres positions XYZ
+        new BarrelSpot(new Vector3(-57f, -0.55f, 31.92f)),
+        new BarrelSpot(new Vector3(-49f, 42.0f, 101f)),
+        new BarrelSpot(new Vector3(-53f, 7.5f, 130f)),
+        new BarrelSpot(new Vector3(-22f, -0.55f, 128f)),
+        new BarrelSpot(new Vector3(3f,-0.55f, 103f)),
+        new BarrelSpot(new Vector3(3f, 4.5f, 54f)),
+        new BarrelSpot(new Vector3(-15f, -0.55f, 22f)),
+        new BarrelSpot(new Vector3(-76.5f, 8f, 10.5f)),
+        new BarrelSpot(new Vector3(-81.5f, 5f, 42f)),
+        new BarrelSpot(new Vector3(-110f, -0.55f, 50.5f)),
+        new BarrelSpot(new Vector3(-72f, 9.0f, 91f)),
+        new BarrelSpot(new Vector3(-76f, -0.55f, 114f)),
+        new BarrelSpot(new Vector3(-46f, -0.55f, 52f)),
+        new BarrelSpot(new Vector3(-35f, 3.7f, 87f)),
+        new BarrelSpot(new Vector3(-18f, -0.55f, 71f)),
+    };
+
+    static void InitBarrels()
+    {
+        // Active aléatoirement 10 emplacements sur 15
+        List<int> indices = Enumerable.Range(0, barrelSpots.Count).OrderBy(i => random.Next()).Take(initialBarrelCount).ToList();
+        for (int i = 0; i < barrelSpots.Count; i++)
+        {
+            barrelSpots[i].hasBarrel = indices.Contains(i);
+            barrelSpots[i].respawnPending = false;
+            barrelSpots[i].respawnTimer = 0f;
+        }
+    }
+
+    static void SwitchWeaponFromBarrel()
+    {
+        if (weapons.Count <= 1) return;
+        Weapon newWeapon = currentWeapon;
+        while (newWeapon == currentWeapon)
+        {
+            newWeapon = weapons[random.Next(weapons.Count)];
+        }
+        currentWeapon = newWeapon;
+    }
+
+    static void CheckBarrelRespawns(float deltaTime)
+    {
+        for (int i = 0; i < barrelSpots.Count; i++)
+        {
+            BarrelSpot spot = barrelSpots[i];
+            if (!spot.hasBarrel && spot.respawnPending)
+            {
+                spot.respawnTimer -= deltaTime;
+                if (spot.respawnTimer <= 0f)
+                {
+                    spot.respawnPending = false;
+                    spot.respawnTimer = 0f;
+
+                    List<int> freeSlots = barrelSpots
+                        .Select((b, index) => new { b, index })
+                        .Where(x => !x.b.hasBarrel && !x.b.respawnPending)
+                        .Select(x => x.index)
+                        .ToList();
+
+                    if (freeSlots.Count > 0)
+                    {
+                        int targetIndex = freeSlots[random.Next(freeSlots.Count)];
+                        barrelSpots[targetIndex].hasBarrel = true;
+                    }
+                }
+                barrelSpots[i] = spot;
+            }
+        }
+    }
+
+    static void OnBarrelHit(int index)
+    {
+        if (index < 0 || index >= barrelSpots.Count) return;
+        Vector3 barrelPos = barrelSpots[index].position;
+        barrelSpots[index].hasBarrel = false;
+        barrelSpots[index].respawnPending = true;
+        barrelSpots[index].respawnTimer = barrelRespawnSeconds;
+        SwitchWeaponFromBarrel();
+        Raylib.PlaySound(explosion);
+        activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
+    }
+
+    public class ExplosionEffect
+    {
+        public Vector3 position;
+        public float timer;
+        public float duration;
+        public float initialSize;
+        public float maxSize;
+
+        public ExplosionEffect(Vector3 pos, float dur = 0.5f, float initSize = 0.5f, float maxSz = 7f)
+        {
+            position = pos;
+            timer = dur;
+            duration = dur;
+            initialSize = initSize;
+            maxSize = maxSz;
+        }
+
+        public float GetSize()
+        {
+            float progress = 1f - (timer / duration);
+            return initialSize + (maxSize - initialSize) * progress;
+        }
+
+        public float GetAlpha()
+        {
+            return (timer / duration) * 255f;
+        }
+    }
+
+    static List<ExplosionEffect> activeExplosions = new List<ExplosionEffect>();
+
+    static bool IsPointOnLaser(Vector3 point, Vector3 laserStart, Vector3 direction, float range)
+    {
+        Vector3 toPoint = point - laserStart;
+        float distance = toPoint.Length();
+        if (distance > range) return false;
+        Vector3 toPointNorm = Vector3.Normalize(toPoint);
+        float dot = Vector3.Dot(direction, toPointNorm);
+        return dot > 0.995f;
+    }
 
     static bool debugInfo = false;
 
@@ -40,21 +187,22 @@ partial class Program
 
         if (isMenuGameOpen) { Menugame(); return; }
 
-        if (Raylib.IsKeyPressed(KeyboardKey.G))
-        {
-            Random rand = new Random();
-            Weapon newWeapon = currentWeapon;
-            while (newWeapon == currentWeapon)
-            {
-                newWeapon = weapons[rand.Next(weapons.Count)];
-            }
-            currentWeapon = newWeapon;
-        }
-
+        // Le changement d'arme se fait désormais uniquement via les barrils touchés
 
         float deltaTime = Raylib.GetFrameTime(); 
         laserTimer -= deltaTime;
         if (laserTimer < 0) laserTimer = 0;
+
+        CheckBarrelRespawns(deltaTime);
+
+        for (int i = activeExplosions.Count - 1; i >= 0; i--)
+        {
+            activeExplosions[i].timer -= deltaTime;
+            if (activeExplosions[i].timer <= 0)
+            {
+                activeExplosions.RemoveAt(i);
+            }
+        }
 
         if (recoilAngle < 0) recoilAngle += deltaTime * 30.0f;
         if (recoilAngle > 0) recoilAngle = 0;
@@ -408,6 +556,24 @@ partial class Program
                 Raylib.DrawBoundingBox(enemy.GetBoundingBox(), Color.Blue);
                 Raylib.DrawModel(enemyModel, enemy.position, 1.0f, Color.White);
             }
+
+            // Dessiner les barrils
+            foreach (BarrelSpot spot in barrelSpots)
+            {
+                if (spot.hasBarrel)
+                {
+                    Raylib.DrawModel(barrelModel, spot.position, barrelScale, Color.White);
+                }
+            }
+
+            // Dessiner les explosions
+            foreach (ExplosionEffect exp in activeExplosions)
+            {
+                float size = exp.GetSize();
+                byte alpha = (byte)exp.GetAlpha();
+                Color expColor = new Color((byte)255, (byte)255, (byte)255, alpha);
+                Raylib.DrawBillboard(camera, imageexplosion, exp.position, size, expColor);
+            }
             
             // Dessiner le laser (Code ILIAN)
             if (laserTimer > 0)
@@ -476,17 +642,36 @@ partial class Program
             laserStart = camera.Position + direction * 0.5f + right * 0.25f;
             laserEnd = laserStart + direction * currentWeapon.range;
 
-            foreach (Enemy enemy in enemies.ToList())
+            int hitBarrelIndex = -1;
+            for (int i = 0; i < barrelSpots.Count; i++)
             {
-                float distanceToEnemy = Vector3.Distance(laserStart, enemy.position);
-                if (distanceToEnemy <= currentWeapon.range)
+                BarrelSpot spot = barrelSpots[i];
+                if (!spot.hasBarrel) continue;
+                if (IsPointOnLaser(spot.position, laserStart, direction, currentWeapon.range))
                 {
-                    Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
-                    float dot = Vector3.Dot(direction, toEnemy);
-                    if (dot > 0.995) // Hitbox précise
+                    hitBarrelIndex = i;
+                    break;
+                }
+            }
+
+            if (hitBarrelIndex >= 0)
+            {
+                OnBarrelHit(hitBarrelIndex);
+            }
+            else
+            {
+                foreach (Enemy enemy in enemies.ToList())
+                {
+                    float distanceToEnemy = Vector3.Distance(laserStart, enemy.position);
+                    if (distanceToEnemy <= currentWeapon.range)
                     {
-                        enemy.health -= currentWeapon.damage;
-                        if (enemy.health <= 0) enemies.Remove(enemy);
+                        Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
+                        float dot = Vector3.Dot(direction, toEnemy);
+                        if (dot > 0.995) // Hitbox précise
+                        {
+                            enemy.health -= currentWeapon.damage;
+                            if (enemy.health <= 0) enemies.Remove(enemy);
+                        }
                     }
                 }
             }
@@ -498,51 +683,52 @@ partial class Program
         {
             //infos 
             Raylib.DrawText("le moteur tourne.", 10,10,20, Color.DarkGreen);
-            Raylib.DrawText($"Hauteur du cube : {posCube.Y:F2}", 10,40,20,Color.DarkGreen);
+            Raylib.DrawText($"Position XYZ : X={posCube.X:F2} Y={posCube.Y:F2} Z={posCube.Z:F2}", 10,40,20, Color.DarkGreen);
+            Raylib.DrawText($"Hauteur du cube : {posCube.Y:F2}", 10,70,20,Color.DarkGreen);
             if (NbJump >NbJumpMax)
             {
-                Raylib.DrawText("Jump allowed", 10,80,20,Color.DarkGreen);
+                Raylib.DrawText("Jump allowed", 10,100,20,Color.DarkGreen);
             }
             else
             {
-                Raylib.DrawText("Jump not allowed", 10,80,20,Color.Red);
+                Raylib.DrawText("Jump not allowed", 10,100,20,Color.Red);
             }
 
             //wall jump 
             if (capteurMurDroit.toucheMur)
             {
-                Raylib.DrawText("saut droit", 10,110,20,Color.DarkGreen);
+                Raylib.DrawText("saut droit", 10,130,20,Color.DarkGreen);
             }
             else
             {
-                Raylib.DrawText("saut droit",10,110,20,Color.Red);
+                Raylib.DrawText("saut droit",10,130,20,Color.Red);
             }
             if (capteurMurGauche.toucheMur)
             {
-                Raylib.DrawText("saut gauche", 10,140,20,Color.DarkGreen);
+                Raylib.DrawText("saut gauche", 10,160,20,Color.DarkGreen);
             }
             else
             {
-                Raylib.DrawText("saut gauche",10,140,20,Color.Red);
+                Raylib.DrawText("saut gauche",10,160,20,Color.Red);
             }
 
             //sprint 
             if (IsSprinting)
             {
-                Raylib.DrawText("sprint", 10,170,20,Color.DarkGreen);
+                Raylib.DrawText("sprint", 10,190,20,Color.DarkGreen);
             }
             else
             {
-                Raylib.DrawText("sprint",10,170,20,Color.Red);
+                Raylib.DrawText("sprint",10,190,20,Color.Red);
             }
 
             if (IsWallRunning)
             {
-                Raylib.DrawText("WallRun", 10,200,20,Color.DarkGreen);
+                Raylib.DrawText("WallRun", 10,220,20,Color.DarkGreen);
             }
             else
             {
-                Raylib.DrawText("WallRun",10,200,20,Color.Red);
+                Raylib.DrawText("WallRun",10,220,20,Color.Red);
             }
 
             Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10,240,20,Color.DarkGreen);

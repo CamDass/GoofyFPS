@@ -26,14 +26,14 @@ partial class Program
     
     // Images & HUD
     static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim;
-    static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background;
+    static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, imageexplosion;
     static float tempsAffichage = 3.0f; 
     static float opaciteImage = 255.0f; 
     static List<EffetClic> ListeEffets = new List<EffetClic>();
 
     // Modèles 3D et Sons
-    static Model mapModel, enemyModel, sniper, karambit;
-    static Sound snipershot, karambitshot, select, unselect, survole, swoosh;
+    static Model mapModel, enemyModel, sniper, karambit, barrelModel;
+    static Sound snipershot, karambitshot, select, unselect, survole, swoosh, explosion;
     static Shader lightShader;
     static int lightPosLoc;
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
@@ -107,6 +107,7 @@ partial class Program
         clic2 = Raylib.LoadTexture("src\\img\\clic2-blanc.png");
         clic3 = Raylib.LoadTexture("src\\img\\clic3-blanc.png");
         startimg = Raylib.LoadTexture("assets\\2D\\epsteintrump.png");
+        imageexplosion = Raylib.LoadTexture("assets\\2D\\exploimage.png");
 
         play_active = Raylib.LoadTexture("src\\boutons\\play-active.png");
         play_button = Raylib.LoadTexture("src\\boutons\\play-base.png");
@@ -125,9 +126,11 @@ partial class Program
         sniperrifle.modelname = sniper;
         karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");
         karambitknife.modelname = karambit;
+        barrelModel = Raylib.LoadModel("assets\\3D\\barril.glb");
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
 
         Raylib.InitAudioDevice();
+        explosion = Raylib.LoadSound("assets\\sounds\\fah-bomb.mp3");
         snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
         sniperrifle.soundname = snipershot;
         karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
@@ -136,6 +139,7 @@ partial class Program
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
         swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
+        explosion = Raylib.LoadSound("assets\\sounds\\fahh-bomb.mp3");
 
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
@@ -165,6 +169,12 @@ partial class Program
             for (int i = 0; i < enemyModel.MaterialCount; i++)
             {
                 enemyModel.Materials[i].Shader = lightShader;
+            }
+
+            // 5. Barreils
+            for (int i = 0; i < barrelModel.MaterialCount; i++)
+            {
+                barrelModel.Materials[i].Shader = lightShader;
             }
         }
 
@@ -285,6 +295,7 @@ partial class Program
         ticketCube = simulation.Shapes.Add(Cube);
         inertieCube = Cube.ComputeInertia(1f);
 
+        InitBarrels();
         Raylib.SetTargetFPS(FPS); 
         X_carre = Raylib.GetScreenWidth()/2;
         Y_carre = Raylib.GetScreenHeight()/2;
@@ -304,6 +315,7 @@ partial class Program
         Raylib.UnloadModel(enemyModel);
         Raylib.UnloadModel(sniper);
         Raylib.UnloadModel(karambit);
+        Raylib.UnloadModel(barrelModel);
         Raylib.UnloadShader(lightShader);
         Raylib.UnloadSound(snipershot);
         Raylib.UnloadSound(karambitshot);

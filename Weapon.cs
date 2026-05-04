@@ -3,10 +3,6 @@ using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
 
-
-
-using Raylib_cs; // Indispensable pour que le type "Model" soit reconnu
-
 public class Weapon
 {
     // parametres
@@ -31,6 +27,7 @@ public class Weapon
         range = portee;
         fireRate = cadence;
         maxammo = munitionsMax;
+        ammo = munitionsMax;
         reloadtime = tempsRecharge;
         modelname = modele3D;
         soundname = son;
