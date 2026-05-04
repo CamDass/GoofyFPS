@@ -13,8 +13,8 @@ partial class Program
     // ========================================================
     // VARIABLES DES ARMES (ILIAN)
     // ========================================================
-    static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 1.0f, 5, 3, sniper, snipershot);
-    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot);
+    static Weapon sniperrifle = new Weapon("Sniper", 100, 500, 1.0f, 5, 3, sniper, snipershot);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 2, 0.4f, 1, 0, karambit, karambitshot);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife };
     static Weapon currentWeapon = karambitknife;
