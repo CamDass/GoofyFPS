@@ -230,7 +230,7 @@ partial class Program
         {
             if (Raylib.IsKeyPressed(KeyboardKey.Space))
             {
-                espionCube.Velocity.Linear.Y += 5f;
+                espionCube.Velocity.Linear.Y += 2f;
                 if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
                 if (capteurMurGauche.toucheMur) deplacementVoulu += GroundRight*20;
                 Console.WriteLine("wall jump");
