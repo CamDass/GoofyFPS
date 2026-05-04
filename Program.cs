@@ -25,8 +25,8 @@ partial class Program
     static List<Texture2D> ListeTexture = new List<Texture2D>();
     
     // Images & HUD
-    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim;
-    static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background;
+    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, ImageMapTest, ImageMapVille;
+    static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, BlurBackground;
     static float tempsAffichage = 3.0f; 
     static float opaciteImage = 255.0f; 
     static List<EffetClic> ListeEffets = new List<EffetClic>();
@@ -78,7 +78,7 @@ partial class Program
     static int NbJumpMax = 1; 
 
     static bool CanDash = true;
-    static float dashChrono = 100;
+    static float dashChrono = 0;
 
 
     static float SpeedCoef = 1;
@@ -114,11 +114,18 @@ partial class Program
         option_active = Raylib.LoadTexture("src\\boutons\\option-active.png");
         quit_active = Raylib.LoadTexture("src\\boutons\\quit-active.png");
         quit_button = Raylib.LoadTexture("src\\boutons\\quit-base.png");
-        background = Raylib.LoadTexture("src\\Background3.png");
 
-        Model Map = Raylib.LoadModel("map.glb"); // On la charge toujours pour plus tard
-        Model MapTest = Raylib.LoadModel("test.glb"); // On la charge toujours pour plus tard
-        mapModel = Map;
+        background = Raylib.LoadTexture("src\\Background3.png");
+        
+        Image BlurBackgroundImg = Raylib.LoadImage("src\\Background3.png");
+        Raylib.ImageBlurGaussian(ref BlurBackgroundImg, 10);
+        BlurBackground = Raylib.LoadTextureFromImage(BlurBackgroundImg);
+        Raylib.UnloadImage(BlurBackgroundImg);
+
+
+        ImageMapTest = Raylib.LoadTexture("src\\testMap.png");
+        ImageMapVille = Raylib.LoadTexture("src\\ville.png");
+
 
         enemyModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
@@ -219,56 +226,7 @@ partial class Program
         // LE PONT RAYLIB -> BEPU (Création de la carte physique)
         // ========================================================
 
-        Console.WriteLine($"[DEBUG] Extraction des triangles de la map ({mapModel.MeshCount} parties détectées)...");
-
-        unsafe 
-        {
-            int totalTriangles = 0;
-            for (int i = 0; i < mapModel.MeshCount; i++) totalTriangles += mapModel.Meshes[i].TriangleCount;
-
-            pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
-            int triangleActuel = 0;
-
-            for (int m = 0; m < mapModel.MeshCount; m++)
-            {
-                Raylib_cs.Mesh raylibMesh = mapModel.Meshes[m];
-                float* vertices = raylibMesh.Vertices;
-                ushort* indices = raylibMesh.Indices; 
-
-                for (int t = 0; t < raylibMesh.TriangleCount; t++)
-                {
-                    int index1, index2, index3;
-
-                    // Si Blender a bien fait son travail (Mesh indexé)
-                    if (indices != null)
-                    {
-                        index1 = indices[t * 3 + 0];
-                        index2 = indices[t * 3 + 1];
-                        index3 = indices[t * 3 + 2];
-                    }
-                    // Si Blender a exporté "en vrac" (Vertices purs)
-                    else
-                    {
-                        index1 = t * 3 + 0;
-                        index2 = t * 3 + 1;
-                        index3 = t * 3 + 2;
-                    }
-
-                    Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
-                    Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
-                    Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
-
-                    bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
-                    triangleActuel++;
-                }
-            }
-
-    var cartePhysiqueBEPU = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
-    TypedIndex ticketCarte = simulation.Shapes.Add(cartePhysiqueBEPU);
-    simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
-
-    Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
-}
+        
 
         // Le Joueur
         Capsule PlayerFrom = new Capsule(0.5f, 1f);
