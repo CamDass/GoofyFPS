@@ -3,10 +3,6 @@ using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
 
-
-
-using Raylib_cs; // Indispensable pour que le type "Model" soit reconnu
-
 public class Weapon
 {
     // parametres
@@ -22,21 +18,24 @@ public class Weapon
     public float lastShotTime;
     public bool isReloading;
     public float reloadStartTime;
+    public float force;
 
     // constructeur
-    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son)
+    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son, float power)
     {
         name = nom;
         damage = degats;
         range = portee;
         fireRate = cadence;
         maxammo = munitionsMax;
+        ammo = munitionsMax;
         reloadtime = tempsRecharge;
         modelname = modele3D;
         soundname = son;
         lastShotTime = 0.0f;
         isReloading = false;
         reloadStartTime = 0.0f;
+        force = power;
     }
 
 
