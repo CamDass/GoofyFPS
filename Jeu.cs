@@ -142,8 +142,8 @@ partial class Program
         GroundRight = Vector3.Normalize(GroundRight);
         Vector3 deplacementVoulu = Vector3.Zero; 
 
-        GroundSensor capteurMurDroit = new GroundSensor(espionCube.CollidableReference);
-        GroundSensor capteurMurGauche = new GroundSensor(espionCube.CollidableReference);
+        WallSensor capteurMurDroit = new WallSensor(espionCube.CollidableReference);
+        WallSensor capteurMurGauche = new WallSensor(espionCube.CollidableReference);
         float longueurLaserMur = 0.8f;
         simulation.RayCast(posCube, GroundRight, longueurLaserMur, ref capteurMurDroit);
         simulation.RayCast(posCube, -GroundRight, longueurLaserMur, ref capteurMurGauche);
@@ -181,8 +181,7 @@ partial class Program
         // Saut
         if (Raylib.IsKeyPressed(KeyboardKey.Space))
         {
-            if (capteurMurGauche.toucheSol || capteurMurDroit.toucheSol) espionCube.Velocity.Linear.Y = 5f;
-            else if (NbJump > NbJumpMax)
+            if (NbJump > NbJumpMax)
             {
                 NbJump--;
                 if (espionCube.Velocity.Linear.Y > 0) { espionCube.Velocity.Linear.Y += 5f; } else { espionCube.Velocity.Linear.Y = 5f; }
@@ -192,15 +191,34 @@ partial class Program
         // Déplacements & WallRun
         if (!capteurSol.toucheSol)
         {
-            if ((capteurMurDroit.toucheSol && Raylib.IsKeyDown(KeyboardKey.D)) || (capteurMurGauche.toucheSol && Raylib.IsKeyDown(KeyboardKey.A))) IsWallRunning = true; 
+            if ((capteurMurDroit.toucheMur && Raylib.IsKeyDown(KeyboardKey.D)) || (capteurMurGauche.toucheMur && Raylib.IsKeyDown(KeyboardKey.A))) IsWallRunning = true; 
         }
 
         if (Raylib.IsKeyDown(KeyboardKey.W) || Raylib.IsKeyDown(KeyboardKey.Up)) deplacementVoulu += GroundForward;
         if (Raylib.IsKeyDown(KeyboardKey.S) || Raylib.IsKeyDown(KeyboardKey.Down)) deplacementVoulu -= GroundForward;
-        if ((Raylib.IsKeyDown(KeyboardKey.A) || Raylib.IsKeyDown(KeyboardKey.Left)) && !capteurMurGauche.toucheSol) deplacementVoulu -= GroundRight; 
-        if ((Raylib.IsKeyDown(KeyboardKey.D) || Raylib.IsKeyDown(KeyboardKey.Right)) && !capteurMurDroit.toucheSol) deplacementVoulu += GroundRight;
+        if ((Raylib.IsKeyDown(KeyboardKey.A) || Raylib.IsKeyDown(KeyboardKey.Left)) && !capteurMurGauche.toucheMur) deplacementVoulu -= GroundRight; 
+        if ((Raylib.IsKeyDown(KeyboardKey.D) || Raylib.IsKeyDown(KeyboardKey.Right)) && !capteurMurDroit.toucheMur) deplacementVoulu += GroundRight;
 
-        if (deplacementVoulu.LengthSquared() > 0) deplacementVoulu = Vector3.Normalize(deplacementVoulu);
+        if (deplacementVoulu.LengthSquared() > 0)
+        {
+            deplacementVoulu = Vector3.Normalize(deplacementVoulu);
+
+            // NOUVEAU : INCLINAISON SUR LA PENTE
+            // Si on est sur le sol et que ce sol n'est pas parfaitement plat
+            if (capteurSol.toucheSol && capteurSol.normaleDuSol != new Vector3(0, 1f, 0))
+            {
+                // 1. On projette notre déplacement horizontal sur le plan incliné du sol
+                // Formule mathématique : Vecteur = Vecteur - (Vecteur . Normale) * Normale
+                float dotProduct = Vector3.Dot(deplacementVoulu, capteurSol.normaleDuSol);
+                deplacementVoulu = deplacementVoulu - (capteurSol.normaleDuSol * dotProduct);
+                
+                // 2. On renormalise pour ne pas perdre de vitesse dans la pente
+                if (deplacementVoulu.LengthSquared() > 0)
+                {
+                    deplacementVoulu = Vector3.Normalize(deplacementVoulu);
+                }
+            }
+        }
 
         bool IsSprinting = Raylib.IsKeyDown(KeyboardKey.LeftShift);
         float SpeedCoef = IsSprinting ? 1.7f : 1f;
@@ -249,6 +267,15 @@ partial class Program
         Vector3 targetVelocity = deplacementVoulu * vMax * SpeedCoef;
         espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
         espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
+
+        if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyboardKey.Space))
+        {
+            if (targetVelocity.Y > 0) 
+            {
+                // On aide activement la capsule à monter la pente en appliquant la vitesse Y voulue !
+                espionCube.Velocity.Linear.Y = targetVelocity.Y;
+            }
+        }
 
         // Dash
         if (Raylib.IsKeyPressed(KeyboardKey.LeftControl)) espionCube.Velocity.Linear += GroundForward * 30;
@@ -462,7 +489,7 @@ partial class Program
             }
 
             //wall jump 
-            if (capteurMurDroit.toucheSol)
+            if (capteurMurDroit.toucheMur)
             {
                 Raylib.DrawText("saut droit", 10,110,20,Color.DarkGreen);
             }
@@ -470,7 +497,7 @@ partial class Program
             {
                 Raylib.DrawText("saut droit",10,110,20,Color.Red);
             }
-            if (capteurMurGauche.toucheSol)
+            if (capteurMurGauche.toucheMur)
             {
                 Raylib.DrawText("saut gauche", 10,140,20,Color.DarkGreen);
             }
@@ -510,19 +537,19 @@ partial class Program
             Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10, 340, 20, Color.DarkGreen);
         }
 
-
+        Color chrossairColor = Color.Red;
         //wall run 
-        if (capteurMurDroit.toucheSol)
+        if (capteurMurDroit.toucheMur)
         {
-            Raylib.DrawRectangle(LargeurFenetre/2+50,HauteurFenetre/2-5,3,10,Color.White);
+            Raylib.DrawRectangle(LargeurFenetre/2+50,HauteurFenetre/2-5,3,10,chrossairColor);
         }
-        if (capteurMurGauche.toucheSol)
+        if (capteurMurGauche.toucheMur)
         {
-            Raylib.DrawRectangle(LargeurFenetre/2-50,HauteurFenetre/2-5,3,10,Color.White);
+            Raylib.DrawRectangle(LargeurFenetre/2-50,HauteurFenetre/2-5,3,10,chrossairColor);
         }
 
         //crosshair 
-        Raylib.DrawCircle(LargeurFenetre/2,HauteurFenetre/2,3f,Color.White);
+        Raylib.DrawCircle(LargeurFenetre/2,HauteurFenetre/2,3f,chrossairColor);
 
 
 
