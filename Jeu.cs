@@ -252,38 +252,15 @@ partial class Program
         Raylib.ClearBackground(Color.SkyBlue);
 
         Raylib.BeginMode3D(camera);
-            
-            // NOTE : On ne dessine pas mapModel car BEPU ne le calcule pas encore !
-            // On dessine tes objets de test physique à la place :
 
+            // REMET CETTE LIGNE :
+            Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.Gray);
+            
+            /*
             //sol 
             float taillePlatforme = 200f;
             Raylib.DrawCube(new Vector3(0,-taillePlatforme/2,0), taillePlatforme, taillePlatforme, taillePlatforme, Color.Gray);
             Raylib.DrawGrid((int)taillePlatforme, 1f); 
-
-
-            //vide 
-            int nbrCouche = 50;
-            float espaceCouche = 1f;
-            float hauteurVide = -30f;
-
-            
-
-            //COUCHES TRANSPARENTES (bas vers le haut)
-            Color gazRouge = new Color(255, 50, 50, 8); 
-
-            //boucle commence au fond (i = 50) et remonte jusqu'à la surface (i = 1)
-            if (espionCube.Pose.Position.Y <= 0)
-            {
-                for (int i = nbrCouche; i > 0; i--)
-                {
-                    float hauteur = hauteurVide - (i * espaceCouche);
-                    
-                    // On dessine une plaque très fine (épaisseur 0.1f au lieu de 1f)
-                    Raylib.DrawCube(new Vector3(0, hauteur, 0), 1000f, 0.1f, 1000f, gazRouge);
-                }
-            }
-                
 
             
             //mur 
@@ -310,6 +287,27 @@ partial class Program
 
             Raylib.DrawCube(PosPlatforme3,10f, 1f , 10f,Color.Gray);
             Raylib.DrawCubeWires(PosPlatforme3,10f, 1f , 10f,Color.White);
+            */
+
+
+            //COUCHES TRANSPARENTES (bas vers le haut)
+            Color gazRouge = new Color(255, 50, 50, 8);
+            //vide 
+            int nbrCouche = 50;
+            float espaceCouche = 1f;
+            float hauteurVide = -30f; 
+
+            //boucle commence au fond (i = 50) et remonte jusqu'à la surface (i = 1)
+            if (espionCube.Pose.Position.Y <= 0)
+            {
+                for (int i = nbrCouche; i > 0; i--)
+                {
+                    float hauteur = hauteurVide - (i * espaceCouche);
+                    
+                    // On dessine une plaque très fine (épaisseur 0.1f au lieu de 1f)
+                    Raylib.DrawCube(new Vector3(0, hauteur, 0), 1000f, 0.1f, 1000f, gazRouge);
+                }
+            }
 
             //dessiner le model du joueur
             Vector3 PointHaut = new Vector3(posCube.X, posCube.Y + 0.5f, posCube.Z);
