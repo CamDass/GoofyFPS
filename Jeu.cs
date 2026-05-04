@@ -104,9 +104,14 @@ partial class Program
         float longueurLaserGlissade = 1.2f;
         simulation.RayCast(posCube, directionLaser, longueurLaserGlissade, ref capteurGlissade);
 
-        if (capteurSol.toucheSol) NbJump = NbJumpMax + 1;
+        if (capteurSol.toucheSol) {
+            NbJump = NbJumpMax + 1;
+            CanDash = true;
+        }
 
-
+        //90 frame = 1.5s 
+        if (dashChrono < 90)dashChrono ++;
+        
 
 
         if (Raylib.IsKeyDown(KeyboardKey.Tab))
@@ -237,6 +242,8 @@ partial class Program
             }
 
             NbJump = NbJumpMax + 1;
+            CanDash = true;
+
             fAcceleration = 0.1f;
             if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
             if (Raylib.IsKeyDown(KeyboardKey.A)) rollActuel = 0.25f;
@@ -286,7 +293,12 @@ partial class Program
         }
 
         // Dash
-        if (Raylib.IsKeyPressed(KeyboardKey.LeftControl)) espionCube.Velocity.Linear += GroundForward * 30;
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftControl) && CanDash && dashChrono >= 90){
+            //Raylib.PlaySound(swoosh);
+            espionCube.Velocity.Linear += GroundForward * 30;
+            CanDash = false ;
+            dashChrono = 0;
+        }
 
         // Jump pad (Sandbox)
         //if (posCube.X > 9 && posCube.X < 11 && posCube.Z > -1 && posCube.Z < 1 && capteurSol.toucheSol) espionCube.Velocity.Linear.Y += 20f;
@@ -572,6 +584,22 @@ partial class Program
         {
             Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel,80,Color.Red);
         }
+
+        Color missingDash = new Color(150, 150, 150, 50);
+        Color dashColor = new Color(150, 255, 150, 255);
+        int dashPixel = (int)(100*dashChrono/90);
+
+        Raylib.DrawRectangle(100, HauteurFenetre - 200, 100,40,missingDash); //arriere plan pour si on enleve la vie on voit encore la barre
+        if (CanDash && dashChrono >= 90)
+        {
+            Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,dashColor);
+        } else
+        {
+            Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,Color.LightGray);
+        }
+        
+        
+
 
         Raylib.DrawText($"{life}",100+10, HauteurFenetre - 150 + 25,50,Color.Black);
         

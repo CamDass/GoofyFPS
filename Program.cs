@@ -76,6 +76,11 @@ partial class Program
     // Variables de mouvement
     static int NbJump = 2; 
     static int NbJumpMax = 1; 
+
+    static bool CanDash = true;
+    static float dashChrono = 100;
+
+
     static float SpeedCoef = 1;
     
     // Paramètres Caméra FPS
