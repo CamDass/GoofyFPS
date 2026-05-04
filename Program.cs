@@ -151,11 +151,6 @@ partial class Program
         swordslash = swoosh;
         sniperrifle.soundname = snipershot;
         karambitknife.soundname = karambitshot;
-        bazookaWeapon.soundname = bazookashot;
-        shotgunWeapon.soundname = shotgunshot;
-        pistolWeapon.soundname = pistolshot;
-        revolverWeapon.soundname = revolvershot;
-        swordWeapon.soundname = swordslash;
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");

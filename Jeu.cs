@@ -13,16 +13,16 @@ partial class Program
     // ========================================================
     // VARIABLES DES ARMES (ILIAN)
     // ========================================================
-    static Weapon sniperrifle = new Weapon("Sniper", 100, 500, 1.0f, 5, 3, sniper, snipershot);
-    static Weapon karambitknife = new Weapon("Karambit", 75, 10, 0.4f, 1, 0, karambit, karambitshot);
-    static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot);
-    static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 2f, 5, 2, shotgun, shotgunshot);
-    static Weapon pistolWeapon = new Weapon("Pistol", 20, 90, 0.3f, 12, 2, pistol, pistolshot);
-    static Weapon revolverWeapon = new Weapon("Revolver", 34, 10, 0.8f, 6, 2, revolver, revolvershot);
-    static Weapon swordWeapon = new Weapon("Sword", 20, 100, 0.3f, 15, 4, sword, swordslash);
+    static Weapon sniperrifle = new Weapon("Sniper", 100, 500, 1.0f, 5, 3, sniper, snipershot, 0f);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 10, 0.4f, 1, 0, karambit, karambitshot, 0f);
+    static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
+    static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 2f, 5, 2, shotgun, shotgunshot, 7.0f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 20, 90, 0.3f, 12, 2, pistol, pistolshot, 0f);
+    static Weapon revolverWeapon = new Weapon("Revolver", 34, 10, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
+    static Weapon swordWeapon = new Weapon("Sword", 20, 100, 0.3f, 15, 4, sword, swordslash, 4f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
-    static Weapon currentWeapon = pistolWeapon;
+    static Weapon currentWeapon = revolverWeapon;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
@@ -615,6 +615,13 @@ partial class Program
             camera.FovY = 20.0f;
         }
         else camera.FovY = 60.0f;
+
+        if (hasAmmo && Raylib.IsMouseButtonDown(MouseButton.Left) && ((float)Raylib.GetTime() - currentWeapon.lastShotTime >= currentWeapon.fireRate))
+        {   
+            Vector3 direction = CamFroward;
+            float forceRecul = 1.0f;
+            espionCube.Velocity.Linear -= direction * forceRecul * currentWeapon.force;
+        }
 
         if (showweapon)
         {

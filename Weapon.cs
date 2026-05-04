@@ -18,9 +18,10 @@ public class Weapon
     public float lastShotTime;
     public bool isReloading;
     public float reloadStartTime;
+    public float force;
 
     // constructeur
-    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son)
+    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son, float power)
     {
         name = nom;
         damage = degats;
@@ -34,6 +35,7 @@ public class Weapon
         lastShotTime = 0.0f;
         isReloading = false;
         reloadStartTime = 0.0f;
+        force = power;
     }
 
 
