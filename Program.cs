@@ -135,13 +135,31 @@ partial class Program
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
 
-        //APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE
+        // APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE ET LES ARMES
         unsafe
         {
-            // On boucle sur TOUS les matériaux du modèle Blender
+            // 1. Pour la map
             for (int i = 0; i < mapModel.MaterialCount; i++)
             {
                 mapModel.Materials[i].Shader = lightShader;
+            }
+
+            // 2. CORRECTION : Pour le sniper
+            for (int i = 0; i < sniper.MaterialCount; i++)
+            {
+                sniper.Materials[i].Shader = lightShader;
+            }
+
+            // 3. CORRECTION : Pour le karambit
+            for (int i = 0; i < karambit.MaterialCount; i++)
+            {
+                karambit.Materials[i].Shader = lightShader;
+            }
+
+            // 4. (Bonus) Pour les ennemis si tu veux qu'ils réagissent aussi à la lumière
+            for (int i = 0; i < enemyModel.MaterialCount; i++)
+            {
+                enemyModel.Materials[i].Shader = lightShader;
             }
         }
 
