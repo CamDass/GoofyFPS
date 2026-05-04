@@ -32,8 +32,8 @@ partial class Program
     static List<EffetClic> ListeEffets = new List<EffetClic>();
 
     // Modèles 3D et Sons
-    static Model mapModel, enemyModel, sniper, karambit, barrelModel;
-    static Sound snipershot, karambitshot, select, unselect, survole, swoosh, explosion;
+    static Model mapModel, enemyModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
+    static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
     static Shader lightShader;
     static int lightPosLoc;
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
@@ -126,20 +126,39 @@ partial class Program
         sniperrifle.modelname = sniper;
         karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");
         karambitknife.modelname = karambit;
+        bazooka = Raylib.LoadModel("assets\\3D\\bazooka.glb");
+        bazookaWeapon.modelname = bazooka; 
+        sword = Raylib.LoadModel("assets\\3D\\sword.glb");
+        swordWeapon.modelname = sword;
+        shotgun = Raylib.LoadModel("assets\\3D\\shotgun.glb");
+        shotgunWeapon.modelname = shotgun;
+        pistol = Raylib.LoadModel("assets\\3D\\pistol.glb");
+        pistolWeapon.modelname = pistol;
+        revolver = Raylib.LoadModel("assets\\3D\\revolver.glb");
+        revolverWeapon.modelname = revolver;
         barrelModel = Raylib.LoadModel("assets\\3D\\barril.glb");
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
 
         Raylib.InitAudioDevice();
-        explosion = Raylib.LoadSound("assets\\sounds\\fah-bomb.mp3");
+        explosion = Raylib.LoadSound("assets\\sounds\\fahh-bomb.mp3");
         snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
-        sniperrifle.soundname = snipershot;
         karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
+        bazookashot = Raylib.LoadSound("assets\\sounds\\loud-explosion.mp3");
+        shotgunshot = Raylib.LoadSound("assets\\sounds\\fouchette-4.mp3");
+        pistolshot = Raylib.LoadSound("assets\\sounds\\small-gun.mp3");
+        revolvershot = Raylib.LoadSound("assets\\sounds\\lobotomy.mp3");
+        swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
+        swordslash = swoosh;
+        sniperrifle.soundname = snipershot;
         karambitknife.soundname = karambitshot;
+        bazookaWeapon.soundname = bazookashot;
+        shotgunWeapon.soundname = shotgunshot;
+        pistolWeapon.soundname = pistolshot;
+        revolverWeapon.soundname = revolvershot;
+        swordWeapon.soundname = swordslash;
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
-        swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
-        explosion = Raylib.LoadSound("assets\\sounds\\fahh-bomb.mp3");
 
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
@@ -163,6 +182,26 @@ partial class Program
             for (int i = 0; i < karambit.MaterialCount; i++)
             {
                 karambit.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < bazooka.MaterialCount; i++)
+            {
+                bazooka.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < sword.MaterialCount; i++)
+            {
+                sword.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < shotgun.MaterialCount; i++)
+            {
+                shotgun.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < pistol.MaterialCount; i++)
+            {
+                pistol.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < revolver.MaterialCount; i++)
+            {
+                revolver.Materials[i].Shader = lightShader;
             }
 
             // 4. (Bonus) Pour les ennemis si tu veux qu'ils réagissent aussi à la lumière
@@ -315,6 +354,11 @@ partial class Program
         Raylib.UnloadModel(enemyModel);
         Raylib.UnloadModel(sniper);
         Raylib.UnloadModel(karambit);
+        Raylib.UnloadModel(bazooka);
+        Raylib.UnloadModel(sword);
+        Raylib.UnloadModel(shotgun);
+        Raylib.UnloadModel(pistol);
+        Raylib.UnloadModel(revolver);
         Raylib.UnloadModel(barrelModel);
         Raylib.UnloadShader(lightShader);
         Raylib.UnloadSound(snipershot);
