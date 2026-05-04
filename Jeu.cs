@@ -23,6 +23,8 @@ partial class Program
     static Vector3 laserEnd = new Vector3();
     static float recoilAngle = 0.0f;
 
+    static bool debugInfo = false;
+
     //===== BOUCLE DU JEU =====
     public static void BouclePrincipale()
     {
@@ -226,6 +228,21 @@ partial class Program
         camera.Target = camera.Position + CamFroward;
 
 
+
+        if (Raylib.IsKeyPressed(KeyboardKey.F2)){
+            if (debugInfo)
+            {
+                debugInfo = false;
+            } else
+            {
+                debugInfo = true;
+            }
+        }
+
+
+
+
+
         // ========================================================
         // [ZONE MIXTE] 3. RENDU GRAPHIQUE (RAYLIB)
         // ========================================================
@@ -317,6 +334,7 @@ partial class Program
                 Raylib.DrawLine3D(laserStart, laserEnd, laserColor);
                 Raylib.DrawSphere(laserEnd, 0.2f, laserColor);
             }
+            
         Raylib.EndMode3D();
 
         // ========================================================
@@ -393,70 +411,100 @@ partial class Program
 
         currentWeapon.Reload();
 
-        //infos 
-        Raylib.DrawText("le moteur tourne.", 10,10,20, Color.DarkGreen);
-        Raylib.DrawText($"Hauteur du cube : {posCube.Y:F2}", 10,40,20,Color.DarkGreen);
-        if (NbJump >NbJumpMax)
+        if (debugInfo)
         {
-            Raylib.DrawText("Jump allowed", 10,80,20,Color.DarkGreen);
-        }
-        else
-        {
-            Raylib.DrawText("Jump not allowed", 10,80,20,Color.Red);
+            //infos 
+            Raylib.DrawText("le moteur tourne.", 10,10,20, Color.DarkGreen);
+            Raylib.DrawText($"Hauteur du cube : {posCube.Y:F2}", 10,40,20,Color.DarkGreen);
+            if (NbJump >NbJumpMax)
+            {
+                Raylib.DrawText("Jump allowed", 10,80,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("Jump not allowed", 10,80,20,Color.Red);
+            }
+
+            //wall jump 
+            if (capteurMurDroit.toucheSol)
+            {
+                Raylib.DrawText("saut droit", 10,110,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("saut droit",10,110,20,Color.Red);
+            }
+            if (capteurMurGauche.toucheSol)
+            {
+                Raylib.DrawText("saut gauche", 10,140,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("saut gauche",10,140,20,Color.Red);
+            }
+
+            //sprint 
+            if (IsSprinting)
+            {
+                Raylib.DrawText("sprint", 10,170,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("sprint",10,170,20,Color.Red);
+            }
+
+            if (IsWallRunning)
+            {
+                Raylib.DrawText("WallRun", 10,200,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("WallRun",10,200,20,Color.Red);
+            }
+
+            Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10,240,20,Color.DarkGreen);
+            Raylib.DrawText($"Vitesse verticale : {vitesseVerticale:F2}", 10,270,20,Color.DarkGreen);
+            
+            if (capteurGlissade.toucheSol) Raylib.DrawText("touche sol glissade", 10,300,20,Color.DarkGreen);
+            else Raylib.DrawText("touche sol glissade", 10,300,20,Color.Red);
+
+            if (laserTimer > 0) Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 380, 20, Color.Red);
+
+            // Vitesse Debug BEPU
+            Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10, 340, 20, Color.DarkGreen);
         }
 
-        //wall jump 
+
+        //wall run 
         if (capteurMurDroit.toucheSol)
         {
-            Raylib.DrawText("saut droit", 10,110,20,Color.DarkGreen);
             Raylib.DrawRectangle(LargeurFenetre/2+50,HauteurFenetre/2-5,3,10,Color.White);
-        }
-        else
-        {
-            Raylib.DrawText("saut droit",10,110,20,Color.Red);
         }
         if (capteurMurGauche.toucheSol)
         {
-            Raylib.DrawText("saut gauche", 10,140,20,Color.DarkGreen);
             Raylib.DrawRectangle(LargeurFenetre/2-50,HauteurFenetre/2-5,3,10,Color.White);
         }
-        else
-        {
-            Raylib.DrawText("saut gauche",10,140,20,Color.Red);
-        }
 
-        //sprint 
-        if (IsSprinting)
-        {
-            Raylib.DrawText("sprint", 10,170,20,Color.DarkGreen);
-        }
-        else
-        {
-            Raylib.DrawText("sprint",10,170,20,Color.Red);
-        }
-
-        if (IsWallRunning)
-        {
-            Raylib.DrawText("WallRun", 10,200,20,Color.DarkGreen);
-        }
-        else
-        {
-            Raylib.DrawText("WallRun",10,200,20,Color.Red);
-        }
-
-        Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10,240,20,Color.DarkGreen);
-        Raylib.DrawText($"Vitesse verticale : {vitesseVerticale:F2}", 10,270,20,Color.DarkGreen);
-        
-        if (capteurGlissade.toucheSol) Raylib.DrawText("touche sol glissade", 10,300,20,Color.DarkGreen);
-        else Raylib.DrawText("touche sol glissade", 10,300,20,Color.Red);
         //crosshair 
         Raylib.DrawCircle(LargeurFenetre/2,HauteurFenetre/2,3f,Color.White);
 
 
-        if (laserTimer > 0) Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 380, 20, Color.Red);
 
-        // Vitesse Debug BEPU
-        Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10, 340, 20, Color.DarkGreen);
+        Color missingLife = new Color(255, 50, 50, 40);
+        float life = 80;
+        int lifePixel = (int)(400*life/100);
+        Raylib.DrawRectangle(100, HauteurFenetre - 150, 400,80,missingLife); //arriere plan pour si on enleve la vie on voit encore la barre
+        if (life > 20)
+        {
+            Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel,80,Color.White);
+        } else
+        {
+            Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel,80,Color.Red);
+        }
+
+        Raylib.DrawText($"{life}",100+10, HauteurFenetre - 150 + 25,50,Color.Black);
+        
+
         
         Raylib.DrawFPS(LargeurFenetre-90,10);
         Raylib.EndDrawing();
