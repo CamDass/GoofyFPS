@@ -43,7 +43,12 @@ partial class Program
         if (Raylib.IsKeyPressed(KeyboardKey.G))
         {
             Random rand = new Random();
-            currentWeapon = weapons[rand.Next(weapons.Count)];
+            Weapon newWeapon = currentWeapon;
+            while (newWeapon == currentWeapon)
+            {
+                newWeapon = weapons[rand.Next(weapons.Count)];
+            }
+            currentWeapon = newWeapon;
         }
 
         if (Raylib.IsKeyDown(KeyboardKey.Tab))
@@ -349,7 +354,7 @@ partial class Program
 
         bool hasWeapon = true;   
         bool hasAmmo = currentWeapon.ammo > 0;    
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && currentWeapon == sniperrifle;
         bool showweapon = !isAiming;
         Model actualWeapon = currentWeapon.modelname;
         Sound actualSound = currentWeapon.soundname;
