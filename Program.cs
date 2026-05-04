@@ -290,6 +290,7 @@ partial class Program
             if (endroit == "menu") Menu();
             else if (endroit == "boucle") BouclePrincipale();
             else if (endroit == "option") Menugame();
+            else if (endroit == "choice map") ChoiceMap();
         }
 
         // --- NETTOYAGE ---

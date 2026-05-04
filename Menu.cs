@@ -220,4 +220,12 @@ partial class Program
 
             Raylib.EndDrawing();
     }
+
+
+
+    public static void ChoiceMap()
+    {
+        
+    }
+
 }

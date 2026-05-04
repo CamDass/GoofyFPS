@@ -118,5 +118,41 @@ public struct GroundSensor : ISweepHitHandler, IRayHitHandler
             if (t < maximumT) maximumT = t;
         }
     }
+
+
+    // Le capteur dédié aux murs (Utilise uniquement le Raycast, pas besoin de balle ici)
+    
 }
 
+public struct WallSensor : IRayHitHandler
+    {
+        public CollidableReference IgnoreCollidable;
+        public bool toucheMur;
+        public Vector3 normaleDuMur; // Le Saint Graal pour coder le Wall-Run !
+
+        public WallSensor(CollidableReference ignoreCollidable)
+        {
+            IgnoreCollidable = ignoreCollidable;
+            toucheMur = false;
+            normaleDuMur = Vector3.Zero;
+        }
+
+        public bool AllowTest(CollidableReference collidable) { return collidable != IgnoreCollidable; }
+        public bool AllowTest(CollidableReference collidable, int childIndex) { return true; }
+
+        public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
+        {
+            // LA LOGIQUE INVERSE DU SOL :
+            // Un mur est vertical. Son produit scalaire avec le HAUT doit être proche de ZÉRO.
+            // On utilise Math.Abs pour que ça marche peu importe la direction du mur.
+            // On accepte tout ce qui est entre -0.3 et 0.3 (tolère les murs très légèrement penchés).
+            float dotProduct = Math.Abs(Vector3.Dot(hitNormal, new Vector3(0, 1, 0)));
+            
+            if (dotProduct < 0.3f) 
+            {
+                toucheMur = true;
+                normaleDuMur = hitNormal;
+                if (t < maximumT) maximumT = t; // On a trouvé notre mur, on arrête le laser
+            }
+        }
+    }
