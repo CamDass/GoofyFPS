@@ -64,52 +64,59 @@ public struct PoseIntegratorCallbacks : IPoseIntegratorCallbacks
 }
 
 
-// On ajoute le "diplôme" ISweepHitHandler (et on garde IRayHitHandler au cas où tu en aurais besoin ailleurs)// On déclare fièrement les DEUX interfaces (Le diplôme Sphère ET le diplôme Laser)
+// On ajoute le "diplôme" ISweepHitHandler (et on garde IRayHitHandler au cas où tu en aurais besoin ailleurs)// On déclare fièrement les DEUX interfaces (Le diplôme Sphère ET le diplôme Laser)using BepuPhysics;
+
 public struct GroundSensor : ISweepHitHandler, IRayHitHandler
 {
     public CollidableReference IgnoreCollidable;
     public bool toucheSol;
+    // NOUVEAU : On mémorise l'inclinaison du sol touché
+    public Vector3 normaleDuSol; 
 
     public GroundSensor(CollidableReference ignoreCollidable)
     {
         IgnoreCollidable = ignoreCollidable;
         toucheSol = false;
+        normaleDuSol = new Vector3(0, 1, 0); // Par défaut, on imagine un sol plat
     }
 
-    // Filtre 1 : On ignore le joueur lui-même
-    public bool AllowTest(CollidableReference collidable)
-    {
-        return collidable != IgnoreCollidable;
-    }
-
-    // Filtre 2 : On teste bien les sous-parties de la carte
-    public bool AllowTest(CollidableReference collidable, int childIndex)
-    {
-        return true;
-    }
+    public bool AllowTest(CollidableReference collidable) { return collidable != IgnoreCollidable; }
+    public bool AllowTest(CollidableReference collidable, int childIndex) { return true; }
 
     // ==========================================
-    // LES FONCTIONS POUR LA BALLE (SWEEP - Sauts)
+    // LE SWEEP (La Balle)
     // ==========================================
     public void OnHit(ref float maximumT, float t, in Vector3 hitLocation, in Vector3 hitNormal, CollidableReference collidable)
     {
-        toucheSol = true;
-        if (t < maximumT) maximumT = t;
+        // LE FAMEUX PRODUIT SCALAIRE (Dot Product)
+        // On compare la normale du sol avec le vecteur "Haut" (0, 1, 0)
+        // 0.7f correspond à une pente maximale d'environ 45 degrés.
+        if (Vector3.Dot(hitNormal, new Vector3(0, 1, 0)) > 0.7f)
+        {
+            toucheSol = true;
+            normaleDuSol = hitNormal; // On enregistre la pente !
+            if (t < maximumT) maximumT = t;
+        }
     }
 
     public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
     {
         toucheSol = true;
+        // On remet une normale droite par sécurité si on frotte bizarrement au départ
+        normaleDuSol = new Vector3(0, 1, 0); 
     }
 
     // ==========================================
-    // LA FONCTION POUR LE LASER (RAYCAST - Glissade)
+    // LE RAYCAST (La Glissade)
     // ==========================================
-    // On n'oublie pas le "int childIndex" à la toute fin !
     public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
     {
-        toucheSol = true;
-        if (t < maximumT) maximumT = t;
+        if (Vector3.Dot(hitNormal, new Vector3(0, 1, 0)) > 0.7f)
+        {
+            toucheSol = true;
+            normaleDuSol = hitNormal;
+            if (t < maximumT) maximumT = t;
+        }
     }
 }
 

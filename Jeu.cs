@@ -336,7 +336,7 @@ partial class Program
             float hauteurVide = -30f; 
 
             //boucle commence au fond (i = 50) et remonte jusqu'à la surface (i = 1)
-            if (espionCube.Pose.Position.Y <= 0)
+            if (espionCube.Pose.Position.Y <= -1)
             {
                 for (int i = nbrCouche; i > 0; i--)
                 {
