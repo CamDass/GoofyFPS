@@ -603,13 +603,13 @@ partial class Program
 
         bool hasWeapon = true;   
         bool hasAmmo = currentWeapon.ammo > 0;    
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && currentWeapon == sniperrifle;
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && (currentWeapon == sniperrifle || currentWeapon == pistolWeapon);
         bool showweapon = !isAiming;
         Model actualWeapon = currentWeapon.modelname;
         Sound actualSound = currentWeapon.soundname;
         Vector2 positionViseurSniper = new Vector2(0,0);
 
-        if (isAiming && currentWeapon == sniperrifle)
+        if (isAiming && (currentWeapon == sniperrifle || currentWeapon == pistolWeapon))
         {
             Raylib.DrawTextureEx(sniperaim, positionViseurSniper, 0, 1, Color.White);
             camera.FovY = 20.0f;
@@ -626,7 +626,7 @@ partial class Program
             
             string texteMunitions = $"Munitions: {currentWeapon.ammo}/{currentWeapon.maxammo}";
             int posX = Raylib.GetScreenWidth() - 400;
-            int posY = Raylib.GetScreenHeight() - 100;
+            int posY = Raylib.GetScreenHeight() - 200;
             Raylib.DrawText(texteMunitions, posX, posY, 30, Color.Black);
         }
 
