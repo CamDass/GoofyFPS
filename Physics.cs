@@ -7,6 +7,7 @@ using BepuPhysics.Constraints;
 using BepuPhysics.Trees;
 using BepuUtilities;
 
+
 // ========================================================================================
 // LES CONTRATS DE PHYSIQUE
 // ========================================================================================
@@ -62,37 +63,60 @@ public struct PoseIntegratorCallbacks : IPoseIntegratorCallbacks
     }
 }
 
-public struct GroundSensor : IRayHitHandler
+
+// On ajoute le "diplôme" ISweepHitHandler (et on garde IRayHitHandler au cas où tu en aurais besoin ailleurs)// On déclare fièrement les DEUX interfaces (Le diplôme Sphère ET le diplôme Laser)using BepuPhysics;
+
+public struct GroundSensor : ISweepHitHandler, IRayHitHandler
 {
+    public CollidableReference IgnoreCollidable;
     public bool toucheSol;
-    public CollidableReference IdJoueur ;
+    // NOUVEAU : On mémorise l'inclinaison du sol touché
+    public Vector3 normaleDuSol; 
 
-    public GroundSensor(CollidableReference idJoueur)
+    public GroundSensor(CollidableReference ignoreCollidable)
     {
+        IgnoreCollidable = ignoreCollidable;
         toucheSol = false;
-        IdJoueur = idJoueur;
+        normaleDuSol = new Vector3(0, 1, 0); // Par défaut, on imagine un sol plat
     }
 
-    public bool AllowTest(CollidableReference collidable)
+    public bool AllowTest(CollidableReference collidable) { return collidable != IgnoreCollidable; }
+    public bool AllowTest(CollidableReference collidable, int childIndex) { return true; }
+
+    // ==========================================
+    // LE SWEEP (La Balle)
+    // ==========================================
+    public void OnHit(ref float maximumT, float t, in Vector3 hitLocation, in Vector3 hitNormal, CollidableReference collidable)
     {
-        //comparer le code bare de l'objet touché et celui du joueur pour eviter de bloquer le saut
-        //.packed est une maniere qu'a bepu de comaprer rapidement les id
-        //si c nous meme, c faux donc le laser passe a travers. 
-        return collidable.Packed != IdJoueur.Packed;
+        // LE FAMEUX PRODUIT SCALAIRE (Dot Product)
+        // On compare la normale du sol avec le vecteur "Haut" (0, 1, 0)
+        // 0.7f correspond à une pente maximale d'environ 45 degrés.
+        if (Vector3.Dot(hitNormal, new Vector3(0, 1, 0)) > 0.7f)
+        {
+            toucheSol = true;
+            normaleDuSol = hitNormal; // On enregistre la pente !
+            if (t < maximumT) maximumT = t;
+        }
     }
 
-    //garder pour plustard si on a des objets complexe
-    public bool AllowTest(CollidableReference collidable, int childIndex)
+    public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
     {
-        //pour l'instant on garde ça simple, on autorise le laser a toucher toutes les sous parties
-        return true;
-    }
-
-    public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 normal, CollidableReference collidable, int childIndex)
-    {
-        //si bepu appel cette fonction c que ça a touché le sol
         toucheSol = true;
-        //on dit au laser de s'arreter net a la distance de l'impact. 
-        maximumT = t;
+        // On remet une normale droite par sécurité si on frotte bizarrement au départ
+        normaleDuSol = new Vector3(0, 1, 0); 
+    }
+
+    // ==========================================
+    // LE RAYCAST (La Glissade)
+    // ==========================================
+    public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
+    {
+        if (Vector3.Dot(hitNormal, new Vector3(0, 1, 0)) > 0.7f)
+        {
+            toucheSol = true;
+            normaleDuSol = hitNormal;
+            if (t < maximumT) maximumT = t;
+        }
     }
 }
+

@@ -70,10 +70,35 @@ partial class Program
         espionCube.Awake = true;
         Vector3 posCube = espionCube.Pose.Position; 
 
+
+
+        //UPGRADE raycast -> shpere cast : la fameuse balle
         GroundSensor capteurSol = new GroundSensor(espionCube.CollidableReference);
         Vector3 directionLaser = new Vector3(0, -1f, 0);
-        float longueurLaser = 0.6f + 0.5f;
-        simulation.RayCast(posCube, directionLaser, longueurLaser, ref capteurSol);
+
+        // La vélocité contient DÉJÀ la direction
+        BodyVelocity velocitySphere = new BodyVelocity(directionLaser);
+
+        // On crée la forme
+        Sphere sphere = new Sphere(0.45f); 
+
+        // On la place au centre du joueur
+        RigidPose posDepartSphere = new RigidPose(posCube, Quaternion.Identity);
+        float distanceCheck = 0.5f + 0.5f;
+
+        // Le Sweep avec les 6 BONS paramètres
+        simulation.Sweep(
+            sphere,             // 1. TShape (La sphère)
+            posDepartSphere,    // 2. RigidPose (Le point de départ)
+            velocitySphere,     // 3. BodyVelocity (La direction du balayage)
+            distanceCheck,      // 4. float maximumT (La distance max)
+            pool,               // 5. BufferPool (La mémoire)
+            ref capteurSol      // 6. Le handler (Ton capteur)
+        );
+
+
+
+
 
         GroundSensor capteurGlissade = new GroundSensor(espionCube.CollidableReference);
         float longueurLaserGlissade = 1.2f;
@@ -89,7 +114,6 @@ partial class Program
             espionCube.Pose.Position = new Vector3(0,50,0);
             NbJump = NbJumpMax + 1;
 
-            
             Raylib.EnableCursor();
             Raylib.PlaySound(unselect);
             endroit = "menu";
@@ -230,7 +254,7 @@ partial class Program
         if (Raylib.IsKeyPressed(KeyboardKey.LeftControl)) espionCube.Velocity.Linear += GroundForward * 30;
 
         // Jump pad (Sandbox)
-        if (posCube.X > 9 && posCube.X < 11 && posCube.Z > -1 && posCube.Z < 1 && capteurSol.toucheSol) espionCube.Velocity.Linear.Y += 20f;
+        //if (posCube.X > 9 && posCube.X < 11 && posCube.Z > -1 && posCube.Z < 1 && capteurSol.toucheSol) espionCube.Velocity.Linear.Y += 20f;
 
         // On fait passer le temps
         simulation.Timestep(1f / 60f);
@@ -312,7 +336,7 @@ partial class Program
             float hauteurVide = -30f; 
 
             //boucle commence au fond (i = 50) et remonte jusqu'à la surface (i = 1)
-            if (espionCube.Pose.Position.Y <= 0)
+            if (espionCube.Pose.Position.Y <= -1)
             {
                 for (int i = nbrCouche; i > 0; i--)
                 {
