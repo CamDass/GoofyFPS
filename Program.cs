@@ -111,7 +111,10 @@ partial class Program
         quit_button = Raylib.LoadTexture("src\\boutons\\quit-base.png");
         background = Raylib.LoadTexture("src\\Background3.png");
 
-        mapModel = Raylib.LoadModel("map.glb"); // On la charge toujours pour plus tard
+        Model Map = Raylib.LoadModel("map.glb"); // On la charge toujours pour plus tard
+        Model MapTest = Raylib.LoadModel("test.glb"); // On la charge toujours pour plus tard
+        mapModel = Map;
+
         enemyModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
         sniperrifle.modelname = sniper;
@@ -232,7 +235,7 @@ partial class Program
                     Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
                     Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
 
-                    bepuTriangles[triangleActuel] = new Triangle(point1, point2, point3);
+                    bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
                     triangleActuel++;
                 }
             }

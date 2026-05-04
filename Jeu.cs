@@ -51,12 +51,6 @@ partial class Program
             currentWeapon = newWeapon;
         }
 
-        if (Raylib.IsKeyDown(KeyboardKey.Tab))
-        {
-            Raylib.EnableCursor();
-            Raylib.PlaySound(unselect);
-            endroit = "menu";
-        }
 
         float deltaTime = Raylib.GetFrameTime(); 
         laserTimer -= deltaTime;
@@ -86,6 +80,20 @@ partial class Program
         simulation.RayCast(posCube, directionLaser, longueurLaserGlissade, ref capteurGlissade);
 
         if (capteurSol.toucheSol) NbJump = NbJumpMax + 1;
+
+
+
+
+        if (Raylib.IsKeyDown(KeyboardKey.Tab))
+        {
+            espionCube.Pose.Position = new Vector3(0,50,0);
+            NbJump = NbJumpMax + 1;
+
+            
+            Raylib.EnableCursor();
+            Raylib.PlaySound(unselect);
+            endroit = "menu";
+        }
 
         // LE CERVEAU DE LA CAMÉRA FPS
         Vector2 mouseDelta = Raylib.GetMouseDelta();
@@ -259,7 +267,8 @@ partial class Program
         Raylib.BeginMode3D(camera);
 
             // REMET CETTE LIGNE :
-            Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.Gray);
+            Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.White);
+            if (debugInfo) Raylib.DrawModelWires(mapModel, mapPosition, mapScale, Color.Black);
             
             /*
             //sol 
