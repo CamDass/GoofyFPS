@@ -147,7 +147,9 @@ public class Enemy
         if (health <= 0)
         {
             isAlive = false;
-            Raylib.PlaySound(Program.death);
+            // Utiliser le pool de sounds de death pour permettre plusieurs lectures simultan\u00e9es
+            Raylib.PlaySound(Program.deathSounds[Program.deathSoundIndex]);
+            Program.deathSoundIndex = (Program.deathSoundIndex + 1) % Program.deathSounds.Length;
             // On le supprime physiquement du monde
             Program.simulation.Bodies.Remove(bodyId); 
         }

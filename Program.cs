@@ -47,7 +47,8 @@ public partial class Program
 
     // Modèles 3D et Sons
     static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
-    public static Sound death;
+    public static Sound[] deathSounds = new Sound[4]; // Pool de 4 sons de death pour éviter les conflits
+    public static int deathSoundIndex = 0;
     static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
     static Shader lightShader;
     static int lightPosLoc;
@@ -202,7 +203,12 @@ public partial class Program
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
-        death = Raylib.LoadSound("assets\\sounds\\death.mp3");
+        
+        // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
+        for (int i = 0; i < deathSounds.Length; i++)
+        {
+            deathSounds[i] = Raylib.LoadSound("assets\\sounds\\death.mp3");
+        }
 
         // Affectation des sons aux armes après le chargement
         sniperrifle.soundname = snipershot;

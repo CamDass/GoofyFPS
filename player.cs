@@ -50,9 +50,9 @@ public class Player
     }
 
     private void Die()
-{
-    IsAlive = false;
-    Console.WriteLine("[INFO] Le joueur est mort !");
-    Health = MaxHealth;
-}
+    {
+        IsAlive = false;
+        Health = 0;
+        Console.WriteLine("[INFO] Le joueur est mort !");
+    }
 }
