@@ -34,7 +34,7 @@ public class Enemy
     //le cervaux (aled ça va etre chaud ici)
     // Le Cerveau (Avec système d'évitement d'obstacles)
     // Le Cerveau (Avec évitement d'obstacles ET détection du vide)
-    public void Maj(Vector3 playerPos)
+    public void Maj(Vector3 playerPos, ref BodyReference PlayerBody)
     {
         if (!isAlive) return;
 
@@ -42,27 +42,50 @@ public class Enemy
 
         BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(bodyId);
         
-        // Si l'ennemi est à moins de 1.5 mètre de toi et qu'il est prêt à attaquer
-        float distanceToPlayer = Vector3.Distance(enemyBody.Pose.Position, playerPos);
-        if (distanceToPlayer < 2f && attackCooldown <= 0)
+        // ==========================================
+        // CORRECTION DE LA DISTANCE (On ignore la hauteur Y)
+        // ==========================================
+        Vector3 positionEnnemiPlate = enemyBody.Pose.Position;
+        positionEnnemiPlate.Y = 0;
+        
+        Vector3 positionJoueurPlate = playerPos;
+        positionJoueurPlate.Y = 0;
+
+        float distanceHorizontale = Vector3.Distance(positionEnnemiPlate, positionJoueurPlate);
+        float distanceToPlayer = Vector3.Distance(positionEnnemiPlate, positionJoueurPlate);
+        float differenceHauteur = playerPos.Y - enemyBody.Pose.Position.Y;
+        
+        if (distanceHorizontale < 2f && differenceHauteur < 2.5f && attackCooldown <= 0)
         {
-            // Il te met une claque de 15 dégâts !
-            Program.localPlayer.TakeDamage(15); 
-            attackCooldown = 0.5f; // Il doit attendre 1 seconde avant de refrapper
+            // Il te met une claque !
+            Program.localPlayer.TakeDamage(10); 
+            attackCooldown = 0.5f; 
+
+            // ==========================================
+            // NOUVEAU : LE KNOCKBACK !
+            // ==========================================
+            // 1. On calcule la direction de la claque (de l'ennemi vers toi)
+            Vector3 pushDir = Vector3.Normalize(positionJoueurPlate - positionEnnemiPlate);
+            
+            // 2. On ajoute un petit saut vers le haut pour bien désorienter la caméra
+            pushDir.Y = 0.3f; 
+            
+            // 3. On applique une force violente sur le corps physique de ton joueur (espionCube)
+            PlayerBody.Velocity.Linear += pushDir * 20f; // Modifie le '15f' si ça pousse trop ou pas assez !
         }
 
         enemyBody.Awake = true;
         
-
-        // 1. L'instinct primaire : aller vers le joueur
+        // --- 2. LE DÉPLACEMENT (Cerveau) ---
         Vector3 dirVoulue = playerPos - enemyBody.Pose.Position;
         dirVoulue.Y = 0; 
 
-        if (dirVoulue.LengthSquared() > 0.5f)
+        // CORRECTION DU BUG : On utilise une seule logique de distance
+        // Si on est à plus de 1.8 mètre, on court vers le joueur
+        if (distanceToPlayer > 1f) 
         {
             dirVoulue = Vector3.Normalize(dirVoulue);
 
-            // --- L'ANTENNE ANTI-MURS (Ton code précédent) ---
             WallSensor capteurVue = new WallSensor(enemyBody.CollidableReference);
             Program.simulation.RayCast(enemyBody.Pose.Position, dirVoulue, 2.0f, ref capteurVue);
 
@@ -75,26 +98,28 @@ public class Enemy
                 if (dirVoulue.LengthSquared() > 0) dirVoulue = Vector3.Normalize(dirVoulue);
             }
 
-            // ==========================================
-            // NOUVEAU : LE DÉTECTEUR DE VIDE (CLIFF SENSOR)
-            // ==========================================
-
             Vector3 positionDevant = enemyBody.Pose.Position + (dirVoulue * 1.5f);
-            
             positionDevant.Y += 0.5f; 
             
             LaserSensor capteurVide = new LaserSensor(enemyBody.CollidableReference);
-
             Program.simulation.RayCast(positionDevant, new Vector3(0, -1f, 0), 2.5f, ref capteurVide);
 
             if (!capteurVide.aTouche)
             {
                 dirVoulue = Vector3.Zero; 
             }
-
             
             enemyBody.Velocity.Linear.X = dirVoulue.X * speed;
             enemyBody.Velocity.Linear.Z = dirVoulue.Z * speed;
+        }
+        else 
+        {
+            // ==========================================
+            // CORRECTION DU BUG : LE FREINAGE
+            // ==========================================
+            // Si on est à portée de frappe, on coupe le moteur des jambes proprement !
+            enemyBody.Velocity.Linear.X = 0;
+            enemyBody.Velocity.Linear.Z = 0;
         }
     }
 
