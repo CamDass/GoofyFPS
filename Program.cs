@@ -9,11 +9,16 @@ using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuUtilities.Memory;
 
-partial class Program
+public partial class Program
 {
     // ========================================================
-    // [ZONE COLLÈGUE] VARIABLES DU JEU ET DES ARMES
+    // VARIABLES DU JEU ET DES ARMES
     // ========================================================
+ 
+    public static Player localPlayer = new Player(100);
+    public static float hitmarkerTimer = 0f;
+
+
     static int FPS = 60;
     static int HauteurFenetre = 1080;
     static int LargeurFenetre = 1920;
@@ -25,38 +30,53 @@ partial class Program
     static List<Texture2D> ListeTexture = new List<Texture2D>();
     
     // Images & HUD
-    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, ImageMapTest, ImageMapVille;
+    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, ImageMapTest, ImageMapVille, Imageville2;
     static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, BlurBackground, imageexplosion;
     static float tempsAffichage = 3.0f; 
     static float opaciteImage = 255.0f; 
     static List<EffetClic> ListeEffets = new List<EffetClic>();
 
     // Modèles 3D et Sons
-    static Model mapModel, enemyModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
+    static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
     static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
     static Shader lightShader;
     static int lightPosLoc;
+    static int lightColorLoc;
+    static int viewPosLoc;
+
+
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
     static float mapScale = 1f;
     static Vector3 mapPosition = new Vector3(0.0f, 0.0f, 0.0f);
 
 
-
     // Ennemis
-    public class Enemy
+    public static Model ennemiModel;
+    public static List<Enemy> enemiesList = new List<Enemy>();
+
+    public class DamageText
     {
         public Vector3 position;
-        public int health;
-        public Vector3 size;
+        public string text;
+        public float timer;
+        public float maxTimer;
 
-        public Enemy(Vector3 pos, int hp, Vector3 sz) { position = pos; health = hp; size = sz; }
-        public BoundingBox GetBoundingBox() { return new BoundingBox(position - size / 2, position + size / 2); }
+        public DamageText(Vector3 pos, int damage)
+        {
+            position = pos; 
+            text = damage.ToString(); // On transforme le nombre en texte
+            timer = 0.8f;     // Le texte vivra pendant 0.8 seconde
+            maxTimer = 0.8f;
+        }
     }
-    static List<Enemy> enemies = new List<Enemy>
-    {
-        new Enemy(new Vector3(5.0f, 1.0f, 5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f)),
-        new Enemy(new Vector3(-5.0f, 1.0f, -5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f))
-    };
+    public static List<DamageText> activeDamageTexts = new List<DamageText>();
+
+    public static TypedIndex formeBarilIndex;
+
+    
+
+
+
 
     // ========================================================
     // [ZONE BEPU] VARIABLES DE LA PHYSIQUE ET DE LA CAMÉRA
@@ -89,6 +109,18 @@ partial class Program
     static float MouseSensi = 0.003f;
     static float actualFov = 60f;
     static float boostFov = 0f;
+
+
+
+    // ========================================================
+    // GESTIONNAIRE DE SURVIE ET SPAWNS
+    // ========================================================
+    public static float survivalTime = 0f;
+    public static float enemySpawnTimer = 0f;
+    public static float timeBetweenSpawns = 3.0f; // 1 ennemi toutes les 3 secondes
+    public static List<Vector3> enemySpawnPoints = new List<Vector3>();
+
+
 
 
     // ========================================================
@@ -126,9 +158,10 @@ partial class Program
 
         ImageMapTest = Raylib.LoadTexture("src\\testMap.png");
         ImageMapVille = Raylib.LoadTexture("src\\ville.png");
+        Imageville2 = Raylib.LoadTexture("src\\ville2.png");
 
 
-        enemyModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
+        ennemiModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
         sniperrifle.modelname = sniper;
         karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");
@@ -164,7 +197,9 @@ partial class Program
 
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
-
+        lightColorLoc = Raylib.GetShaderLocation(lightShader, "lightColor");
+        viewPosLoc = Raylib.GetShaderLocation(lightShader, "viewPos");
+        
         // APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE ET LES ARMES
         unsafe
         {
@@ -207,9 +242,9 @@ partial class Program
             }
 
             // 4. (Bonus) Pour les ennemis si tu veux qu'ils réagissent aussi à la lumière
-            for (int i = 0; i < enemyModel.MaterialCount; i++)
+            for (int i = 0; i < ennemiModel.MaterialCount; i++)
             {
-                enemyModel.Materials[i].Shader = lightShader;
+                ennemiModel.Materials[i].Shader = lightShader;
             }
 
             // 5. Barreils
@@ -287,7 +322,14 @@ partial class Program
         ticketCube = simulation.Shapes.Add(Cube);
         inertieCube = Cube.ComputeInertia(1f);
 
-        InitBarrels();
+        Cylinder formeBaril = new Cylinder(0.5f, 1f);
+        formeBarilIndex = simulation.Shapes.Add(formeBaril);
+
+        
+        
+
+        
+
         Raylib.SetTargetFPS(FPS); 
         X_carre = Raylib.GetScreenWidth()/2;
         Y_carre = Raylib.GetScreenHeight()/2;
@@ -304,7 +346,7 @@ partial class Program
         // --- NETTOYAGE ---
         foreach(var texture in ListeTexture) Raylib.UnloadTexture(texture);
         Raylib.UnloadModel(mapModel);
-        Raylib.UnloadModel(enemyModel);
+        Raylib.UnloadModel(ennemiModel);
         Raylib.UnloadModel(sniper);
         Raylib.UnloadModel(karambit);
         Raylib.UnloadModel(bazooka);

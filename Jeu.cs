@@ -13,13 +13,13 @@ partial class Program
     // ========================================================
     // VARIABLES DES ARMES (ILIAN)
     // ========================================================
-    static Weapon sniperrifle = new Weapon("Sniper", 100, 500, 1.0f, 5, 3, sniper, snipershot, 0f);
-    static Weapon karambitknife = new Weapon("Karambit", 75, 10, 0.4f, 1, 0, karambit, karambitshot, 0f);
+    static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot, 0f);
     static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 2f, 5, 2, shotgun, shotgunshot, 7.0f);
-    static Weapon pistolWeapon = new Weapon("Pistol", 20, 90, 0.3f, 12, 2, pistol, pistolshot, 0f);
-    static Weapon revolverWeapon = new Weapon("Revolver", 34, 10, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
-    static Weapon swordWeapon = new Weapon("Sword", 20, 100, 0.3f, 15, 4, sword, swordslash, 4f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 20, 500, 0.3f, 12, 2, pistol, pistolshot, 0f);
+    static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
+    static Weapon swordWeapon = new Weapon("Sword", 8, 100, 0.15f, 30, 4, sword, swordslash, 4f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
     static Weapon currentWeapon = revolverWeapon;
@@ -33,12 +33,20 @@ partial class Program
     static float barrelScale = 1.0f;
     static int initialBarrelCount = 10;
 
+    static bool showweapon = true;
+
     public class BarrelSpot
     {
         public Vector3 position;
         public bool hasBarrel;
         public float respawnTimer;
         public bool respawnPending;
+
+
+        public StaticHandle handlePhysique; 
+        public bool estSolide;
+
+
 
         public BarrelSpot(Vector3 position, bool hasBarrel = false)
         {
@@ -69,18 +77,6 @@ partial class Program
         new BarrelSpot(new Vector3(-18f, -0.55f, 71f)),
     };
 
-    static void InitBarrels()
-    {
-        // Active aléatoirement 10 emplacements sur 15
-        List<int> indices = Enumerable.Range(0, barrelSpots.Count).OrderBy(i => random.Next()).Take(initialBarrelCount).ToList();
-        for (int i = 0; i < barrelSpots.Count; i++)
-        {
-            barrelSpots[i].hasBarrel = indices.Contains(i);
-            barrelSpots[i].respawnPending = false;
-            barrelSpots[i].respawnTimer = 0f;
-        }
-    }
-
     static void SwitchWeaponFromBarrel()
     {
         if (weapons.Count <= 1) return;
@@ -90,6 +86,26 @@ partial class Program
             newWeapon = weapons[random.Next(weapons.Count)];
         }
         currentWeapon = newWeapon;
+    }
+static void InitBarrels()
+    {
+        List<int> indices = Enumerable.Range(0, barrelSpots.Count).OrderBy(i => random.Next()).Take(initialBarrelCount).ToList();
+        for (int i = 0; i < barrelSpots.Count; i++)
+        {
+            // LA CORRECTION EST ICI : On force la variable à 'false' pour oublier l'ancienne partie
+            barrelSpots[i].estSolide = false; 
+
+            barrelSpots[i].hasBarrel = indices.Contains(i);
+            barrelSpots[i].respawnPending = false;
+            barrelSpots[i].respawnTimer = 0f;
+
+            // Ajout physique initial tout neuf !
+            if (barrelSpots[i].hasBarrel)
+            {
+                barrelSpots[i].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[i].position + new Vector3(0, 0.5f, 0), formeBarilIndex));
+                barrelSpots[i].estSolide = true;
+            }
+        }
     }
 
     static void CheckBarrelRespawns(float deltaTime)
@@ -105,16 +121,16 @@ partial class Program
                     spot.respawnPending = false;
                     spot.respawnTimer = 0f;
 
-                    List<int> freeSlots = barrelSpots
-                        .Select((b, index) => new { b, index })
-                        .Where(x => !x.b.hasBarrel && !x.b.respawnPending)
-                        .Select(x => x.index)
-                        .ToList();
+                    List<int> freeSlots = barrelSpots.Select((b, index) => new { b, index }).Where(x => !x.b.hasBarrel && !x.b.respawnPending).Select(x => x.index).ToList();
 
                     if (freeSlots.Count > 0)
                     {
                         int targetIndex = freeSlots[random.Next(freeSlots.Count)];
                         barrelSpots[targetIndex].hasBarrel = true;
+                        
+                        // Le baril réapparaît, on lui redonne un mur physique !
+                        barrelSpots[targetIndex].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[targetIndex].position + new Vector3(0, 0.5f, 0), formeBarilIndex));
+                        barrelSpots[targetIndex].estSolide = true;
                     }
                 }
                 barrelSpots[i] = spot;
@@ -122,13 +138,22 @@ partial class Program
         }
     }
 
-    static void OnBarrelHit(int index)
+    public static void OnBarrelHit(int index)
     {
         if (index < 0 || index >= barrelSpots.Count) return;
         Vector3 barrelPos = barrelSpots[index].position;
+        
         barrelSpots[index].hasBarrel = false;
         barrelSpots[index].respawnPending = true;
         barrelSpots[index].respawnTimer = barrelRespawnSeconds;
+        
+        // Le baril explose, on supprime son mur physique !
+        if (barrelSpots[index].estSolide)
+        {
+            simulation.Statics.Remove(barrelSpots[index].handlePhysique);
+            barrelSpots[index].estSolide = false;
+        }
+
         SwitchWeaponFromBarrel();
         Raylib.PlaySound(explosion);
         activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
@@ -165,7 +190,7 @@ partial class Program
 
     static List<ExplosionEffect> activeExplosions = new List<ExplosionEffect>();
 
-    static bool IsPointOnLaser(Vector3 point, Vector3 laserStart, Vector3 direction, float range)
+    public static bool IsPointOnLaser(Vector3 point, Vector3 laserStart, Vector3 direction, float range)
     {
         Vector3 toPoint = point - laserStart;
         float distance = toPoint.Length();
@@ -175,11 +200,52 @@ partial class Program
         return dot > 0.995f;
     }
 
+
+    // =============== enemis ===============
+    public static void InitEnnemis()
+    {
+        // 1. On nettoie proprement les anciens ennemis physiques
+        foreach (Enemy enemy in enemiesList)
+        {
+            if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId);
+        }
+        enemiesList.Clear();
+
+        // 2. On définit tes points de Spawn (Coordonnées à adapter selon ta map !)
+        enemySpawnPoints.Clear();
+        enemySpawnPoints.Add(new Vector3(2f, 2f, 2f));
+        enemySpawnPoints.Add(new Vector3(-27f, 2f, 64f));
+        enemySpawnPoints.Add(new Vector3(-100f, 2f, 99f));
+        enemySpawnPoints.Add(new Vector3(-104f, 2f, 149f));
+        enemySpawnPoints.Add(new Vector3(-28f, 2f, 127f));
+        enemySpawnPoints.Add(new Vector3(4f, 2f, 83f));
+        enemySpawnPoints.Add(new Vector3(-80f, 2f, 27f));
+        enemySpawnPoints.Add(new Vector3(-63f, 2f, 3f));
+
+
+        // 3. On réinitialise les chronos
+        survivalTime = 0f;
+        enemySpawnTimer = 10; //premier chrono plus long de 10s
+
+        // 4. On fait apparaître 2 ennemis de base
+        enemiesList.Add(new Enemy(enemySpawnPoints[0], 100, 4.0f));
+        enemiesList.Add(new Enemy(enemySpawnPoints[1], 100, 4.0f));
+    }
+
+
+
+
+
+
+
+
+
     static bool debugInfo = false;
 
     //===== BOUCLE DU JEU =====
     public static void BouclePrincipale()
     {
+        
         // ========================================================
         // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
         // ========================================================
@@ -209,8 +275,11 @@ partial class Program
             }
         }
 
-        if (recoilAngle < 0) recoilAngle += deltaTime * 30.0f;
-        if (recoilAngle > 0) recoilAngle = 0;
+
+        recoilAngle = recoilAngle + (0.0f - recoilAngle) * 15f * deltaTime;
+        
+        // Anti-tremblement : on bloque à 0 quand on est presque arrivé
+        if (recoilAngle > -0.01f) recoilAngle = 0;
 
 
         // ========================================================
@@ -250,6 +319,15 @@ partial class Program
         );
 
 
+
+        enemiesList.RemoveAll(e => !e.isAlive);
+
+        // ACTIVATION DES CERVEAUX (IA)
+        foreach (Enemy enemy in enemiesList)
+        {
+            // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
+            enemy.Maj(posCube);
+        }
 
 
 
@@ -319,6 +397,11 @@ partial class Program
                 espionCube.Velocity.Angular = Vector3.Zero; // Stop la rotation sur lui-même
 
             }
+        
+        if (Raylib.IsKeyPressed(KeyboardKey.K)) localPlayer.TakeDamage(15);
+        if (Raylib.IsKeyPressed(KeyboardKey.H)) localPlayer.Heal(25);
+        
+        if (espionCube.Pose.Position.Y < -30f) localPlayer.TakeDamage(1);
 
         if (espionCube.Pose.Position.Y < -50f)
         {
@@ -332,7 +415,8 @@ partial class Program
         }
 
 
-
+        //print coordonés 
+        if (Raylib.IsKeyPressed(KeyboardKey.RightShift)) Console.WriteLine($"{espionCube.Pose.Position}");
 
 
 
@@ -448,7 +532,14 @@ partial class Program
         // Dash
         if (Raylib.IsKeyPressed(KeyboardKey.LeftControl) && CanDash && dashChrono >= 90){
             //Raylib.PlaySound(swoosh);
-            espionCube.Velocity.Linear += GroundForward * 30;
+            Vector3 directionDash = GroundForward; 
+
+            if (deplacementVoulu.LengthSquared() > 0)
+            {
+                directionDash = deplacementVoulu; 
+            }
+            espionCube.Velocity.Linear += directionDash * 30;
+
             CanDash = false ;
             dashChrono = 0;
         }
@@ -476,17 +567,48 @@ partial class Program
             }
         }
 
+        
 
 
+        // === SYSTÈME DE SURVIE : LE TEMPS PASSE ===
+        if (localPlayer.IsAlive) // Le chrono tourne seulement si on est en vie
+        {
+            survivalTime += deltaTime;
+            enemySpawnTimer -= deltaTime;
+
+            // Si le temps est écoulé, et qu'il n'y a pas déjà trop de zombies (ex: limite de 30)
+            if (enemySpawnTimer <= 0f && enemiesList.Count < 70)
+            {
+                // On choisit un point de spawn au hasard
+                int randomSpawnIndex = random.Next(enemySpawnPoints.Count);
+                
+                // On crée le zombie
+                enemiesList.Add(new Enemy(enemySpawnPoints[randomSpawnIndex], 100, 4.0f));
+                
+                // On relance le chrono d'apparition
+                enemySpawnTimer = timeBetweenSpawns;
+            }
+        }
 
 
         // ========================================================
         // [ZONE MIXTE] 3. RENDU GRAPHIQUE (RAYLIB)
         // ========================================================
-        Raylib.SetShaderValue(lightShader, lightPosLoc, lightPosition, ShaderUniformDataType.Vec3);
+        Vector3 soleilPosition = new Vector3(50.0f, 100.0f, 50.0f);
+        Vector4 soleilCouleur = new Vector4(1.0f, 0.9f, 0.8f, 1.0f); 
 
+        Raylib.SetShaderValue(lightShader, lightPosLoc, soleilPosition, ShaderUniformDataType.Vec3);
+        Raylib.SetShaderValue(lightShader, lightColorLoc, soleilCouleur, ShaderUniformDataType.Vec4);
+        
+        // On envoie la position de la caméra pour le brouillard 
+        Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
+        
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Color.SkyBlue);
+        Color couleurZenith = new Color(20, 25, 45, 255);   // Bleu très sombre en haut
+        Color couleurHorizon = new Color(120, 60, 50, 255); // Orange/Rouge sale à l'horizon
+        
+        Raylib.DrawRectangleGradientV(0, 0, LargeurFenetre, HauteurFenetre, couleurZenith, couleurHorizon);
 
         Raylib.BeginMode3D(camera);
 
@@ -494,38 +616,6 @@ partial class Program
             Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.White);
             if (debugInfo) Raylib.DrawModelWires(mapModel, mapPosition, mapScale, Color.Black);
             
-            /*
-            //sol 
-            float taillePlatforme = 200f;
-            Raylib.DrawCube(new Vector3(0,-taillePlatforme/2,0), taillePlatforme, taillePlatforme, taillePlatforme, Color.Gray);
-            Raylib.DrawGrid((int)taillePlatforme, 1f); 
-
-            
-            //mur 
-            Vector3 PosMur = new Vector3(-9.5f,2.5f,0);
-            Vector3 PosMur2 = new Vector3(-9.5f,20f,0);
-            Raylib.DrawCube(PosMur,1f,5f,20f,Color.Gray);
-            Raylib.DrawCubeWires(PosMur,1f,5f,20f,Color.White);
-
-            Raylib.DrawCube(PosMur2,1f,5f,20f,Color.Gray);
-            Raylib.DrawCubeWires(PosMur2,1f,5f,20f,Color.White);
-
-            Raylib.DrawCube(new Vector3(10f,-0.3f,0), 2f, 1f, 2f, Color.Blue); // Jump Pad
-
-
-            Vector3 PosPlatforme1 = new Vector3(25,4,0);
-            Vector3 PosPlatforme2 = new Vector3(22,10,-15);
-            Vector3 PosPlatforme3 = new Vector3(10,18,-20);
-            //Box Platforme = new Box(10f, 1f , 10f)
-            Raylib.DrawCube(PosPlatforme1,10f, 1f , 10f,Color.Gray);
-            Raylib.DrawCubeWires(PosPlatforme1,10f, 1f , 10f,Color.White);
-
-            Raylib.DrawCube(PosPlatforme2,10f, 1f , 10f,Color.Gray);
-            Raylib.DrawCubeWires(PosPlatforme2,10f, 1f , 10f,Color.White);
-
-            Raylib.DrawCube(PosPlatforme3,10f, 1f , 10f,Color.Gray);
-            Raylib.DrawCubeWires(PosPlatforme3,10f, 1f , 10f,Color.White);
-            */
 
 
             //COUCHES TRANSPARENTES (bas vers le haut)
@@ -555,11 +645,40 @@ partial class Program
 
 
 
-            // Dessiner les ennemis (Code ILIAN)
-            foreach (Enemy enemy in enemies)
+            // Dessiner les ennemis (Nouvelle version Physique)
+            // Dessiner les ennemis (Nouvelle version Physique et LookAt)
+            foreach (Enemy enemy in enemiesList)
             {
-                Raylib.DrawBoundingBox(enemy.GetBoundingBox(), Color.Blue);
-                Raylib.DrawModel(enemyModel, enemy.position, 1.0f, Color.White);
+                Vector3 positionPhysique = enemy.GetPosition();
+                
+                // La position physique est au centre de la capsule (à 0.5m du sol)
+                Vector3 positionDessin = new Vector3(positionPhysique.X, positionPhysique.Y - 0.5f, positionPhysique.Z);
+                
+                // ==========================================
+                // NOUVEAU : FAIRE TOURNER LE MODÈLE VERS LE JOUEUR
+                // ==========================================
+                // 1. On calcule la direction entre l'ennemi et le joueur
+                Vector3 directionVersJoueur = posCube - positionDessin;
+                
+                // 2. On calcule l'angle sur le plan horizontal (X et Z) en Radians
+                float angleRadians = MathF.Atan2(directionVersJoueur.X, directionVersJoueur.Z);
+                
+                // 3. On convertit les Radians en Degrés (Raylib attend des degrés)
+                float angleDegres = angleRadians * (180.0f / MathF.PI);
+                
+                // --- ASTUCE BLENDER ---
+                // Si c'est le cas, décommente l'une de ces lignes pour le redresser :
+                angleDegres += 180.0f; // S'il te tourne le dos
+                // angleDegres += 90.0f;  // S'il marche en crabe
+                
+                // 4. On dessine avec DrawModelEx pour appliquer la rotation !
+                Vector3 axeRotation = new Vector3(0, 1, 0); // On tourne autour de l'axe vertical Y
+                Vector3 echelle = new Vector3(1.0f, 1.0f, 1.0f); // Taille normale
+                
+                Raylib.DrawModelEx(ennemiModel, positionDessin, axeRotation, angleDegres, echelle, Color.White);
+                
+                // Bonus Debug : Afficher la vraie hitbox BEPU
+                if (debugInfo) Raylib.DrawBoundingBox(new BoundingBox(positionPhysique - new Vector3(0.5f,1f,0.5f), positionPhysique + new Vector3(0.5f,1f,0.5f)), Color.Red);
             }
 
             // Dessiner les barrils
@@ -583,14 +702,100 @@ partial class Program
             // Dessiner le laser (Code ILIAN)
             if (laserTimer > 0)
             {
-                byte alpha = (byte)(laserTimer * 255);
-                Color laserColor = new Color((byte)255, (byte)0, (byte)0, alpha);
-                Raylib.DrawLine3D(laserStart, laserEnd, laserColor);
-                Raylib.DrawSphere(laserEnd, 0.2f, laserColor);
+                int alpha = (int)(laserTimer * 255);
+
+                if (debugInfo)
+                {
+                    // MODE DÉBUG (F2) : Rouge pur
+                    Color debugColor = new Color(255, 0, 0, alpha);
+                    Raylib.DrawLine3D(laserStart, laserEnd, debugColor);
+                    Raylib.DrawSphere(laserEnd, 0.2f, debugColor);
+                }
+                else
+                {
+                    // MODE NORMAL : esthétique Fumée et Étincelle
+                    Color smokeColor = new Color(180, 180, 180, alpha); // Gris clair pour la fumée
+                    Color sparkColor = new Color(255, 120, 0, alpha);   // Orange vif pour le flash
+                    
+                    //fumée
+                    Raylib.DrawLine3D(laserStart, laserEnd, smokeColor);
+                    
+                    //Flash
+                    if (laserTimer > 0.8f) 
+                    {
+                        // Grosse étincelle là où la balle touche
+                        Raylib.DrawSphere(laserEnd, 0.3f, sparkColor);   
+                    }
+                } 
             }
             
         Raylib.EndMode3D();
 
+        // 1. LES BARRES DE VIE
+        // 1. LES BARRES DE VIE (Affichage ciblé)
+        foreach (Enemy enemy in enemiesList)
+        {
+            Vector3 headPos3D = enemy.GetPosition() + new Vector3(0, 2.0f, 0);
+            Vector3 dirToEnemy = Vector3.Normalize(headPos3D - camera.Position);
+            float precisionRegard = Vector3.Dot(dirToEnemy, CamFroward);
+
+            if (precisionRegard > 0.95f)
+            {
+                Vector2 screenPos = Raylib.GetWorldToScreen(headPos3D, camera);
+                
+                float hpPercent = (float)enemy.health / 100f; 
+                if (hpPercent < 0) hpPercent = 0;
+
+                int barWidth = 80;
+                int barHeight = 10;
+                int posX = (int)screenPos.X - (barWidth / 2); 
+                int posY = (int)screenPos.Y;
+
+                Raylib.DrawRectangle(posX, posY, barWidth, barHeight, Color.Red);
+                Raylib.DrawRectangle(posX, posY, (int)(barWidth * hpPercent), barHeight, Color.Green);
+                Raylib.DrawRectangleLines(posX, posY, barWidth, barHeight, Color.Black);
+            }
+        }
+
+        // 2. LES TEXTES DE DÉGÂTS VOLANTS
+        for (int i = activeDamageTexts.Count - 1; i >= 0; i--)
+        {
+            DamageText dt = activeDamageTexts[i];
+            
+            // Le chronomètre tourne
+            dt.timer -= deltaTime;
+            if (dt.timer <= 0)
+            {
+                activeDamageTexts.RemoveAt(i);
+                continue;
+            }
+
+            // LE MOUVEMENT : Le texte monte vers le ciel (axe Y)
+            dt.position.Y += deltaTime * 1.5f;
+
+            // Comme pour la jauge, on vérifie si le texte est devant nous
+            Vector3 dirToText = dt.position - camera.Position;
+            if (Vector3.Dot(dirToText, CamFroward) > 0)
+            {
+                Vector2 screenPos = Raylib.GetWorldToScreen(dt.position, camera);
+                
+                // LE FONDU : Plus le timer approche de 0, plus l'alpha devient transparent
+                int alpha = (int)((dt.timer / dt.maxTimer) * 255);
+                Color textColor = new Color(255, 200, 0, alpha); // Jaune/Orange pétant
+                Color shadowColor = new Color(0, 0, 0, alpha);   // Ombre noire
+
+                // On dessine le texte (avec son ombre)
+                int textSize = 25;
+                int textWidth = Raylib.MeasureText(dt.text, textSize);
+                Raylib.DrawText(dt.text, (int)screenPos.X - textWidth/2 + 2, (int)screenPos.Y + 2, textSize, shadowColor);
+                Raylib.DrawText(dt.text, (int)screenPos.X - textWidth/2, (int)screenPos.Y, textSize, textColor);
+            }
+        }
+
+
+
+        
+        
         // ========================================================
         // [ZONE ILIAN] 4. HUD ET ARMES 2D
         // ========================================================
@@ -603,93 +808,143 @@ partial class Program
 
         bool hasWeapon = true;   
         bool hasAmmo = currentWeapon.ammo > 0;    
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && (currentWeapon == sniperrifle || currentWeapon == pistolWeapon);
-        bool showweapon = !isAiming;
         Model actualWeapon = currentWeapon.modelname;
-        Sound actualSound = currentWeapon.soundname;
-        Vector2 positionViseurSniper = new Vector2(0,0);
+        
+        // --- LOGIQUE DE CATÉGORIES D'ARMES ---
+        bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon);
+        bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
+        
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee;
+        
+        showweapon = true;
 
-        if (isAiming && (currentWeapon == sniperrifle || currentWeapon == pistolWeapon))
+        if (Raylib.IsKeyDown(KeyboardKey.F3)) showweapon = false;
+
+        
+
+
+        // --- GESTION DU ZOOM (FOV) ---
+        float targetFov = 60.0f; // FOV de base
+
+        if (isAiming)
         {
-            Raylib.DrawTextureEx(sniperaim, positionViseurSniper, 0, 1, Color.White);
-            camera.FovY = 20.0f;
+            if (isScopedWeapon)
+            {
+                targetFov = 20.0f; // Gros zoom
+                showweapon = false; // On cache l'arme 3D
+                Raylib.DrawTextureEx(sniperaim, new Vector2(0,0), 0, 1, Color.White); // Image lunette
+            }
+            else
+            {
+                
+                targetFov = 40.0f; // Petit zoom pour les armes normales centrées
+            }
         }
-        else camera.FovY = 60.0f;
 
-        if (hasAmmo && Raylib.IsMouseButtonDown(MouseButton.Left) && ((float)Raylib.GetTime() - currentWeapon.lastShotTime >= currentWeapon.fireRate))
-        {   
-            Vector3 direction = CamFroward;
-            float forceRecul = 1.0f;
-            espionCube.Velocity.Linear -= direction * forceRecul * currentWeapon.force;
-        }
+        // Interpolation fluide du zoom de la caméra principale !
+        camera.FovY = camera.FovY + (targetFov - camera.FovY) * 15f * deltaTime;
 
+
+        // --- DESSIN DE L'ARME 3D ---
         if (showweapon)
         {
             Raylib.BeginMode3D(weaponCamera);
-                Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
-                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, Vector3.One, Color.White);
+                
+                // 1. Calcul du balancement (Headbobbing de l'étape 3)
+                float balancementY = 0f;
+                float balancementX = 0f;
+                if (capteurSol.toucheSol)
+                {
+                    balancementY = MathF.Sin((float)Raylib.GetTime() * 12f) * (vitesseHorizontale * 0.002f);
+                    balancementX = MathF.Cos((float)Raylib.GetTime() * 6f) * (vitesseHorizontale * 0.001f);
+                }
+                else
+                {
+                    balancementY = -espionCube.Velocity.Linear.Y * 0.003f;
+                    if (balancementY > 0.08f) balancementY = 0.08f;
+                    if (balancementY < -0.08f) balancementY = -0.08f;
+                }
+
+                // 2. Position de base de l'arme (sur le côté)
+                float posX = 0.05f;
+                float posY = -0.04f;
+                float posZ = 0.12f;
+
+                // 3. SI ON VISE : On centre l'arme !
+                if (isAiming && !isScopedWeapon)
+                {
+                    posX = 0.1f;   // Au centre horizontalement
+                    posY = -0.04f; // On la remonte un peu vers les yeux
+                    posZ = 0.10f;  // On la rapproche légèrement
+                }
+
+                // Application finale de la position
+                Vector3 weaponPos = new Vector3(posX + balancementX, posY + balancementY, posZ); 
+                Vector3 weaponScale = new Vector3(0.1f, 0.1f, 0.1f);
+                
+                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, weaponScale, Color.White);
+
+                
+
             Raylib.EndMode3D();
-            Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
             
-            string texteMunitions = $"Munitions: {currentWeapon.ammo}/{currentWeapon.maxammo}";
-            int posX = Raylib.GetScreenWidth() - 400;
-            int posY = Raylib.GetScreenHeight() - 200;
-            Raylib.DrawText(texteMunitions, posX, posY, 30, Color.Black);
+            // ==========================================
+            // HUD MUNITIONS 
+            // ==========================================
+            Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green); // Réticule
+            
+            string ammoStr = currentWeapon.ammo.ToString();
+            string maxAmmoStr = currentWeapon.maxammo.ToString();
+
+            int tailleGrandTexte = 70;
+            int taillePetitTexte = 35;
+
+            // Position globale du bloc de munitions (En bas à droite)
+            posX = Raylib.GetScreenWidth() - 250;
+            posY = Raylib.GetScreenHeight() - 120;
+
+            //Le grand chiffre
+            Raylib.DrawText(ammoStr, (int)posX + 3, (int)posY + 3, tailleGrandTexte, Color.Black);
+            Raylib.DrawText(ammoStr, (int)posX, (int)posY, tailleGrandTexte, Color.White);
+
+            //Petit
+            int largeurGrandTexte = Raylib.MeasureText(ammoStr, tailleGrandTexte);
+            
+            int petitPosX = (int)posX + largeurGrandTexte + 10; // Décalé vers la droite
+            int petitPosY = (int)posY + (tailleGrandTexte - taillePetitTexte) - 5; // Aligné vers le bas du grand chiffre
+            
+            // Ombre + Texte pour le petit chiffre (en gris clair)
+            Raylib.DrawText(maxAmmoStr, petitPosX + 2, petitPosY + 2, taillePetitTexte, Color.Black);
+            Raylib.DrawText(maxAmmoStr, petitPosX, petitPosY, taillePetitTexte, Color.LightGray);
+
         }
 
         // ========================================================
         // [ZONE ILIAN] 5. LOGIQUE DES TIRS
         // ========================================================
-        if (hasWeapon && hasAmmo && !currentWeapon.isReloading && Raylib.IsMouseButtonDown(MouseButton.Left) && ((float)Raylib.GetTime() - currentWeapon.lastShotTime >= currentWeapon.fireRate))
+        // Si on a une arme et qu'on clique
+        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left))
         {
-            Raylib.PlaySound(actualSound);
-            laserTimer = 1.0f;
-            recoilAngle = -15.0f;
-            currentWeapon.lastShotTime = (float)Raylib.GetTime();
-            currentWeapon.ammo--;
+            Vector3 direction = CamFroward;
             
-            // LA SEULE MODIFICATION POUR LE ILIAN : On utilise le regard BEPU (CamFroward)
-            Vector3 direction = CamFroward; 
-            Vector3 right = Vector3.Normalize(Vector3.Cross(direction, camera.Up));
-            laserStart = camera.Position + direction * 0.5f + right * 0.25f;
-            laserEnd = laserStart + direction * currentWeapon.range;
+            // On dit à l'arme : "Essaye de tirer avec ces infos !"
+            bool aTire = currentWeapon.Shoot(direction, camera, ref espionCube, barrelSpots, enemiesList, out Vector3 startL, out Vector3 endL);
 
-            int hitBarrelIndex = -1;
-            for (int i = 0; i < barrelSpots.Count; i++)
+            // Si l'arme a répondu "Oui, le tir est parti" : on gère le visuel
+            if (aTire)
             {
-                BarrelSpot spot = barrelSpots[i];
-                if (!spot.hasBarrel) continue;
-                if (IsPointOnLaser(spot.position, laserStart, direction, currentWeapon.range))
-                {
-                    hitBarrelIndex = i;
-                    break;
-                }
-            }
-
-            if (hitBarrelIndex >= 0)
-            {
-                OnBarrelHit(hitBarrelIndex);
-            }
-            else
-            {
-                foreach (Enemy enemy in enemies.ToList())
-                {
-                    float distanceToEnemy = Vector3.Distance(laserStart, enemy.position);
-                    if (distanceToEnemy <= currentWeapon.range)
-                    {
-                        Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
-                        float dot = Vector3.Dot(direction, toEnemy);
-                        if (dot > 0.995) // Hitbox précise
-                        {
-                            enemy.health -= currentWeapon.damage;
-                            if (enemy.health <= 0) enemies.Remove(enemy);
-                        }
-                    }
-                }
+                laserTimer = 1.0f;
+                recoilAngle = -15.0f;
+                laserStart = startL;
+                laserEnd = endL;
             }
         }
 
         currentWeapon.Reload();
+
+
+
+
 
         if (debugInfo)
         {
@@ -767,21 +1022,61 @@ partial class Program
         }
 
         //crosshair 
-        Raylib.DrawCircle(LargeurFenetre/2,HauteurFenetre/2,3f,chrossairColor);
+
+        int centreX = LargeurFenetre / 2;
+        int centreY = HauteurFenetre / 2;
+
+        Raylib.DrawCircle(centreX, centreY, 3f, chrossairColor);
+
+        if (hitmarkerTimer > 0)
+        {
+            hitmarkerTimer -= deltaTime; 
+            
+            int alphaHit = (int)((hitmarkerTimer / 0.3f) * 255);
+            Color hitColor = new Color(255, 255, 255, alphaHit); 
+
+            int taille = 15;      // Longueur de la branche
+            int trou = 7;         // L'espace vide au centre
+            float epaisseur = 3f; // L'ÉPAISSEUR DU HITMARKER !
+
+            // Haut-Gauche
+            Raylib.DrawLineEx(new Vector2(centreX - trou, centreY - trou), new Vector2(centreX - taille, centreY - taille), epaisseur, hitColor);
+            // Bas-Droite
+            Raylib.DrawLineEx(new Vector2(centreX + trou, centreY + trou), new Vector2(centreX + taille, centreY + taille), epaisseur, hitColor);
+            // Bas-Gauche
+            Raylib.DrawLineEx(new Vector2(centreX - trou, centreY + trou), new Vector2(centreX - taille, centreY + taille), epaisseur, hitColor);
+            // Haut-Droite
+            Raylib.DrawLineEx(new Vector2(centreX + trou, centreY - trou), new Vector2(centreX + taille, centreY - taille), epaisseur, hitColor);
+        }
+
+
 
 
 
         Color missingLife = new Color(255, 50, 50, 40);
-        float life = 80;
-        int lifePixel = (int)(400*life/100);
-        Raylib.DrawRectangle(100, HauteurFenetre - 150, 400,80,missingLife); //arriere plan pour si on enleve la vie on voit encore la barre
-        if (life > 20)
+
+        float lifePercentage = (float)localPlayer.Health / localPlayer.MaxHealth;
+
+        int lifePixel = (int)(400 * lifePercentage);
+
+        Raylib.DrawRectangle(100, HauteurFenetre - 150, 400, 80, missingLife); 
+        
+        // La barre de vie réelle (Blanche si > 25%, Rouge clignotant si <= 25%)
+        if (lifePercentage > 0.25f)
         {
-            Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel,80,Color.White);
-        } else
+            Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.White);
+        } 
+        else if (localPlayer.IsAlive)
         {
-            Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel,80,Color.Red);
+            // Effet Urgence : Clignotement rouge si la vie est critique
+            if (MathF.Sin((float)Raylib.GetTime() * 10f) > 0)
+                Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.Red);
+            else
+                Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.DarkGray);
         }
+
+        // Le texte des HP (Noir)
+        Raylib.DrawText($"{localPlayer.Health}", 100 + 10, HauteurFenetre - 150 + 25, 50, Color.Black);
 
         Color missingDash = new Color(150, 150, 150, 50);
         Color dashColor = new Color(150, 255, 150, 255);
@@ -796,14 +1091,41 @@ partial class Program
             Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,Color.LightGray);
         }
         
+        // ==========================================
+        // HUD : LE CHRONOMÈTRE DE SURVIE
+        // ==========================================
+        // On convertit les secondes en un texte propre (ex: "Survie : 45s")
+        string chronoTexte = $"SURVIE : {MathF.Floor(survivalTime)}s";
+        int tailleChrono = 40;
+        int largeurChrono = Raylib.MeasureText(chronoTexte, tailleChrono);
         
+        int chronoX = (LargeurFenetre - largeurChrono) / 2; // Centré en haut
+        int chronoY = 30;
 
-
-        Raylib.DrawText($"{life}",100+10, HauteurFenetre - 150 + 25,50,Color.Black);
-        
+        // Effet d'ombre pour que ce soit bien lisible
+        Raylib.DrawText(chronoTexte, chronoX + 3, chronoY + 3, tailleChrono, Color.Black);
+        Raylib.DrawText(chronoTexte, chronoX, chronoY, tailleChrono, Color.White);
 
         
         Raylib.DrawFPS(LargeurFenetre-90,10);
+
+        // ==========================================
+        // POST-PROCESSING BASIQUE (VIGNETTAGE)
+        // ==========================================
+        // On dessine de grands rectangles noirs semi-transparents sur les bords de l'écran
+        Color ombreBord = new Color(0, 0, 0, 80); // Noir transparent
+        
+        // Bordure Haut
+        Raylib.DrawRectangleGradientV(0, 0, LargeurFenetre, 100, ombreBord, Color.Blank);
+        // Bordure Bas
+        Raylib.DrawRectangleGradientV(0, HauteurFenetre - 100, LargeurFenetre, 100, Color.Blank, ombreBord);
+        // Bordure Gauche
+        Raylib.DrawRectangleGradientH(0, 0, 100, HauteurFenetre, ombreBord, Color.Blank);
+        // Bordure Droite
+        Raylib.DrawRectangleGradientH(LargeurFenetre - 100, 0, 100, HauteurFenetre, Color.Blank, ombreBord);
+
+
+
         Raylib.EndDrawing();
     }
 }

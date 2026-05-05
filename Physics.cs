@@ -156,3 +156,40 @@ public struct WallSensor : IRayHitHandler
             }
         }
     }
+
+// laser pour mur (s'arrete au premier touché)
+// On ajoute la mémoire du joueur à ignorer
+public struct LaserSensor : IRayHitHandler
+{
+    public bool aTouche;
+    public float distanceImpact;
+    public CollidableReference JoueurAIgnorer; //pour eviter de se tirer dessus sinon c un peu chiant quoi
+
+    public CollidableReference ObjetTouche;
+
+
+    // Constructeur pour enregistrer le joueur
+    public LaserSensor(CollidableReference joueurAIgnorer)
+    {
+        aTouche = false;
+        distanceImpact = 0;
+        JoueurAIgnorer = joueurAIgnorer;
+    }
+
+    // filtre magique
+    public bool AllowTest(CollidableReference collidable) 
+    { 
+        return collidable != JoueurAIgnorer; 
+    }
+    
+    public bool AllowTest(CollidableReference collidable, int childIndex) { return true; }
+
+    public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
+    {
+        aTouche = true;
+        if (t < maximumT) maximumT = t; 
+        distanceImpact = maximumT;
+
+        ObjetTouche = collidable;
+    }
+}

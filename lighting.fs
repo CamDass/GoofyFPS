@@ -2,39 +2,59 @@
 
 in vec3 fragPosition;
 in vec2 fragTexCoord;
-in vec3 fragNormal;
 in vec4 fragColor;
+in vec3 fragNormal;
 
-uniform vec3 lightPos;      
-uniform vec4 colDiffuse;    
-uniform sampler2D texture0; 
+uniform sampler2D texture0;
+uniform vec4 colDiffuse;
+
+uniform vec3 lightPos;
+uniform vec4 lightColor;
+
+uniform vec3 viewPos; 
 
 out vec4 finalColor;
 
 void main()
 {
-    // 1. Lumière Ambiante
-    vec3 ambient = vec3(0.3, 0.3, 0.3); 
+    // 1. CORRECTION DES TEXTURES
+    vec4 texelColor = texture(texture0, fragTexCoord);
+    
+    // On combine la texture avec la couleur du modèle (colDiffuse) et la couleur du sommet (fragColor)
+    // Ça répare les objets sans texture !
+    vec4 baseColor = texelColor * colDiffuse * fragColor;
+    
+    // Si le pixel est transparent, on l'ignore (utile pour les grillages ou feuilles)
+    if (baseColor.a == 0.0) discard;
 
-    // 2. Lumière Diffuse 
-    vec3 norm = normalize(fragNormal);
+    // 2. LUMIÈRE
+    vec3 ambient = vec3(0.3, 0.3, 0.3); // J'ai un peu éclairci les ombres pour plus de visibilité
     vec3 lightDir = normalize(lightPos - fragPosition);
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * vec3(1.0, 1.0, 1.0); 
+    float diff = max(dot(fragNormal, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor.rgb;
 
-    // ========================================================
-    // LA CORRECTION EST ICI
-    // Change cette valeur pour ajuster la taille de la texture !
-    // > 1.0 : La texture se répète plus (elle paraîtra plus petite)
-    // < 1.0 : La texture s'étire (elle paraîtra plus grande)
-    // ========================================================
-    float textureScale = 100.0; // Essaie 2.0, 5.0, 10.0 ou 0.5 selon ton besoin
-    vec2 scaledTexCoord = fragTexCoord * textureScale;
+    // L'objet éclairé (avant le brouillard)
+    vec3 lightingResult = (ambient + diffuse) * baseColor.rgb;
 
-    // On utilise nos nouvelles coordonnées mises à l'échelle
-    vec4 texelColor = texture(texture0, scaledTexCoord);
+    // ==========================================
+    // 3. LE BROUILLARD (FOG)
+    // ==========================================
+    // Calcul de la distance entre tes yeux et le mur
+    float dist = length(viewPos - fragPosition);
+    
+    // Réglages du brouillard (Tu pourras modifier ces chiffres !)
+    float fogStart = 40.0; // Le brouillard commence à 15 mètres
+    float fogEnd = 100.0;   // On ne voit plus rien à 80 mètres
+    
+    // On calcule un pourcentage d'opacité du brouillard (entre 0.0 et 1.0)
+    float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
+    
+    // Couleur du brouillard (C'est exactement le orange de ton Horizon de l'Étape 4 !)
+    vec3 fogColor = vec3(120.0/255.0, 60.0/255.0, 50.0/255.0);
 
-    // 3. Résultat final
-    vec3 result = (ambient + diffuse) * texelColor.rgb * colDiffuse.rgb;
-    finalColor = vec4(result, texelColor.a);
+    // On utilise "mix" pour mélanger la vraie couleur avec le brouillard selon la distance
+    vec3 finalRGB = mix(lightingResult, fogColor, fogFactor);
+
+    // Résultat final !
+    finalColor = vec4(finalRGB, baseColor.a);
 }

@@ -239,6 +239,13 @@ partial class Program
     {
         simulation.Statics.Clear();
 
+        foreach (Enemy enemy in enemiesList)
+        {
+            if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId);
+        }
+        // On vide la liste mémoire
+        enemiesList.Clear();
+
         Raylib.BeginDrawing();
 
         // ========================================================
@@ -279,7 +286,7 @@ partial class Program
         // ========================================================
         // REMARQUE : Remplace "textureMap1", etc. par tes vraies variables de textures préchargées
         // Pour l'instant, je mets ton "Logo" comme placeholder pour que ça compile sans erreur.
-        Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Logo }; 
+        Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2 }; 
         string[] nomsMap = { "Tutoriel", "La Ville", "Arène de tir" };
         string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
         string[] ModelMapPath = {"test.glb","map.glb","map.glb"};
@@ -393,6 +400,9 @@ partial class Program
                             mapModel.Materials[j].Shader = lightShader;
                         }
                     }
+
+                    InitBarrels();
+                    InitEnnemis();
 
                     endroit = destinationsMap[n]; // On lance la bonne map !
 

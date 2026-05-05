@@ -20,6 +20,86 @@ public class EffetClic
 
 ========
 
+ennemi.cs
+
+using System.Numerics;
+using BepuPhysics;
+using BepuPhysics.Collidables;
+
+public class Enemy
+{
+    public BodyHandle bodyId ;
+    public int health;
+    public float speed;
+    public bool isAlive;
+
+    public Enemy(Vector3 startPos, int hp, float spd)
+    {
+        health = hp;
+        speed = spd;
+        isAlive = true;
+
+        Capsule shape = new Capsule(0.5f,1f);
+        TypedIndex shapeIndex = Program.simulation.Shapes.Add(shape);
+        
+        BodyInertia inertia = shape.ComputeInertia(1f);
+        inertia.InverseInertiaTensor = new BepuUtilities.Symmetric3x3(); 
+          
+        BodyDescription bodyDesc = BodyDescription.CreateDynamic(startPos, inertia, shapeIndex, 0.01f);
+        bodyId = Program.simulation.Bodies.Add(bodyDesc);
+    }
+
+    //le cervaux (aled ça va etre chaud ici)
+    public void Maj(Vector3 playerPos)
+    {
+        if (!isAlive) return;
+
+        BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(bodyId);
+        enemyBody.Awake = true;
+
+        //pour l'instant on va simplement le faire aller vers le joueur
+        Vector3 dir = playerPos - enemyBody.Pose.Position;
+        dir.Y = 0; //si il peut ne pas fly c bien qd mm
+
+        //on applique les changement que au dessus de 0.5m sinon il nous rentre literalement dedans
+        if (dir.LengthSquared() > 0.5f)
+        {
+            dir = Vector3.Normalize(dir);
+            enemyBody.Velocity.Linear.X = dir.X * speed;
+            enemyBody.Velocity.Linear.Z = dir.Z * speed;
+        }
+    }
+
+    // La Gestion des dégâts
+    public void TakeDamage(int damage)
+    {
+        if (!isAlive) return;
+
+        health -= damage;
+        if (health <= 0)
+        {
+            isAlive = false;
+            // On le supprime physiquement du monde
+            Program.simulation.Bodies.Remove(bodyId); 
+        }
+    }
+
+    // Pour savoir où dessiner le modèle 3D
+    public Vector3 GetPosition()
+    {
+        if (!isAlive) return Vector3.Zero;
+        return Program.simulation.Bodies.GetBodyReference(bodyId).Pose.Position;
+    }
+
+    public int GetLife()
+    {
+        if (!isAlive) return 0;
+        return health;
+    }
+}
+
+========
+
 Jeu.cs
 
 using System;
@@ -28,226 +108,663 @@ using Raylib_cs;
 using System.Numerics;
 using System.Linq;
 
+// Moteur Physique
+using BepuPhysics;
+using BepuPhysics.Collidables;
+
 partial class Program
 {   
+    // ========================================================
+    // VARIABLES DES ARMES (ILIAN)
+    // ========================================================
+    static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot, 0f);
+    static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
+    static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 2f, 5, 2, shotgun, shotgunshot, 7.0f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 20, 500, 0.3f, 12, 2, pistol, pistolshot, 0f);
+    static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
+    static Weapon swordWeapon = new Weapon("Sword", 8, 100, 0.15f, 30, 4, sword, swordslash, 4f);
 
-
-    static Weapon sniperrifle = new Weapon("Sniper", 100, 100, 1.0f, 5, 3, sniper, snipershot);
-
-    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot);
-
-    static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife };
-    static Weapon currentWeapon = karambitknife;
+    static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
+    static Weapon currentWeapon = revolverWeapon;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
     static float recoilAngle = 0.0f;
-    //===== BOUCLE DU JEU =====
 
+    static Random random = new Random();
+    static float barrelRespawnSeconds = 30.0f;
+    static float barrelScale = 1.0f;
+    static int initialBarrelCount = 10;
+
+    public class BarrelSpot
+    {
+        public Vector3 position;
+        public bool hasBarrel;
+        public float respawnTimer;
+        public bool respawnPending;
+
+        public BarrelSpot(Vector3 position, bool hasBarrel = false)
+        {
+            this.position = position;
+            this.hasBarrel = hasBarrel;
+            respawnTimer = 0f;
+            respawnPending = false;
+        }
+    }
+
+    static List<BarrelSpot> barrelSpots = new List<BarrelSpot>
+    {
+        // Remplace ces coordonnées par tes propres positions XYZ
+        new BarrelSpot(new Vector3(-57f, -0.55f, 31.92f)),
+        new BarrelSpot(new Vector3(-49f, 42.0f, 101f)),
+        new BarrelSpot(new Vector3(-53f, 7.5f, 130f)),
+        new BarrelSpot(new Vector3(-22f, -0.55f, 128f)),
+        new BarrelSpot(new Vector3(3f,-0.55f, 103f)),
+        new BarrelSpot(new Vector3(3f, 4.5f, 54f)),
+        new BarrelSpot(new Vector3(-15f, -0.55f, 22f)),
+        new BarrelSpot(new Vector3(-76.5f, 8f, 10.5f)),
+        new BarrelSpot(new Vector3(-81.5f, 5f, 42f)),
+        new BarrelSpot(new Vector3(-110f, -0.55f, 50.5f)),
+        new BarrelSpot(new Vector3(-72f, 9.0f, 91f)),
+        new BarrelSpot(new Vector3(-76f, -0.55f, 114f)),
+        new BarrelSpot(new Vector3(-46f, -0.55f, 52f)),
+        new BarrelSpot(new Vector3(-35f, 3.7f, 87f)),
+        new BarrelSpot(new Vector3(-18f, -0.55f, 71f)),
+    };
+
+    static void InitBarrels()
+    {
+        // Active aléatoirement 10 emplacements sur 15
+        List<int> indices = Enumerable.Range(0, barrelSpots.Count).OrderBy(i => random.Next()).Take(initialBarrelCount).ToList();
+        for (int i = 0; i < barrelSpots.Count; i++)
+        {
+            barrelSpots[i].hasBarrel = indices.Contains(i);
+            barrelSpots[i].respawnPending = false;
+            barrelSpots[i].respawnTimer = 0f;
+        }
+    }
+
+    
+
+    static void SwitchWeaponFromBarrel()
+    {
+        if (weapons.Count <= 1) return;
+        Weapon newWeapon = currentWeapon;
+        while (newWeapon == currentWeapon)
+        {
+            newWeapon = weapons[random.Next(weapons.Count)];
+        }
+        currentWeapon = newWeapon;
+    }
+
+    static void CheckBarrelRespawns(float deltaTime)
+    {
+        for (int i = 0; i < barrelSpots.Count; i++)
+        {
+            BarrelSpot spot = barrelSpots[i];
+            if (!spot.hasBarrel && spot.respawnPending)
+            {
+                spot.respawnTimer -= deltaTime;
+                if (spot.respawnTimer <= 0f)
+                {
+                    spot.respawnPending = false;
+                    spot.respawnTimer = 0f;
+
+                    List<int> freeSlots = barrelSpots
+                        .Select((b, index) => new { b, index })
+                        .Where(x => !x.b.hasBarrel && !x.b.respawnPending)
+                        .Select(x => x.index)
+                        .ToList();
+
+                    if (freeSlots.Count > 0)
+                    {
+                        int targetIndex = freeSlots[random.Next(freeSlots.Count)];
+                        barrelSpots[targetIndex].hasBarrel = true;
+                    }
+                }
+                barrelSpots[i] = spot;
+            }
+        }
+    }
+
+    //on ajoute public 
+    public static void OnBarrelHit(int index)
+    {
+        if (index < 0 || index >= barrelSpots.Count) return;
+        Vector3 barrelPos = barrelSpots[index].position;
+        barrelSpots[index].hasBarrel = false;
+        barrelSpots[index].respawnPending = true;
+        barrelSpots[index].respawnTimer = barrelRespawnSeconds;
+        SwitchWeaponFromBarrel();
+        Raylib.PlaySound(explosion);
+        activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
+    }
+
+    public class ExplosionEffect
+    {
+        public Vector3 position;
+        public float timer;
+        public float duration;
+        public float initialSize;
+        public float maxSize;
+
+        public ExplosionEffect(Vector3 pos, float dur = 0.5f, float initSize = 0.5f, float maxSz = 7f)
+        {
+            position = pos;
+            timer = dur;
+            duration = dur;
+            initialSize = initSize;
+            maxSize = maxSz;
+        }
+
+        public float GetSize()
+        {
+            float progress = 1f - (timer / duration);
+            return initialSize + (maxSize - initialSize) * progress;
+        }
+
+        public float GetAlpha()
+        {
+            return (timer / duration) * 255f;
+        }
+    }
+
+    static List<ExplosionEffect> activeExplosions = new List<ExplosionEffect>();
+
+    public static bool IsPointOnLaser(Vector3 point, Vector3 laserStart, Vector3 direction, float range)
+    {
+        Vector3 toPoint = point - laserStart;
+        float distance = toPoint.Length();
+        if (distance > range) return false;
+        Vector3 toPointNorm = Vector3.Normalize(toPoint);
+        float dot = Vector3.Dot(direction, toPointNorm);
+        return dot > 0.995f;
+    }
+
+    static bool debugInfo = false;
+
+    //===== BOUCLE DU JEU =====
     public static void BouclePrincipale()
     {
-        // ==========================================
-        // --- BOUCLE PRINCIPALE DU JEU ---
-        // ==========================================
-
-        /*
-        static bool IsDashing = false;
-        static int CountDash = 0;
-        */
-
+        // ========================================================
+        // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
+        // ========================================================
         if (Raylib.IsKeyPressed(KeyboardKey.LeftAlt))
         {
-            isMenuGameOpen = !isMenuGameOpen; // Bascule l'état du menu
-            if (isMenuGameOpen)
-            {
-                Raylib.EnableCursor();
-                Raylib.PlaySound(unselect);
-            }
-            else
-            {
-                Raylib.DisableCursor();
-                Raylib.PlaySound(select);
-            }
+            isMenuGameOpen = !isMenuGameOpen; 
+            if (isMenuGameOpen) { Raylib.EnableCursor(); Raylib.PlaySound(unselect); }
+            else { Raylib.DisableCursor(); Raylib.PlaySound(select); }
         }
 
-        // Si le menu en jeu est ouvert, on l'affiche et on bloque le jeu
-        if (isMenuGameOpen)
+        if (isMenuGameOpen) { Menugame(); return; }
+
+        // Le changement d'arme se fait désormais uniquement via les barrils touchés
+
+        float deltaTime = Raylib.GetFrameTime(); 
+        laserTimer -= deltaTime;
+        if (laserTimer < 0) laserTimer = 0;
+
+        CheckBarrelRespawns(deltaTime);
+
+        for (int i = activeExplosions.Count - 1; i >= 0; i--)
         {
-            Menugame();
-            return; // Sort de la boucle principale pour ne pas mettre à jour le jeu
+            activeExplosions[i].timer -= deltaTime;
+            if (activeExplosions[i].timer <= 0)
+            {
+                activeExplosions.RemoveAt(i);
+            }
         }
 
-        // Changement d'arme aléatoire avec la touche G
-        if (Raylib.IsKeyPressed(KeyboardKey.G))
+        enemiesList.RemoveAll(e => !e.isAlive);
+
+        // ACTIVATION DES CERVEAUX (IA)
+        foreach (Enemy enemy in enemiesList)
         {
-            Random rand = new Random();
-            int randomIndex = rand.Next(weapons.Count);
-            currentWeapon = weapons[randomIndex];
+            // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
+            enemy.Update(posCube);
         }
 
+        recoilAngle = recoilAngle + (0.0f - recoilAngle) * 15f * deltaTime;
         
-            
+        // Anti-tremblement : on bloque à 0 quand on est presque arrivé
+        if (recoilAngle > -0.01f) recoilAngle = 0;
+
+
+        // ========================================================
+        // [ZONE BEPU] 2. PHYSIQUE ET MOUVEMENTS (TON CODE COMPLET)
+        // ========================================================
+        float hauteurVoulue = 0.8f; 
+        bool IsWallRunning = false;
+
+        BodyReference espionCube = simulation.Bodies.GetBodyReference(PlayerId);
+        espionCube.Awake = true;
+        Vector3 posCube = espionCube.Pose.Position; 
+
+
+
+        //UPGRADE raycast -> shpere cast : la fameuse balle
+        GroundSensor capteurSol = new GroundSensor(espionCube.CollidableReference);
+        Vector3 directionLaser = new Vector3(0, -1f, 0);
+
+        // La vélocité contient DÉJÀ la direction
+        BodyVelocity velocitySphere = new BodyVelocity(directionLaser);
+
+        // On crée la forme
+        Sphere sphere = new Sphere(0.45f); 
+
+        // On la place au centre du joueur
+        RigidPose posDepartSphere = new RigidPose(posCube, Quaternion.Identity);
+        float distanceCheck = 0.5f + 0.5f;
+
+        // Le Sweep avec les 6 BONS paramètres
+        simulation.Sweep(
+            sphere,             // 1. TShape (La sphère)
+            posDepartSphere,    // 2. RigidPose (Le point de départ)
+            velocitySphere,     // 3. BodyVelocity (La direction du balayage)
+            distanceCheck,      // 4. float maximumT (La distance max)
+            pool,               // 5. BufferPool (La mémoire)
+            ref capteurSol      // 6. Le handler (Ton capteur)
+        );
+
+
+
+
+
+        GroundSensor capteurGlissade = new GroundSensor(espionCube.CollidableReference);
+        float longueurLaserGlissade = 1.2f;
+        simulation.RayCast(posCube, directionLaser, longueurLaserGlissade, ref capteurGlissade);
+
+        if (capteurSol.toucheSol) {
+            NbJump = NbJumpMax + 1;
+            CanDash = true;
+        }
+
+        //90 frame = 1.5s 
+        if (dashChrono < 90)dashChrono ++;
+        
+
+
         if (Raylib.IsKeyDown(KeyboardKey.Tab))
         {
+            espionCube.Pose.Position = new Vector3(0,50,0);
+            NbJump = NbJumpMax + 1;
+
             Raylib.EnableCursor();
             Raylib.PlaySound(unselect);
             endroit = "menu";
         }
 
-        int DashSpeed = 1;
+        // LE CERVEAU DE LA CAMÉRA FPS
+        Vector2 mouseDelta = Raylib.GetMouseDelta();
+        CameraYaw -= mouseDelta.X * MouseSensi;
+        CameraPitch -= mouseDelta.Y * MouseSensi;
 
-        if (IsDashing) //si t'es en train de dash tu va bien plus vite
-        {
-            CountDash ++;
-            DashSpeed = 8; //vitesse du dash
-        }
+        float PitchLimit = 1.55f;
+        if (CameraPitch > PitchLimit) CameraPitch = PitchLimit;
+        if (CameraPitch < -PitchLimit) CameraPitch = -PitchLimit;
 
-        if (CountDash >= 8) // si on atteint x/60 fps on remet a 0
-        {
-            IsDashing = false;
-            CountDash = 0;
-        }
-        
-        if (CountDash == 1) // a la premiere frame ou il est activé 
-        {
-            Raylib.PlaySound(swoosh);
-        }
+        Vector3 CamFroward = new Vector3(
+            MathF.Cos(CameraPitch) * MathF.Sin(CameraYaw),
+            MathF.Sin(CameraPitch),
+            MathF.Cos(CameraPitch) * MathF.Cos(CameraYaw)
+        );
 
-        if (Raylib.IsKeyPressed(KeyboardKey.LeftShift) && !IsDashing)
-        {
-            IsDashing = true;
-        };
+        // LES JAMBES DU JOUEUR 
+        Vector3 GroundForward = new Vector3(CamFroward.X, 0, CamFroward.Z);
+        if (GroundForward.LengthSquared() > 0.0001f) GroundForward = Vector3.Normalize(GroundForward); 
 
-        float deltaTime = Raylib.GetFrameTime(); 
+        Vector3 GroundRight = Vector3.Cross(GroundForward, new Vector3(0, 1f, 0));
+        GroundRight = Vector3.Normalize(GroundRight);
+        Vector3 deplacementVoulu = Vector3.Zero; 
 
-        // Mise à jour du timer du laser
-        laserTimer -= deltaTime;
-        if (laserTimer < 0) laserTimer = 0;
+        WallSensor capteurMurDroit = new WallSensor(espionCube.CollidableReference);
+        WallSensor capteurMurGauche = new WallSensor(espionCube.CollidableReference);
+        float longueurLaserMur = 0.8f;
+        simulation.RayCast(posCube, GroundRight, longueurLaserMur, ref capteurMurDroit);
+        simulation.RayCast(posCube, -GroundRight, longueurLaserMur, ref capteurMurGauche);
 
-        // Mise à jour du recul de l'arme
-        if (recoilAngle < 0) recoilAngle += deltaTime * 30.0f;
-        if (recoilAngle > 0) recoilAngle = 0;
 
-        // --- A. GESTION DES MOUVEMENTS HORIZONTAUX (X & Z) ---
-        Vector3 oldPosition = camera.Position;
 
-        Raylib.UpdateCamera(ref camera, CameraMode.FirstPerson);
-        Vector3 desiredMovement = (camera.Position - oldPosition)*DashSpeed;
-        
-        // Tester chaque axe séparément pour les collisions
-        camera.Position = oldPosition; 
-        camera.Target -= desiredMovement;
-
-        // Collision X
-        camera.Position.X += desiredMovement.X;
-        camera.Target.X += desiredMovement.X;
-        BoundingBox playerBoxX = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
-        
-        foreach (BoundingBox wall in walls)
-        {
-            if (Raylib.CheckCollisionBoxes(playerBoxX, wall))
+        //vide
+        if (Raylib.IsKeyPressed(KeyboardKey.P))
             {
-                camera.Position.X -= desiredMovement.X;
-                camera.Target.X -= desiredMovement.X;
-                break;
-            }
-        }
+                // 1. On modifie les coordonnées instantanément (ex: on le remet à 10m de haut au centre)
+                espionCube.Pose.Position = new Vector3(0, 10f, 0); 
+                
+                // 2. On remet l'inertie et la vitesse à zéro pour un arrêt net !
+                espionCube.Velocity.Linear = Vector3.Zero;  // Stop le déplacement
+                espionCube.Velocity.Angular = Vector3.Zero; // Stop la rotation sur lui-même
 
-        // Collision Z
-        camera.Position.Z += desiredMovement.Z;
-        camera.Target.Z += desiredMovement.Z;
-        BoundingBox playerBoxZ = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
+            }
         
-        foreach (BoundingBox wall in walls)
+        if (Raylib.IsKeyPressed(KeyboardKey.K)) localPlayer.TakeDamage(15);
+        if (Raylib.IsKeyPressed(KeyboardKey.H)) localPlayer.Heal(25);
+        
+        if (espionCube.Pose.Position.Y < -30f) localPlayer.TakeDamage(1);
+
+        if (espionCube.Pose.Position.Y < -50f)
         {
-            if (Raylib.CheckCollisionBoxes(playerBoxZ, wall))
-            {
-                camera.Position.Z -= desiredMovement.Z;
-                camera.Target.Z -= desiredMovement.Z;
-                break;
-            }
+            // 1. On modifie les coordonnées instantanément (ex: on le remet à 10m de haut au centre)
+                espionCube.Pose.Position = new Vector3(0, 10f, 0); 
+                
+                // 2. On remet l'inertie et la vitesse à zéro pour un arrêt net !
+                espionCube.Velocity.Linear = Vector3.Zero;  // Stop le déplacement
+                espionCube.Velocity.Angular = Vector3.Zero; // Stop la rotation sur lui-même
+
         }
 
-        // --- B. GESTION DES MOUVEMENTS VERTICAUX (AXE Y) ---
+
+
+
+
+
+        // Saut
         if (Raylib.IsKeyPressed(KeyboardKey.Space))
         {
-            if (isGrounded || NbJump > 0)
+            if (NbJump > NbJumpMax)
             {
-                NbJump -=1;
-                velocityY = jumpStrength;
+                NbJump--;
+                if (espionCube.Velocity.Linear.Y > 0) { espionCube.Velocity.Linear.Y += 5f; } else { espionCube.Velocity.Linear.Y = 5f; }
             }
-            
         }
-            
 
-        velocityY -= gravity * deltaTime;
-
-        float moveY = velocityY * deltaTime;
-        camera.Position.Y += moveY;
-        camera.Target.Y += moveY;
-        BoundingBox playerBoxY = new BoundingBox(camera.Position - playerSize / 2, camera.Position + playerSize / 2);
-        isGrounded = false; 
-
-        foreach (BoundingBox wall in walls)
+        // Déplacements & WallRun
+        if (!capteurSol.toucheSol)
         {
-            if (Raylib.CheckCollisionBoxes(playerBoxY, wall))
+            if ((capteurMurDroit.toucheMur && Raylib.IsKeyDown(KeyboardKey.D)) || (capteurMurGauche.toucheMur && Raylib.IsKeyDown(KeyboardKey.A))) IsWallRunning = true; 
+        }
+
+        if (Raylib.IsKeyDown(KeyboardKey.W) || Raylib.IsKeyDown(KeyboardKey.Up)) deplacementVoulu += GroundForward;
+        if (Raylib.IsKeyDown(KeyboardKey.S) || Raylib.IsKeyDown(KeyboardKey.Down)) deplacementVoulu -= GroundForward;
+        if ((Raylib.IsKeyDown(KeyboardKey.A) || Raylib.IsKeyDown(KeyboardKey.Left)) && !capteurMurGauche.toucheMur) deplacementVoulu -= GroundRight; 
+        if ((Raylib.IsKeyDown(KeyboardKey.D) || Raylib.IsKeyDown(KeyboardKey.Right)) && !capteurMurDroit.toucheMur) deplacementVoulu += GroundRight;
+
+        if (deplacementVoulu.LengthSquared() > 0)
+        {
+            deplacementVoulu = Vector3.Normalize(deplacementVoulu);
+
+            // NOUVEAU : INCLINAISON SUR LA PENTE
+            // Si on est sur le sol et que ce sol n'est pas parfaitement plat
+            if (capteurSol.toucheSol && capteurSol.normaleDuSol != new Vector3(0, 1f, 0))
             {
-                if (velocityY < 0) 
+                // 1. On projette notre déplacement horizontal sur le plan incliné du sol
+                // Formule mathématique : Vecteur = Vecteur - (Vecteur . Normale) * Normale
+                float dotProduct = Vector3.Dot(deplacementVoulu, capteurSol.normaleDuSol);
+                deplacementVoulu = deplacementVoulu - (capteurSol.normaleDuSol * dotProduct);
+                
+                // 2. On renormalise pour ne pas perdre de vitesse dans la pente
+                if (deplacementVoulu.LengthSquared() > 0)
                 {
-                    // Collision en tombant (atterrissage)
-                    float correction = wall.Max.Y - (camera.Position.Y - playerSize.Y / 2);
-                    camera.Position.Y += correction;
-                    camera.Target.Y += correction;
-                    velocityY = 0.0f;
-                    isGrounded = true;
-                    NbJump = 2;
+                    deplacementVoulu = Vector3.Normalize(deplacementVoulu);
                 }
-                else if (velocityY > 0)
-                {
-                    // Collision en montant (plafond)
-                    float correction = (camera.Position.Y + playerSize.Y / 2) - wall.Min.Y;
-                    camera.Position.Y -= correction;
-                    camera.Target.Y -= correction;
-                    velocityY = 0.0f;
-                }
-                break; 
             }
         }
 
-        // --- C. MISE À JOUR DE LA LUMIÈRE ---
-        Raylib.SetShaderValue(lightShader, lightPosLoc, lightPosition, ShaderUniformDataType.Vec3);
+        bool IsSprinting = Raylib.IsKeyDown(KeyboardKey.LeftShift);
+        float SpeedCoef = IsSprinting ? 1.7f : 1f;
+        float vMax = 8f; 
+        float fAcceleration = 0.2f; 
+        float rollActuel = 0f;
+
+        if (IsWallRunning)
+        {
+            if (Raylib.IsKeyPressed(KeyboardKey.Space))
+            {
+                espionCube.Velocity.Linear.Y += 2f;
+                if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
+                if (capteurMurGauche.toucheMur) deplacementVoulu += GroundRight*20;
+                Console.WriteLine("wall jump");
+            }
+
+            NbJump = NbJumpMax + 1;
+            CanDash = true;
+
+            fAcceleration = 0.1f;
+            if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
+            if (Raylib.IsKeyDown(KeyboardKey.A)) rollActuel = 0.25f;
+            else if (Raylib.IsKeyDown(KeyboardKey.D)) rollActuel = -0.25f;
+        } 
+        else { rollActuel = 0f; fAcceleration = 0.2f; }
+
+        // Accroupir & Glissade
+        float vitesseHorizontale = new Vector2(espionCube.Velocity.Linear.X, espionCube.Velocity.Linear.Z).Length();
+        float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
+        float vitesseDescente = 0f;
+
+        if (Raylib.IsKeyDown(KeyboardKey.C) && !Raylib.IsKeyDown(KeyboardKey.Space))
+        {
+            if (!capteurGlissade.toucheSol) 
+            {
+                vitesseDescente--;
+                if (vitesseDescente < -20) vitesseDescente = -20; 
+                espionCube.Velocity.Linear.Y += vitesseDescente;
+            } 
+            else 
+            {
+                hauteurVoulue = 0.5f;
+                if (vitesseVerticale > 0) { espionCube.Velocity.Linear += GroundForward * (vitesseVerticale / 2); espionCube.Velocity.Linear.Y = 0.1f; }
+                espionCube.SetShape(PlayerTicketAccroupi);
+                if (vitesseHorizontale > 4) fAcceleration = 0.01f; else vMax = 3f;
+            }
+            if (Raylib.IsKeyPressed(KeyboardKey.C) && !Raylib.IsKeyDown(KeyboardKey.Space) && capteurSol.toucheSol && vitesseHorizontale > 4) espionCube.Velocity.Linear += GroundForward * 5;
+        } 
+        else 
+        {
+            espionCube.SetShape(PlayerTicket);
+            hauteurVoulue = 0.8f; vMax = 8f; fAcceleration = 0.2f; vitesseDescente = 0;
+        }
+
+        Vector3 targetVelocity = deplacementVoulu * vMax * SpeedCoef;
+        espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
+        espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
+
+        if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyboardKey.Space))
+        {
+            if (targetVelocity.Y > 0) 
+            {
+                // On aide activement la capsule à monter la pente en appliquant la vitesse Y voulue !
+                espionCube.Velocity.Linear.Y = targetVelocity.Y;
+            }
+        }
+
+        // Dash
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftControl) && CanDash && dashChrono >= 90){
+            //Raylib.PlaySound(swoosh);
+            Vector3 directionDash = GroundForward; 
+
+            if (deplacementVoulu.LengthSquared() > 0)
+            {
+                directionDash = deplacementVoulu; 
+            }
+            espionCube.Velocity.Linear += directionDash * 30;
+
+            CanDash = false ;
+            dashChrono = 0;
+        }
+
+        // Jump pad (Sandbox)
+        //if (posCube.X > 9 && posCube.X < 11 && posCube.Z > -1 && posCube.Z < 1 && capteurSol.toucheSol) espionCube.Velocity.Linear.Y += 20f;
+
+        // On fait passer le temps
+        simulation.Timestep(1f / 60f);
+
+        // Application finale de la Caméra
+        camera.Position = new Vector3(posCube.X, posCube.Y + hauteurVoulue, posCube.Z);
+        camera.Up = Vector3.Transform(new Vector3(0, 1f, 0), Matrix4x4.CreateFromAxisAngle(CamFroward, rollActuel));
+        camera.Target = camera.Position + CamFroward;
 
 
 
-        // --- D. RENDU GRAPHIQUE ---
+        if (Raylib.IsKeyPressed(KeyboardKey.F2)){
+            if (debugInfo)
+            {
+                debugInfo = false;
+            } else
+            {
+                debugInfo = true;
+            }
+        }
+
+
+
+
+
+        // ========================================================
+        // [ZONE MIXTE] 3. RENDU GRAPHIQUE (RAYLIB)
+        // ========================================================
+        Vector3 soleilPosition = new Vector3(50.0f, 100.0f, 50.0f);
+        Vector4 soleilCouleur = new Vector4(1.0f, 0.9f, 0.8f, 1.0f); 
+
+        Raylib.SetShaderValue(lightShader, lightPosLoc, soleilPosition, ShaderUniformDataType.Vec3);
+        Raylib.SetShaderValue(lightShader, lightColorLoc, soleilCouleur, ShaderUniformDataType.Vec4);
+        
+        // On envoie la position de la caméra pour le brouillard 
+        Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
+        
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Color.SkyBlue);
+        Color couleurZenith = new Color(20, 25, 45, 255);   // Bleu très sombre en haut
+        Color couleurHorizon = new Color(120, 60, 50, 255); // Orange/Rouge sale à l'horizon
+        
+        Raylib.DrawRectangleGradientV(0, 0, LargeurFenetre, HauteurFenetre, couleurZenith, couleurHorizon);
 
         Raylib.BeginMode3D(camera);
-            // On dessine la map (qui contient maintenant aussi les collisions)
-            // On garde la couleur blanche pour que les textures du .glb s'affichent correctement
-            Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.White); 
-            
-            // Lignes de debug pour voir les boîtes
-            foreach (BoundingBox wall in walls)
-                Raylib.DrawBoundingBox(wall, Color.Red);
 
-            // Dessiner les ennemis
-            foreach (Enemy enemy in enemies)
+            // REMET CETTE LIGNE :
+            Raylib.DrawModel(mapModel, mapPosition, mapScale, Color.White);
+            if (debugInfo) Raylib.DrawModelWires(mapModel, mapPosition, mapScale, Color.Black);
+            
+            /*
+            //sol 
+            float taillePlatforme = 200f;
+            Raylib.DrawCube(new Vector3(0,-taillePlatforme/2,0), taillePlatforme, taillePlatforme, taillePlatforme, Color.Gray);
+            Raylib.DrawGrid((int)taillePlatforme, 1f); 
+
+            
+            //mur 
+            Vector3 PosMur = new Vector3(-9.5f,2.5f,0);
+            Vector3 PosMur2 = new Vector3(-9.5f,20f,0);
+            Raylib.DrawCube(PosMur,1f,5f,20f,Color.Gray);
+            Raylib.DrawCubeWires(PosMur,1f,5f,20f,Color.White);
+
+            Raylib.DrawCube(PosMur2,1f,5f,20f,Color.Gray);
+            Raylib.DrawCubeWires(PosMur2,1f,5f,20f,Color.White);
+
+            Raylib.DrawCube(new Vector3(10f,-0.3f,0), 2f, 1f, 2f, Color.Blue); // Jump Pad
+
+
+            Vector3 PosPlatforme1 = new Vector3(25,4,0);
+            Vector3 PosPlatforme2 = new Vector3(22,10,-15);
+            Vector3 PosPlatforme3 = new Vector3(10,18,-20);
+            //Box Platforme = new Box(10f, 1f , 10f)
+            Raylib.DrawCube(PosPlatforme1,10f, 1f , 10f,Color.Gray);
+            Raylib.DrawCubeWires(PosPlatforme1,10f, 1f , 10f,Color.White);
+
+            Raylib.DrawCube(PosPlatforme2,10f, 1f , 10f,Color.Gray);
+            Raylib.DrawCubeWires(PosPlatforme2,10f, 1f , 10f,Color.White);
+
+            Raylib.DrawCube(PosPlatforme3,10f, 1f , 10f,Color.Gray);
+            Raylib.DrawCubeWires(PosPlatforme3,10f, 1f , 10f,Color.White);
+            */
+
+
+            //COUCHES TRANSPARENTES (bas vers le haut)
+            Color gazRouge = new Color(255, 50, 50, 8);
+            //vide 
+            int nbrCouche = 50;
+            float espaceCouche = 1f;
+            float hauteurVide = -30f; 
+
+            //boucle commence au fond (i = 50) et remonte jusqu'à la surface (i = 1)
+            if (espionCube.Pose.Position.Y <= -1)
             {
-                Raylib.DrawBoundingBox(enemy.GetBoundingBox(), Color.Blue);
-                Raylib.DrawModel(enemyModel, enemy.position, 1.0f, Color.White);
+                for (int i = nbrCouche; i > 0; i--)
+                {
+                    float hauteur = hauteurVide - (i * espaceCouche);
+                    
+                    // On dessine une plaque très fine (épaisseur 0.1f au lieu de 1f)
+                    Raylib.DrawCube(new Vector3(0, hauteur, 0), 1000f, 0.1f, 1000f, gazRouge);
+                }
             }
-            // Dessiner le laser rouge pendant 1 seconde après le tir
+
+            //dessiner le model du joueur
+            Vector3 PointHaut = new Vector3(posCube.X, posCube.Y + 0.5f, posCube.Z);
+            Vector3 PointBas = new Vector3(posCube.X, posCube.Y - 0.5f, posCube.Z);
+            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8,Color.White); 
+
+
+
+
+            // Dessiner les ennemis (Nouvelle version Physique)
+            foreach (Enemy enemy in enemiesList)
+            {
+                Vector3 positionPhysique = enemy.GetPosition();
+                
+                // La position physique est au centre de la capsule (à 0.5m du sol)
+                // On abaisse le dessin de 0.5m pour que les pieds du modèle 3D touchent bien le sol !
+                Vector3 positionDessin = new Vector3(positionPhysique.X, positionPhysique.Y - 0.5f, positionPhysique.Z);
+                
+                Raylib.DrawModel(ennemiModel, positionDessin, 1.0f, Color.White);
+                
+                // Bonus Debug : Afficher la vraie hitbox BEPU
+                if (debugInfo) Raylib.DrawBoundingBox(new BoundingBox(positionPhysique - new Vector3(0.5f,1f,0.5f), positionPhysique + new Vector3(0.5f,1f,0.5f)), Color.Red);
+            }
+
+            // Dessiner les barrils
+            foreach (BarrelSpot spot in barrelSpots)
+            {
+                if (spot.hasBarrel)
+                {
+                    Raylib.DrawModel(barrelModel, spot.position, barrelScale, Color.White);
+                }
+            }
+
+            // Dessiner les explosions
+            foreach (ExplosionEffect exp in activeExplosions)
+            {
+                float size = exp.GetSize();
+                byte alpha = (byte)exp.GetAlpha();
+                Color expColor = new Color((byte)255, (byte)255, (byte)255, alpha);
+                Raylib.DrawBillboard(camera, imageexplosion, exp.position, size, expColor);
+            }
+            
+            // Dessiner le laser (Code ILIAN)
             if (laserTimer > 0)
             {
-                byte alpha = (byte)(laserTimer * 255);
-                Color laserColor = new Color((byte)255, (byte)0, (byte)0, alpha);
-                Raylib.DrawLine3D(laserStart, laserEnd, laserColor);
-                Raylib.DrawSphere(laserEnd, 0.2f, laserColor);
-            }
-        Raylib.EndMode3D();
+                int alpha = (int)(laserTimer * 255);
 
+                if (debugInfo)
+                {
+                    // MODE DÉBUG (F2) : Rouge pur
+                    Color debugColor = new Color(255, 0, 0, alpha);
+                    Raylib.DrawLine3D(laserStart, laserEnd, debugColor);
+                    Raylib.DrawSphere(laserEnd, 0.2f, debugColor);
+                }
+                else
+                {
+                    // MODE NORMAL : esthétique Fumée et Étincelle
+                    Color smokeColor = new Color(180, 180, 180, alpha); // Gris clair pour la fumée
+                    Color sparkColor = new Color(255, 120, 0, alpha);   // Orange vif pour le flash
+                    
+                    //fumée
+                    Raylib.DrawLine3D(laserStart, laserEnd, smokeColor);
+                    
+                    //Flash
+                    if (laserTimer > 0.8f) 
+                    {
+                        // Grosse étincelle là où la balle touche
+                        Raylib.DrawSphere(laserEnd, 0.3f, sparkColor);   
+                    }
+                } 
+            }
+            
+        Raylib.EndMode3D();
+        
+        
+        // ========================================================
+        // [ZONE ILIAN] 4. HUD ET ARMES 2D
+        // ========================================================
         Camera3D weaponCamera = new Camera3D();
         weaponCamera.Position = new Vector3(0,0,0);
         weaponCamera.Target = new Vector3(0, 0, 1);
@@ -255,81 +772,304 @@ partial class Program
         weaponCamera.FovY = 45.0f;
         weaponCamera.Projection = CameraProjection.Perspective;
 
-
-
-        
-        bool hasWeapon = true;   // à changer quand il y aura d'autres armes
-        bool hasAmmo = currentWeapon.ammo > 0;    // vérifie les munitions
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon;
-        bool showweapon = !isAiming;
+        bool hasWeapon = true;   
+        bool hasAmmo = currentWeapon.ammo > 0;    
         Model actualWeapon = currentWeapon.modelname;
-        Sound actualSound = currentWeapon.soundname;
-        Vector2 positionViseurSniper = new Vector2(0,0);
+        
+        // --- LOGIQUE DE CATÉGORIES D'ARMES ---
+        bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon);
+        bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
+        
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee;
+        bool showweapon = true;
+
+        // --- GESTION DU ZOOM (FOV) ---
+        float targetFov = 60.0f; // FOV de base
 
         if (isAiming)
         {
-            Raylib.DrawTextureEx(sniperaim, positionViseurSniper, 0, 1, Color.White);
-            camera.FovY = 20.0f;
-        }
-        else
-        {
-            camera.FovY = 60.0f;
-        }
-
-        if (showweapon)
-        {
-            Raylib.BeginMode3D(weaponCamera);
-                Vector3 weaponPos = new Vector3(0.5f, -0.4f, 1.2f);
-                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, Vector3.One, Color.White);
-            Raylib.EndMode3D();
-            Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green);
-            Raylib.DrawFPS(10, 10);
-            string texteMunitions = $"Munitions: {currentWeapon.ammo}/{currentWeapon.maxammo}";
-            int posX = Raylib.GetScreenWidth() - 400;
-            int posY = Raylib.GetScreenHeight() - 450;
-            Raylib.DrawText(texteMunitions, posX, posY, 30, Color.Gray);
-        }
-
-        if (hasWeapon && hasAmmo && !currentWeapon.isReloading && Raylib.IsMouseButtonDown(MouseButton.Left) && ((float)Raylib.GetTime() - currentWeapon.lastShotTime >= currentWeapon.fireRate))
-        {
-            Raylib.PlaySound(actualSound);
-            laserTimer = 1.0f;
-            recoilAngle = -15.0f;
-            currentWeapon.lastShotTime = (float)Raylib.GetTime();
-            currentWeapon.ammo--;
-            Vector3 direction = Vector3.Normalize(camera.Target - camera.Position);
-            Vector3 right = Vector3.Normalize(Vector3.Cross(direction, camera.Up));
-            laserStart = camera.Position + direction * 0.5f + right * 0.25f;
-            laserEnd = laserStart + direction * currentWeapon.range;
-
-            // Calculer les dégâts sur les ennemis touchés
-            foreach (Enemy enemy in enemies.ToList())
+            if (isScopedWeapon)
             {
-                float distanceToEnemy = Vector3.Distance(laserStart, enemy.position);
-                if (distanceToEnemy <= currentWeapon.range)
-                {
-                    Vector3 toEnemy = Vector3.Normalize(enemy.position - laserStart);
-                    float dot = Vector3.Dot(direction, toEnemy);
-                    if (dot > 0.99f)
-                    {
-                        enemy.health -= currentWeapon.damage;
-                        if (enemy.health <= 0)
-                        {
-                            enemies.Remove(enemy);
-                        }
-                    }
-                }
+                targetFov = 20.0f; // Gros zoom
+                showweapon = false; // On cache l'arme 3D
+                Raylib.DrawTextureEx(sniperaim, new Vector2(0,0), 0, 1, Color.White); // Image lunette
+            }
+            else
+            {
+                targetFov = 40.0f; // Petit zoom pour les armes normales centrées
             }
         }
 
-        // Gestion du rechargement
+        // Interpolation fluide du zoom de la caméra principale !
+        camera.FovY = camera.FovY + (targetFov - camera.FovY) * 15f * deltaTime;
+
+
+        // --- DESSIN DE L'ARME 3D ---
+        if (showweapon)
+        {
+            Raylib.BeginMode3D(weaponCamera);
+                
+                // 1. Calcul du balancement (Headbobbing de l'étape 3)
+                float balancementY = 0f;
+                float balancementX = 0f;
+                if (capteurSol.toucheSol)
+                {
+                    balancementY = MathF.Sin((float)Raylib.GetTime() * 12f) * (vitesseHorizontale * 0.002f);
+                    balancementX = MathF.Cos((float)Raylib.GetTime() * 6f) * (vitesseHorizontale * 0.001f);
+                }
+                else
+                {
+                    balancementY = -espionCube.Velocity.Linear.Y * 0.003f;
+                    if (balancementY > 0.08f) balancementY = 0.08f;
+                    if (balancementY < -0.08f) balancementY = -0.08f;
+                }
+
+                // 2. Position de base de l'arme (sur le côté)
+                float posX = 0.05f;
+                float posY = -0.04f;
+                float posZ = 0.12f;
+
+                // 3. SI ON VISE : On centre l'arme !
+                if (isAiming && !isScopedWeapon)
+                {
+                    posX = 0.1f;   // Au centre horizontalement
+                    posY = -0.04f; // On la remonte un peu vers les yeux
+                    posZ = 0.10f;  // On la rapproche légèrement
+                }
+
+                // Application finale de la position
+                Vector3 weaponPos = new Vector3(posX + balancementX, posY + balancementY, posZ); 
+                Vector3 weaponScale = new Vector3(0.1f, 0.1f, 0.1f);
+                
+                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, weaponScale, Color.White);
+
+                
+
+            Raylib.EndMode3D();
+            
+            // ==========================================
+            // HUD MUNITIONS 
+            // ==========================================
+            Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green); // Réticule
+            
+            string ammoStr = currentWeapon.ammo.ToString();
+            string maxAmmoStr = currentWeapon.maxammo.ToString();
+
+            int tailleGrandTexte = 70;
+            int taillePetitTexte = 35;
+
+            // Position globale du bloc de munitions (En bas à droite)
+            posX = Raylib.GetScreenWidth() - 250;
+            posY = Raylib.GetScreenHeight() - 120;
+
+            //Le grand chiffre
+            Raylib.DrawText(ammoStr, (int)posX + 3, (int)posY + 3, tailleGrandTexte, Color.Black);
+            Raylib.DrawText(ammoStr, (int)posX, (int)posY, tailleGrandTexte, Color.White);
+
+            //Petit
+            int largeurGrandTexte = Raylib.MeasureText(ammoStr, tailleGrandTexte);
+            
+            int petitPosX = (int)posX + largeurGrandTexte + 10; // Décalé vers la droite
+            int petitPosY = (int)posY + (tailleGrandTexte - taillePetitTexte) - 5; // Aligné vers le bas du grand chiffre
+            
+            // Ombre + Texte pour le petit chiffre (en gris clair)
+            Raylib.DrawText(maxAmmoStr, petitPosX + 2, petitPosY + 2, taillePetitTexte, Color.Black);
+            Raylib.DrawText(maxAmmoStr, petitPosX, petitPosY, taillePetitTexte, Color.LightGray);
+
+        }
+
+        // ========================================================
+        // [ZONE ILIAN] 5. LOGIQUE DES TIRS
+        // ========================================================
+        // Si on a une arme et qu'on clique
+        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left))
+        {
+            Vector3 direction = CamFroward;
+            
+            // On dit à l'arme : "Essaye de tirer avec ces infos !"
+            bool aTire = currentWeapon.Shoot(direction, camera, ref espionCube, barrelSpots, enemies, out Vector3 startL, out Vector3 endL);
+            
+            // Si l'arme a répondu "Oui, le tir est parti" : on gère le visuel
+            if (aTire)
+            {
+                laserTimer = 1.0f;
+                recoilAngle = -15.0f;
+                laserStart = startL;
+                laserEnd = endL;
+            }
+        }
+
         currentWeapon.Reload();
 
-        // Debug: afficher le timer du laser pour vérifier l'activation
-        if (laserTimer > 0)
+
+
+
+
+        if (debugInfo)
         {
-            Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 40, 20, Color.Red);
+            //infos 
+            Raylib.DrawText("le moteur tourne.", 10,10,20, Color.DarkGreen);
+            Raylib.DrawText($"Position XYZ : X={posCube.X:F2} Y={posCube.Y:F2} Z={posCube.Z:F2}", 10,40,20, Color.DarkGreen);
+            Raylib.DrawText($"Hauteur du cube : {posCube.Y:F2}", 10,70,20,Color.DarkGreen);
+            if (NbJump >NbJumpMax)
+            {
+                Raylib.DrawText("Jump allowed", 10,100,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("Jump not allowed", 10,100,20,Color.Red);
+            }
+
+            //wall jump 
+            if (capteurMurDroit.toucheMur)
+            {
+                Raylib.DrawText("saut droit", 10,130,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("saut droit",10,130,20,Color.Red);
+            }
+            if (capteurMurGauche.toucheMur)
+            {
+                Raylib.DrawText("saut gauche", 10,160,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("saut gauche",10,160,20,Color.Red);
+            }
+
+            //sprint 
+            if (IsSprinting)
+            {
+                Raylib.DrawText("sprint", 10,190,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("sprint",10,190,20,Color.Red);
+            }
+
+            if (IsWallRunning)
+            {
+                Raylib.DrawText("WallRun", 10,220,20,Color.DarkGreen);
+            }
+            else
+            {
+                Raylib.DrawText("WallRun",10,220,20,Color.Red);
+            }
+
+            Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10,240,20,Color.DarkGreen);
+            Raylib.DrawText($"Vitesse verticale : {vitesseVerticale:F2}", 10,270,20,Color.DarkGreen);
+            
+            if (capteurGlissade.toucheSol) Raylib.DrawText("touche sol glissade", 10,300,20,Color.DarkGreen);
+            else Raylib.DrawText("touche sol glissade", 10,300,20,Color.Red);
+
+            if (laserTimer > 0) Raylib.DrawText($"Laser actif: {laserTimer:F2}", 10, 380, 20, Color.Red);
+
+            // Vitesse Debug BEPU
+            Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10, 340, 20, Color.DarkGreen);
         }
+
+        Color chrossairColor = Color.Red;
+        //wall run 
+        if (capteurMurDroit.toucheMur)
+        {
+            Raylib.DrawRectangle(LargeurFenetre/2+50,HauteurFenetre/2-5,3,10,chrossairColor);
+        }
+        if (capteurMurGauche.toucheMur)
+        {
+            Raylib.DrawRectangle(LargeurFenetre/2-50,HauteurFenetre/2-5,3,10,chrossairColor);
+        }
+
+        //crosshair 
+
+        int centreX = LargeurFenetre / 2;
+        int centreY = HauteurFenetre / 2;
+
+        Raylib.DrawCircle(centreX, centreY, 3f, chrossairColor);
+
+        if (hitmarkerTimer > 0)
+        {
+            hitmarkerTimer -= deltaTime; 
+            
+            int alphaHit = (int)((hitmarkerTimer / 0.3f) * 255);
+            Color hitColor = new Color(255, 255, 255, alphaHit); 
+
+            int taille = 15;      // Longueur de la branche
+            int trou = 7;         // L'espace vide au centre
+            float epaisseur = 3f; // L'ÉPAISSEUR DU HITMARKER !
+
+            // Haut-Gauche
+            Raylib.DrawLineEx(new Vector2(centreX - trou, centreY - trou), new Vector2(centreX - taille, centreY - taille), epaisseur, hitColor);
+            // Bas-Droite
+            Raylib.DrawLineEx(new Vector2(centreX + trou, centreY + trou), new Vector2(centreX + taille, centreY + taille), epaisseur, hitColor);
+            // Bas-Gauche
+            Raylib.DrawLineEx(new Vector2(centreX - trou, centreY + trou), new Vector2(centreX - taille, centreY + taille), epaisseur, hitColor);
+            // Haut-Droite
+            Raylib.DrawLineEx(new Vector2(centreX + trou, centreY - trou), new Vector2(centreX + taille, centreY - taille), epaisseur, hitColor);
+        }
+
+
+
+
+
+        Color missingLife = new Color(255, 50, 50, 40);
+
+        float lifePercentage = (float)localPlayer.Health / localPlayer.MaxHealth;
+
+        int lifePixel = (int)(400 * lifePercentage);
+
+        Raylib.DrawRectangle(100, HauteurFenetre - 150, 400, 80, missingLife); 
+        
+        // La barre de vie réelle (Blanche si > 25%, Rouge clignotant si <= 25%)
+        if (lifePercentage > 0.25f)
+        {
+            Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.White);
+        } 
+        else if (localPlayer.IsAlive)
+        {
+            // Effet Urgence : Clignotement rouge si la vie est critique
+            if (MathF.Sin((float)Raylib.GetTime() * 10f) > 0)
+                Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.Red);
+            else
+                Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.DarkGray);
+        }
+
+        // Le texte des HP (Noir)
+        Raylib.DrawText($"{localPlayer.Health}", 100 + 10, HauteurFenetre - 150 + 25, 50, Color.Black);
+
+        Color missingDash = new Color(150, 150, 150, 50);
+        Color dashColor = new Color(150, 255, 150, 255);
+        int dashPixel = (int)(100*dashChrono/90);
+
+        Raylib.DrawRectangle(100, HauteurFenetre - 200, 100,40,missingDash); //arriere plan pour si on enleve la vie on voit encore la barre
+        if (CanDash && dashChrono >= 90)
+        {
+            Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,dashColor);
+        } else
+        {
+            Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,Color.LightGray);
+        }
+        
+    
+
+        
+        Raylib.DrawFPS(LargeurFenetre-90,10);
+
+        // ==========================================
+        // POST-PROCESSING BASIQUE (VIGNETTAGE)
+        // ==========================================
+        // On dessine de grands rectangles noirs semi-transparents sur les bords de l'écran
+        Color ombreBord = new Color(0, 0, 0, 80); // Noir transparent
+        
+        // Bordure Haut
+        Raylib.DrawRectangleGradientV(0, 0, LargeurFenetre, 100, ombreBord, Color.Blank);
+        // Bordure Bas
+        Raylib.DrawRectangleGradientV(0, HauteurFenetre - 100, LargeurFenetre, 100, Color.Blank, ombreBord);
+        // Bordure Gauche
+        Raylib.DrawRectangleGradientH(0, 0, 100, HauteurFenetre, ombreBord, Color.Blank);
+        // Bordure Droite
+        Raylib.DrawRectangleGradientH(LargeurFenetre - 100, 0, 100, HauteurFenetre, Color.Blank, ombreBord);
+
 
 
         Raylib.EndDrawing();
@@ -344,6 +1084,11 @@ using System;
 using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
+
+// Moteur Physique
+using BepuPhysics;
+using BepuPhysics.Collidables;
+using BepuUtilities.Memory;
 
 partial class Program
 {
@@ -361,9 +1106,7 @@ partial class Program
             if (Raylib.IsKeyDown(KeyboardKey.Space)) 
             {
                 Raylib.PlaySound(select);
-                Raylib.DisableCursor();
-
-                endroit = "boucle";
+                endroit = "choice map";
             }
 
             // pour gerer les clic 
@@ -452,7 +1195,7 @@ partial class Program
             float largeuraffichee = Logo.Width * echelle;
             float hauteurAffichee = Logo.Height * echelle;
 
-            Vector2 positionAjustee = new Vector2(posX_logo - (largeuraffichee / 2), (posY_logo - (hauteurAffichee / 2)));
+            Vector2 positionAjustee = new Vector2(posX_logo - (largeuraffichee / 2), posY_logo - (hauteurAffichee / 2));
 
             // 2. Affichage (une seule ligne suffit, en dehors des if/else)
             Raylib.DrawTextureEx(Logo, positionAjustee, rotation, echelle, Color.White);
@@ -470,8 +1213,7 @@ partial class Program
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
                     Raylib.PlaySound(select);
-                    Raylib.DisableCursor();
-                    endroit = "boucle";
+                    endroit = "choice map";
                 }
             }
             else 
@@ -562,6 +1304,236 @@ partial class Program
 
             Raylib.EndDrawing();
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    public static void ChoiceMap()
+    {
+        simulation.Statics.Clear();
+
+        Raylib.BeginDrawing();
+
+        // ========================================================
+        // 1. LE FOND AVEC EFFET "BLUR" (Verre dépoli)
+        // ========================================================
+        Vector2 BackgroundPos = new Vector2(0, 0);
+        // On dessine le fond normal
+        Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0.0f, 1f, Color.White);
+        
+        // L'astuce du flou : on dessine un rectangle blanc semi-transparent par-dessus (180/255 d'opacité)
+        //Raylib.DrawRectangle(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight(), new Color(255, 255, 255, 180));
+
+        // ========================================================
+        // 2. GESTION DES CLICS (Système de particules du menu)
+        // ========================================================
+        if (Raylib.IsMouseButtonPressed(MouseButton.Left)) 
+        {
+            int randValue = Raylib.GetRandomValue(1, 3);
+            Texture2D textureChoisie = clic1;
+            if (randValue == 2) textureChoisie = clic2;
+            if (randValue == 3) textureChoisie = clic3;
+            float x_clic = textureChoisie.Width * 0.2f;
+            float y_clic = textureChoisie.Height * 0.2f;
+            Vector2 positionCentree = Raylib.GetMousePosition() - (new Vector2(x_clic, y_clic) / 2f);
+            ListeEffets.Add(new EffetClic(positionCentree, textureChoisie));
+        }
+
+        // ========================================================
+        // 3. TITRE
+        // ========================================================
+        string titre = "SÉLECTION DE LA CARTE";
+        int tailleTitre = 50;
+        int largeurTitre = Raylib.MeasureText(titre, tailleTitre);
+        Raylib.DrawText(titre, (Raylib.GetScreenWidth() - largeurTitre) / 2, 200, tailleTitre, Color.Black);
+
+        // ========================================================
+        // 4. DONNÉES DES CARTES (En dur)
+        // ========================================================
+        // REMARQUE : Remplace "textureMap1", etc. par tes vraies variables de textures préchargées
+        // Pour l'instant, je mets ton "Logo" comme placeholder pour que ça compile sans erreur.
+        Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Logo }; 
+        string[] nomsMap = { "Tutoriel", "La Ville", "Arène de tir" };
+        string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
+        string[] ModelMapPath = {"test.glb","map.glb","map.glb"};
+
+        // Paramètres de taille et d'espacement
+        int largeurMap = 350;
+        int hauteurMap = 220;
+        int espacement = 80;
+        int nbMaps = 3;
+
+        // Calcul mathématique pour centrer le tout parfaitement
+        int largeurTotale = (largeurMap * nbMaps) + (espacement * (nbMaps - 1));
+        int startX = (Raylib.GetScreenWidth() - largeurTotale) / 2;
+        int startY = (Raylib.GetScreenHeight() - hauteurMap) / 2;
+
+        Vector2 souris = Raylib.GetMousePosition();
+
+        // ========================================================
+        // 5. AFFICHAGE DES CARTES
+        // ========================================================
+        for (int n = 0; n < nbMaps; n++)
+        {
+            // Position de cette carte
+            int mapX = startX + n * (largeurMap + espacement);
+            Rectangle mapBox = new Rectangle(mapX, startY, largeurMap, hauteurMap);
+            
+            bool isHovered = Raylib.CheckCollisionPointRec(souris, mapBox);
+
+            // A. DESSIN DE L'IMAGE (DrawTexturePro permet de forcer la taille à 350x220)
+            Rectangle sourceRec = new Rectangle(0, 0, texturesMap[n].Width, texturesMap[n].Height);
+            Raylib.DrawTexturePro(texturesMap[n], sourceRec, mapBox, Vector2.Zero, 0f, Color.White);
+
+            // B. EFFET DE SURVOL ET CLIC
+            if (isHovered)
+            {
+                // Un contour rouge très épais pour montrer qu'on sélectionne
+                Raylib.DrawRectangleLinesEx(mapBox, 6, Color.Red);
+                
+                // On assombrit un peu l'image pour l'effet "sélectionné"
+                Raylib.DrawRectangleRec(mapBox, new Color(0, 0, 0, 50));
+
+
+                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                {
+                    Raylib.PlaySound(select);
+                    Raylib.DisableCursor(); // Si on passe en mode FPS
+
+                    mapModel = Raylib.LoadModel(ModelMapPath[n]);
+
+
+                    Console.WriteLine($"[DEBUG] Extraction des triangles de la map ({mapModel.MeshCount} parties détectées)...");
+
+                    unsafe 
+                    {
+                        int totalTriangles = 0;
+                        for (int i = 0; i < mapModel.MeshCount; i++) totalTriangles += mapModel.Meshes[i].TriangleCount;
+
+                        pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
+                        int triangleActuel = 0;
+
+                        for (int m = 0; m < mapModel.MeshCount; m++)
+                        {
+                            Raylib_cs.Mesh raylibMesh = mapModel.Meshes[m];
+                            float* vertices = raylibMesh.Vertices;
+                            ushort* indices = raylibMesh.Indices; 
+
+                            for (int t = 0; t < raylibMesh.TriangleCount; t++)
+                            {
+                                int index1, index2, index3;
+
+                                // Si Blender a bien fait son travail (Mesh indexé)
+                                if (indices != null)
+                                {
+                                    index1 = indices[t * 3 + 0];
+                                    index2 = indices[t * 3 + 1];
+                                    index3 = indices[t * 3 + 2];
+                                }
+                                // Si Blender a exporté "en vrac" (Vertices purs)
+                                else
+                                {
+                                    index1 = t * 3 + 0;
+                                    index2 = t * 3 + 1;
+                                    index3 = t * 3 + 2;
+                                }
+
+                                Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
+                                Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
+                                Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
+
+                                bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
+                                triangleActuel++;
+                            }
+                        }
+
+                        var cartePhysiqueBEPU = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
+                        TypedIndex ticketCarte = simulation.Shapes.Add(cartePhysiqueBEPU);
+                        simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+
+                        Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
+                    }
+
+
+
+
+
+
+                    unsafe
+                    {
+                        for (int j = 0; j < mapModel.MaterialCount; j++)
+                        {
+                            mapModel.Materials[j].Shader = lightShader;
+                        }
+                    }
+
+                    endroit = destinationsMap[n]; // On lance la bonne map !
+
+                }
+            }
+            else
+            {
+                // Un contour noir simple
+                Raylib.DrawRectangleLinesEx(mapBox, 3, Color.Black);
+            }
+
+            // C. DESSIN DU TEXTE (Noir centré sur l'image)
+            int tailleTexteMap = 30;
+            int largeurTexteMap = Raylib.MeasureText(nomsMap[n], tailleTexteMap);
+            int texteX = mapX + (largeurMap - largeurTexteMap) / 2;
+            int texteY = startY + (hauteurMap - tailleTexteMap) / 2;
+
+            // Astuce : On dessine un petit rectangle blanc semi-transparent juste derrière le texte
+            // pour être sûr à 100% qu'il sera lisible en noir, peu importe l'image de fond !
+            Raylib.DrawRectangle(texteX - 10, texteY - 5, largeurTexteMap + 20, tailleTexteMap + 10, new Color(255, 255, 255, 180));
+            
+            Raylib.DrawText(nomsMap[n], texteX, texteY, tailleTexteMap, Color.Black);
+        }
+
+        // ========================================================
+        // 6. BOUTON RETOUR (Bonus pratique !)
+        // ========================================================
+        Rectangle boxRetour = new Rectangle(50, 50, 150, 60);
+        bool retourHovered = Raylib.CheckCollisionPointRec(souris, boxRetour);
+        Raylib.DrawRectangleRec(boxRetour, retourHovered ? Color.LightGray : Color.DarkGray);
+        Raylib.DrawRectangleLinesEx(boxRetour, 3, Color.Black);
+        Raylib.DrawText("RETOUR", 50 + 20, 50 + 20, 25, retourHovered ? Color.Black : Color.White);
+
+        if (retourHovered && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Raylib.PlaySound(unselect);
+            endroit = "menu"; // On retourne au menu principal
+        }
+
+        // ========================================================
+        // 7. AFFICHAGE DES EFFETS DE CLIC (Identique au menu)
+        // ========================================================
+        for (int i = ListeEffets.Count - 1; i >= 0; i--)
+        {
+            ListeEffets[i].Opacite -= 5; 
+            if (ListeEffets[i].Opacite <= 0)
+            {
+                ListeEffets.RemoveAt(i);
+            }
+            else 
+            {
+                Color couleurFondu = new Color(255, 255, 255, ListeEffets[i].Opacite);
+                Raylib.DrawTextureEx(ListeEffets[i].Texture, ListeEffets[i].Position, 0.0f, 0.2f, couleurFondu);
+            }
+        }
+
+        Raylib.EndDrawing();
+    }
+
 }
 
 ========
@@ -681,6 +1653,260 @@ partial class Program
 
 Physics.cs
 
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using BepuPhysics;
+using BepuPhysics.Collidables;
+using BepuPhysics.CollisionDetection;
+using BepuPhysics.Constraints;
+using BepuPhysics.Trees;
+using BepuUtilities;
+
+
+// ========================================================================================
+// LES CONTRATS DE PHYSIQUE
+// ========================================================================================
+
+public unsafe struct NarrowPhaseCallbacks : INarrowPhaseCallbacks
+{
+    public void Initialize(Simulation simulation) { }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool AllowContactGeneration(int workerIndex, CollidableReference a, CollidableReference b, ref float speculativeMargin)
+    { return a.Mobility == CollidableMobility.Dynamic || b.Mobility == CollidableMobility.Dynamic; }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool AllowContactGeneration(int workerIndex, CollidablePair pair, int childIndexA, int childIndexB) 
+    { return true; }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe bool ConfigureContactManifold<TManifold>(int workerIndex, CollidablePair pair, ref TManifold manifold, out PairMaterialProperties pairMaterial) where TManifold : unmanaged, IContactManifold<TManifold>
+    {
+        pairMaterial.FrictionCoefficient = 1f; // Force de frottement par défaut
+        pairMaterial.MaximumRecoveryVelocity = 2f;
+        pairMaterial.SpringSettings = new SpringSettings(30, 1);
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ConfigureContactManifold(int workerIndex, CollidablePair pair, int childIndexA, int childIndexB, ref ConvexContactManifold manifold)
+    { return true; }
+
+    public void Dispose() { }
+}
+
+public struct PoseIntegratorCallbacks : IPoseIntegratorCallbacks
+{
+    public Vector3 Gravity;
+    public readonly AngularIntegrationMode AngularIntegrationMode => AngularIntegrationMode.Nonconserving;
+    public readonly bool AllowSubstepsForUnconstrainedBodies => false;
+    public readonly bool IntegrateVelocityForKinematics => false;
+
+    public void Initialize(Simulation simulation) { }
+
+    public PoseIntegratorCallbacks(Vector3 gravity) { Gravity = gravity; }
+
+    public void PrepareForIntegration(float dt) { }
+
+    public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation, BodyInertiaWide localInertia, Vector<int> integrationMask, int workerIndex, Vector<float> dt, ref BodyVelocityWide velocity)
+    {
+        // 1. On clone notre petite gravité dans une grosse boîte Wide
+        Vector3Wide.Broadcast(Gravity, out Vector3Wide gravityWide);
+        
+        // 2. On applique cette grosse boîte à la vitesse des objets !
+        velocity.Linear += gravityWide * dt;
+    }
+}
+
+
+// On ajoute le "diplôme" ISweepHitHandler (et on garde IRayHitHandler au cas où tu en aurais besoin ailleurs)// On déclare fièrement les DEUX interfaces (Le diplôme Sphère ET le diplôme Laser)using BepuPhysics;
+
+public struct GroundSensor : ISweepHitHandler, IRayHitHandler
+{
+    public CollidableReference IgnoreCollidable;
+    public bool toucheSol;
+    // NOUVEAU : On mémorise l'inclinaison du sol touché
+    public Vector3 normaleDuSol; 
+
+    public GroundSensor(CollidableReference ignoreCollidable)
+    {
+        IgnoreCollidable = ignoreCollidable;
+        toucheSol = false;
+        normaleDuSol = new Vector3(0, 1, 0); // Par défaut, on imagine un sol plat
+    }
+
+    public bool AllowTest(CollidableReference collidable) { return collidable != IgnoreCollidable; }
+    public bool AllowTest(CollidableReference collidable, int childIndex) { return true; }
+
+    // ==========================================
+    // LE SWEEP (La Balle)
+    // ==========================================
+    public void OnHit(ref float maximumT, float t, in Vector3 hitLocation, in Vector3 hitNormal, CollidableReference collidable)
+    {
+        // LE FAMEUX PRODUIT SCALAIRE (Dot Product)
+        // On compare la normale du sol avec le vecteur "Haut" (0, 1, 0)
+        // 0.7f correspond à une pente maximale d'environ 45 degrés.
+        if (Vector3.Dot(hitNormal, new Vector3(0, 1, 0)) > 0.7f)
+        {
+            toucheSol = true;
+            normaleDuSol = hitNormal; // On enregistre la pente !
+            if (t < maximumT) maximumT = t;
+        }
+    }
+
+    public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
+    {
+        toucheSol = true;
+        // On remet une normale droite par sécurité si on frotte bizarrement au départ
+        normaleDuSol = new Vector3(0, 1, 0); 
+    }
+
+    // ==========================================
+    // LE RAYCAST (La Glissade)
+    // ==========================================
+    public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
+    {
+        if (Vector3.Dot(hitNormal, new Vector3(0, 1, 0)) > 0.7f)
+        {
+            toucheSol = true;
+            normaleDuSol = hitNormal;
+            if (t < maximumT) maximumT = t;
+        }
+    }
+
+
+    // Le capteur dédié aux murs (Utilise uniquement le Raycast, pas besoin de balle ici)
+    
+}
+
+public struct WallSensor : IRayHitHandler
+    {
+        public CollidableReference IgnoreCollidable;
+        public bool toucheMur;
+        public Vector3 normaleDuMur; // Le Saint Graal pour coder le Wall-Run !
+
+        public WallSensor(CollidableReference ignoreCollidable)
+        {
+            IgnoreCollidable = ignoreCollidable;
+            toucheMur = false;
+            normaleDuMur = Vector3.Zero;
+        }
+
+        public bool AllowTest(CollidableReference collidable) { return collidable != IgnoreCollidable; }
+        public bool AllowTest(CollidableReference collidable, int childIndex) { return true; }
+
+        public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
+        {
+            // LA LOGIQUE INVERSE DU SOL :
+            // Un mur est vertical. Son produit scalaire avec le HAUT doit être proche de ZÉRO.
+            // On utilise Math.Abs pour que ça marche peu importe la direction du mur.
+            // On accepte tout ce qui est entre -0.3 et 0.3 (tolère les murs très légèrement penchés).
+            float dotProduct = Math.Abs(Vector3.Dot(hitNormal, new Vector3(0, 1, 0)));
+            
+            if (dotProduct < 0.3f) 
+            {
+                toucheMur = true;
+                normaleDuMur = hitNormal;
+                if (t < maximumT) maximumT = t; // On a trouvé notre mur, on arrête le laser
+            }
+        }
+    }
+
+// laser pour mur (s'arrete au premier touché)
+// On ajoute la mémoire du joueur à ignorer
+public struct LaserSensor : IRayHitHandler
+{
+    public bool aTouche;
+    public float distanceImpact;
+    public CollidableReference JoueurAIgnorer; //pour eviter de se tirer dessus sinon c un peu chiant quoi
+
+    public CollidableReference ObjetTouche;
+
+
+    // Constructeur pour enregistrer le joueur
+    public LaserSensor(CollidableReference joueurAIgnorer)
+    {
+        aTouche = false;
+        distanceImpact = 0;
+        JoueurAIgnorer = joueurAIgnorer;
+    }
+
+    // filtre magique
+    public bool AllowTest(CollidableReference collidable) 
+    { 
+        return collidable != JoueurAIgnorer; 
+    }
+    
+    public bool AllowTest(CollidableReference collidable, int childIndex) { return true; }
+
+    public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
+    {
+        aTouche = true;
+        if (t < maximumT) maximumT = t; 
+        distanceImpact = maximumT;
+
+        ObjetTouche = collidable;
+    }
+}
+
+========
+
+player.cs
+
+using System;
+
+public class Player
+{
+    // --- Statistiques ---
+    public int MaxHealth;
+    public int Health;
+    public bool IsAlive;
+
+    // --- Constructeur ---
+    public Player(int maxHealth = 100)
+    {
+        MaxHealth = maxHealth;
+        Health = MaxHealth;
+        IsAlive = true;
+    }
+
+    // --- Actions ---
+    public void TakeDamage(int amount)
+    {
+        if (!IsAlive) return; // On ne tape pas un cadavre !
+
+        Health -= amount;
+        
+        // Effet visuel ou sonore possible ici plus tard (ex: écran rouge)
+
+        if (Health <= 0)
+        {
+            Health = 0;
+            Die();
+        }
+    }
+
+    public void Heal(int amount)
+    {
+        if (!IsAlive) return;
+
+        Health += amount;
+        if (Health > MaxHealth) Health = MaxHealth; // On ne dépasse pas le max
+    }
+
+    public void Respawn()
+    {
+        Health = MaxHealth;
+        IsAlive = true;
+    }
+
+    private void Die()
+    {
+        IsAlive = false;
+        Console.WriteLine("[INFO] Le joueur est mort !");
+        // Plus tard, on appellera un écran de Game Over ici
+    }
+}
 
 ========
 
@@ -692,134 +1918,109 @@ using Raylib_cs;
 using System.Numerics;
 using System.Linq;
 
-partial class Program
-{
-    //==== VARIABLES ====
-    static int FPS = 60;
-    static int HauteurFenetre = 1920;
-    static int LargeurFenetre = 1080;
+// Moteur Physique
+using BepuPhysics;
+using BepuPhysics.Collidables;
+using BepuUtilities.Memory;
 
+public partial class Program
+{
+    // ========================================================
+    // VARIABLES DU JEU ET DES ARMES
+    // ========================================================
+ 
+    public static Player localPlayer = new Player(100);
+    public static float hitmarkerTimer = 0f;
+
+
+    static int FPS = 60;
+    static int HauteurFenetre = 1080;
+    static int LargeurFenetre = 1920;
     static int X_carre;
     static int Y_carre;
-
     static string endroit = "menu";
-
-    // Variable pour gérer l'état du menu en jeu (pause)
     static bool isMenuGameOpen = false;
 
-    //pour avoir acces aux textures partout dans le code
-    //fonctionne en 2 temps, ici elles sont reconnu pour tous, ensuite elles sont chargés
     static List<Texture2D> ListeTexture = new List<Texture2D>();
     
-    // ===== images =====
-    static Texture2D Logo;
-    static Texture2D startimg; // juste en dessous les variables pour afficher l'image de start
-    static float tempsAffichage = 3.0f; // ici
-    static float opaciteImage = 255.0f; // et ici
-
-    //clic
-    static Texture2D clic1;
-    static Texture2D clic2;
-    static Texture2D clic3;
-    static Texture2D sniperaim;
-
-    //boutons
-    static Texture2D play_button;
-    static Texture2D play_active;
-    static Texture2D option_button;
-    static Texture2D option_active;
-    static Texture2D quit_button;
-    static Texture2D quit_active;
-
-    static Texture2D background;
-
-    // modeles 3d
-    static Model mapModel;
-    static Model enemyModel;
-    static Model sniper;
-    static Model karambit;
-
-    // sons
-    static Sound snipershot;
-    static Sound karambitshot;
-    static Sound select;
-    static Sound unselect;
-    static Sound survole;
-    static Sound swoosh;
-
-
-    static Shader lightShader;
-    
-
-    // la liste des clic en cours sur le menu
+    // Images & HUD
+    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, ImageMapTest, ImageMapVille;
+    static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, BlurBackground, imageexplosion;
+    static float tempsAffichage = 3.0f; 
+    static float opaciteImage = 255.0f; 
     static List<EffetClic> ListeEffets = new List<EffetClic>();
 
-    // --- 2. CONFIGURATION DE LA CAMÉRA (LE JOUEUR) ---
-    static Camera3D camera;
-    static Vector3 playerSize = new Vector3(1.0f, 2.0f, 1.0f);
-
-    // --- 3. VARIABLES DE PHYSIQUE (SAUT ET GRAVITÉ) ---
-    static bool IsDashing = false; // il faudra ajouter un chrono de cb de temps le dash dur et faire avancer la personne extremeent plus vite pednant ce court laps de temps
-    static int CountDash = 0;
-    static int NbJump = 2;
-    static float gravity = 25.0f;
-    static float jumpStrength = 10.0f;
-    static float velocityY = 0.0f;     // Vitesse verticale
-    static bool isGrounded = true;     // Touche le sol ?
-
-    // --- 4. CHARGEMENT DES ASSETS (MAP ET SHADERS) ---
-    static Vector3 mapPosition = new Vector3(0.0f, 0.0f, 0.0f);
-    static float mapScale = 1f;
+    // Modèles 3D et Sons
+    static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
+    static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
+    static Shader lightShader;
     static int lightPosLoc;
+    static int lightColorLoc;
+    static int viewPosLoc;
+
+
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
+    static float mapScale = 1f;
+    static Vector3 mapPosition = new Vector3(0.0f, 0.0f, 0.0f);
 
-    // --- 5. GÉNÉRATION AUTOMATIQUE DES MURS (AUTO-BOUNDING BOX) ---
-    static List<BoundingBox> walls = new List<BoundingBox>();
 
-    // --- 6. ENNEMIS ---
-    public class Enemy
-    {
-        public Vector3 position;
-        public int health;
-        public Vector3 size;
-
-        public Enemy(Vector3 pos, int hp, Vector3 sz)
-        {
-            position = pos;
-            health = hp;
-            size = sz;
-        }
-
-        public BoundingBox GetBoundingBox()
-        {
-            return new BoundingBox(position - size / 2, position + size / 2);
-        }
-    }
-
-    static List<Enemy> enemies = new List<Enemy>
-    {
-        new Enemy(new Vector3(5.0f, 1.0f, 5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f)),
-        new Enemy(new Vector3(-5.0f, 1.0f, -5.0f), 100, new Vector3(1.0f, 2.0f, 1.0f))
-    };
+    // Ennemis
+    public static Model ennemiModel;
+    public static List<Enemy> enemiesList = new List<Enemy>();
 
 
 
 
+    // ========================================================
+    // [ZONE BEPU] VARIABLES DE LA PHYSIQUE ET DE LA CAMÉRA
+    // ========================================================
+    static Camera3D camera;
+    
+    // Le Cerveau de la physique
+    public static Simulation simulation;
+    public static BufferPool pool;
+    public static BodyHandle PlayerId;
+    public static TypedIndex PlayerTicket;
+    public static TypedIndex PlayerTicketAccroupi;
+    public static BodyInertia inertieCube;
+    public static TypedIndex ticketCube;
+    static List<BodyHandle> ListeObjets = new List<BodyHandle>();
+
+    // Variables de mouvement
+    static int NbJump = 2; 
+    static int NbJumpMax = 1; 
+
+    static bool CanDash = true;
+    static float dashChrono = 0;
+
+
+    static float SpeedCoef = 1;
+    
+    // Paramètres Caméra FPS
+    static float CameraYaw = 0f;
+    static float CameraPitch = 0f;
+    static float MouseSensi = 0.003f;
+    static float actualFov = 60f;
+    static float boostFov = 0f;
+
+
+    // ========================================================
+    // INITIALISATION PRINCIPALE
+    // ========================================================
     static void Main()
     {
+        Raylib.InitWindow(LargeurFenetre, HauteurFenetre, "GoofyFPS");
 
-        // 1. Initialisation de la fenêtre (Largeur, Hauteur, Titre)
-        //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
+        Image ico = Raylib.LoadImage("src\\GoofyFPS-small.png");
+        Raylib.SetWindowIcon(ico);
 
-        Raylib.InitWindow(HauteurFenetre, LargeurFenetre, "GoofyFPS - Moteur de test");
-
-        // ==== IMAGES ====
-
+        // --- 1. CHARGEMENT COLLÈGUE (Assets) ---
         Logo = Raylib.LoadTexture("src\\GoofyFPS.png");
         clic1 = Raylib.LoadTexture("src\\img\\clic-blanc.png");
         clic2 = Raylib.LoadTexture("src\\img\\clic2-blanc.png");
         clic3 = Raylib.LoadTexture("src\\img\\clic3-blanc.png");
         startimg = Raylib.LoadTexture("assets\\2D\\epsteintrump.png");
+        imageexplosion = Raylib.LoadTexture("assets\\2D\\exploimage.png");
 
         play_active = Raylib.LoadTexture("src\\boutons\\play-active.png");
         play_button = Raylib.LoadTexture("src\\boutons\\play-base.png");
@@ -829,46 +2030,117 @@ partial class Program
         quit_button = Raylib.LoadTexture("src\\boutons\\quit-base.png");
 
         background = Raylib.LoadTexture("src\\Background3.png");
+        
+        Image BlurBackgroundImg = Raylib.LoadImage("src\\Background3.png");
+        Raylib.ImageBlurGaussian(ref BlurBackgroundImg, 10);
+        BlurBackground = Raylib.LoadTextureFromImage(BlurBackgroundImg);
+        Raylib.UnloadImage(BlurBackgroundImg);
 
-        mapModel = Raylib.LoadModel("map.glb");
-        enemyModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
+
+        ImageMapTest = Raylib.LoadTexture("src\\testMap.png");
+        ImageMapVille = Raylib.LoadTexture("src\\ville.png");
+
+
+        ennemiModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
         sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
         sniperrifle.modelname = sniper;
         karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");
         karambitknife.modelname = karambit;
+        bazooka = Raylib.LoadModel("assets\\3D\\bazooka.glb");
+        bazookaWeapon.modelname = bazooka; 
+        sword = Raylib.LoadModel("assets\\3D\\sword.glb");
+        swordWeapon.modelname = sword;
+        shotgun = Raylib.LoadModel("assets\\3D\\shotgun.glb");
+        shotgunWeapon.modelname = shotgun;
+        pistol = Raylib.LoadModel("assets\\3D\\pistol.glb");
+        pistolWeapon.modelname = pistol;
+        revolver = Raylib.LoadModel("assets\\3D\\revolver.glb");
+        revolverWeapon.modelname = revolver;
+        barrelModel = Raylib.LoadModel("assets\\3D\\barril.glb");
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
 
         Raylib.InitAudioDevice();
+        explosion = Raylib.LoadSound("assets\\sounds\\fahh-bomb.mp3");
         snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
-        sniperrifle.soundname = snipershot;
         karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
+        bazookashot = Raylib.LoadSound("assets\\sounds\\loud-explosion.mp3");
+        shotgunshot = Raylib.LoadSound("assets\\sounds\\fouchette-4.mp3");
+        pistolshot = Raylib.LoadSound("assets\\sounds\\small-gun.mp3");
+        revolvershot = Raylib.LoadSound("assets\\sounds\\lobotomy.mp3");
+        swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
+        swordslash = swoosh;
+        sniperrifle.soundname = snipershot;
         karambitknife.soundname = karambitshot;
-
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
-        swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
 
-
-        // Nécessite lighting.vs et lighting.fs
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
-
-        ListeTexture.Add(Logo); // on ajoute a la list afin de pouvoir unload facilement
-        ListeTexture.Add(clic1);
-        ListeTexture.Add(clic2);
-        ListeTexture.Add(clic3);
-
-        ListeTexture.Add(play_active);
-        ListeTexture.Add(play_button);
-        ListeTexture.Add(option_active);
-        ListeTexture.Add(option_button);
-        ListeTexture.Add(quit_active);
-        ListeTexture.Add(quit_button);
-
-        ListeTexture.Add(background);
+        lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
+        lightColorLoc = Raylib.GetShaderLocation(lightShader, "lightColor");
+        viewPosLoc = Raylib.GetShaderLocation(lightShader, "viewPos");
         
+        // APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE ET LES ARMES
+        unsafe
+        {
+            // 1. Pour la map
+            for (int i = 0; i < mapModel.MaterialCount; i++)
+            {
+                mapModel.Materials[i].Shader = lightShader;
+            }
 
-        // ==== CONFIGURATION DE LA SCÈNE 3D ====
+            // 2. CORRECTION : Pour le sniper
+            for (int i = 0; i < sniper.MaterialCount; i++)
+            {
+                sniper.Materials[i].Shader = lightShader;
+            }
+
+            // 3. CORRECTION : Pour le karambit
+            for (int i = 0; i < karambit.MaterialCount; i++)
+            {
+                karambit.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < bazooka.MaterialCount; i++)
+            {
+                bazooka.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < sword.MaterialCount; i++)
+            {
+                sword.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < shotgun.MaterialCount; i++)
+            {
+                shotgun.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < pistol.MaterialCount; i++)
+            {
+                pistol.Materials[i].Shader = lightShader;
+            }
+            for (int i = 0; i < revolver.MaterialCount; i++)
+            {
+                revolver.Materials[i].Shader = lightShader;
+            }
+
+            // 4. (Bonus) Pour les ennemis si tu veux qu'ils réagissent aussi à la lumière
+            for (int i = 0; i < ennemiModel.MaterialCount; i++)
+            {
+                ennemiModel.Materials[i].Shader = lightShader;
+            }
+
+            // 5. Barreils
+            for (int i = 0; i < barrelModel.MaterialCount; i++)
+            {
+                barrelModel.Materials[i].Shader = lightShader;
+            }
+        }
+
+        ListeTexture.Add(Logo); ListeTexture.Add(clic1); ListeTexture.Add(clic2); ListeTexture.Add(clic3);
+        ListeTexture.Add(play_active); ListeTexture.Add(play_button); ListeTexture.Add(option_active);
+        ListeTexture.Add(option_button); ListeTexture.Add(quit_active); ListeTexture.Add(quit_button);
+        ListeTexture.Add(background);
+
+
+        // --- 2. CONFIGURATION DE LA CAMÉRA ---
         camera = new Camera3D();
         camera.Position = new Vector3(0.0f, 15.0f, 5.0f); 
         camera.Target = new Vector3(0.0f, 2.0f, 0.0f);   
@@ -876,91 +2148,95 @@ partial class Program
         camera.FovY = 60.0f;                                          
         camera.Projection = CameraProjection.Perspective;
 
-        lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
 
-        // Appliquer le shader aux matériaux de la map
-        // Note: map.glb peut avoir plusieurs matériaux, il faudrait idéalement boucler dessus.
-        // On le garde sur le premier pour le moment selon ton code original.
-        unsafe
-        {
-            if (mapModel.MaterialCount > 0)
-            {
-                mapModel.Materials[0].Shader = lightShader;
-            }
-        }
+        // --- 3. CHARGEMENT BEPU (Le monde physique) ---
+        pool = new BufferPool();
+        Vector3 gravity = new Vector3(0, -10f, 0); // Ta gravité de la sandbox
+        simulation = Simulation.Create(pool, new NarrowPhaseCallbacks(), new PoseIntegratorCallbacks(gravity), new SolveDescription(8, 1));
 
-        Console.WriteLine($"[DEBUG] Nombre de Mesh détectés dans map.glb pour les collisions : {mapModel.MeshCount}");
+        /*
+        // Sol
+        float taillePlatforme = 200f;
+        Box Sol = new Box(taillePlatforme, taillePlatforme, taillePlatforme);
+        TypedIndex SolShapeIndex = simulation.Shapes.Add(Sol);
+        simulation.Statics.Add(new StaticDescription(new Vector3(0, -taillePlatforme/2, 0), SolShapeIndex));
 
-        unsafe 
-        {
-            // Cette boucle parcourt chaque partie (Mesh) de ton fichier map.glb
-            for (int i = 0; i < mapModel.MeshCount; i++)
-            {
-                // Récupère la boîte locale pour la partie 'i'
-                BoundingBox wallBox = Raylib.GetMeshBoundingBox(mapModel.Meshes[i]);
-                
-                // 1. On applique l'échelle (Scale)
-                wallBox.Min *= mapScale;
-                wallBox.Max *= mapScale;
+        // Murs de test
+        Vector3 PosMur = new Vector3(-9.5f, 2.5f, 0);
+        Vector3 PosMur2 = new Vector3(-9.5f, 20f, 0);
+        Box Mur = new Box(1f, 5f, 20f);
+        TypedIndex MurShapeIndex = simulation.Shapes.Add(Mur);
+        simulation.Statics.Add(new StaticDescription(PosMur, MurShapeIndex));
+        simulation.Statics.Add(new StaticDescription(PosMur2, MurShapeIndex));
 
-                // 2. On applique la position dans le monde (Translation)
-                wallBox.Min += mapPosition;
-                wallBox.Max += mapPosition;
+        // Plateformes (de ta sandbox)
+        Box Platforme = new Box(10f, 1f, 10f);
+        TypedIndex PlatformeShapeIndex = simulation.Shapes.Add(Platforme);
+        simulation.Statics.Add(new StaticDescription(new Vector3(25, 4, 0), PlatformeShapeIndex));
+        simulation.Statics.Add(new StaticDescription(new Vector3(22, 10, -15), PlatformeShapeIndex));
+        simulation.Statics.Add(new StaticDescription(new Vector3(10, 18, -20), PlatformeShapeIndex));
+        */
 
-                walls.Add(wallBox);
-            }
-        }
 
-        // On bloque le jeu à 60 FPS pour éviter que la boucle tourne trop vite
+
+
+
+        // ========================================================
+        // LE PONT RAYLIB -> BEPU (Création de la carte physique)
+        // ========================================================
+
+        
+
+        // Le Joueur
+        Capsule PlayerFrom = new Capsule(0.5f, 1f);
+        Capsule PlayerFromAccroupi = new Capsule(0.5f, 0.5f);
+        PlayerTicket = simulation.Shapes.Add(PlayerFrom);
+        PlayerTicketAccroupi = simulation.Shapes.Add(PlayerFromAccroupi);
+
+        BodyInertia PlayerInertie = new BodyInertia { InverseMass = 1f / 10f, InverseInertiaTensor = new BepuUtilities.Symmetric3x3() };
+        BodyDescription Playerdescription = BodyDescription.CreateDynamic(new Vector3(0, 100, 0), PlayerInertie, PlayerTicket, 0.01f);
+        PlayerId = simulation.Bodies.Add(Playerdescription);
+
+        // Cube Spawner
+        Box Cube = new Box(1f, 1f, 1f);
+        ticketCube = simulation.Shapes.Add(Cube);
+        inertieCube = Cube.ComputeInertia(1f);
+
+        InitBarrels();
+        enemiesList.Add(new Enemy(new Vector3(5.0f, 2.0f, 5.0f), 100, 4.0f));
+        enemiesList.Add(new Enemy(new Vector3(-5.0f, 2.0f, -5.0f), 100, 4.0f));
+
         Raylib.SetTargetFPS(FPS); 
-
         X_carre = Raylib.GetScreenWidth()/2;
         Y_carre = Raylib.GetScreenHeight()/2;
 
-        // Création des armes
-        // Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D)
-
-        
-
-
-        
-
-
-
-
-        // 2. La Boucle de Jeu (Game Loop)
-        // Elle tourne en continu tant qu'on n'appuie pas sur Echap ou la croix rouge
+        // --- BOUCLE DE JEU ---
         while (!Raylib.WindowShouldClose())
         {
-            // --- LOGIQUE (Update) ---
-            // C'est ici qu'on mettra les calculs de déplacement plus tard
-            if (endroit == "menu") {
-                Menu();
-            }
-            else if (endroit == "boucle")
-            {
-                BouclePrincipale();
-            }
-            else if (endroit == "option")
-            {
-                Menugame();
-            }
-            
+            if (endroit == "menu") Menu();
+            else if (endroit == "boucle") BouclePrincipale();
+            else if (endroit == "option") Menugame();
+            else if (endroit == "choice map") ChoiceMap();
         }
 
-        // 3. Fermeture propre pour libérer la mémoire
-        foreach(var texture in ListeTexture)
-        {
-            Raylib.UnloadTexture(texture);
-        }
-        
-        // on décharge la 3d
+        // --- NETTOYAGE ---
+        foreach(var texture in ListeTexture) Raylib.UnloadTexture(texture);
         Raylib.UnloadModel(mapModel);
+        Raylib.UnloadModel(ennemiModel);
         Raylib.UnloadModel(sniper);
+        Raylib.UnloadModel(karambit);
+        Raylib.UnloadModel(bazooka);
+        Raylib.UnloadModel(sword);
+        Raylib.UnloadModel(shotgun);
+        Raylib.UnloadModel(pistol);
+        Raylib.UnloadModel(revolver);
+        Raylib.UnloadModel(barrelModel);
         Raylib.UnloadShader(lightShader);
         Raylib.UnloadSound(snipershot);
         Raylib.UnloadSound(karambitshot);
-
+        
+        simulation.Dispose();
+        pool.Clear();
         Raylib.CloseWindow();
     }
 }
@@ -974,9 +2250,8 @@ using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
 
-
-
-using Raylib_cs; // Indispensable pour que le type "Model" soit reconnu
+using BepuPhysics; // physique
+using System.Linq; // listes
 
 public class Weapon
 {
@@ -993,28 +2268,111 @@ public class Weapon
     public float lastShotTime;
     public bool isReloading;
     public float reloadStartTime;
+    public float force;
 
     // constructeur
-    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son)
+    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son, float power)
     {
         name = nom;
         damage = degats;
         range = portee;
         fireRate = cadence;
         maxammo = munitionsMax;
+        ammo = munitionsMax;
         reloadtime = tempsRecharge;
         modelname = modele3D;
         soundname = son;
         lastShotTime = 0.0f;
         isReloading = false;
         reloadStartTime = 0.0f;
+        force = power;
     }
 
 
 
-    public void Shoot()
+    public bool Shoot(Vector3 direction, Camera3D camera, ref BodyReference playerBody, List<Program.BarrelSpot> barrelSpots, List<Program.Enemy> enemies, out Vector3 startLaser, out Vector3 endLaser)
     {
-        
+        startLaser = Vector3.Zero;
+        endLaser = Vector3.Zero;
+
+        // 1. Vérification : A-t-on le droit de tirer ? (Munitions, Rechargement, Cadence)
+        if (ammo <= 0 || isReloading || (float)Raylib.GetTime() - lastShotTime < fireRate)
+        {
+            return false; // Le tir n'est pas parti
+        }
+
+        // 2. Le tir part !
+        Raylib.PlaySound(soundname);
+        lastShotTime = (float)Raylib.GetTime();
+        ammo--;
+
+        // 3. Le recul (Knockback) appliqué directement au joueur BEPU
+        float forceRecul = 0.5f;
+        playerBody.Velocity.Linear -= direction * forceRecul * force;
+
+        // 4. Calcul du rayon laser visuel
+        Vector3 right = Vector3.Normalize(Vector3.Cross(direction, camera.Up));
+        startLaser = camera.Position + direction * 0.5f + right * 0.25f;
+        LaserSensor capteurLaser = new LaserSensor(playerBody.CollidableReference);
+        capteurLaser.aTouche = false;
+
+        // On lance le laser dans la physique
+        Program.simulation.RayCast(startLaser, direction, range, ref capteurLaser);
+
+        // On ajuste la fin du laser
+        float distanceEffective = range; // Par défaut, la balle va jusqu'au bout de sa portée
+
+        if (capteurLaser.aTouche)
+        {
+            // Le mur arrête la balle ! La distance max devient la distance du mur.
+            distanceEffective = capteurLaser.distanceImpact; 
+        }
+
+        // On arrête le visuel à la bonne distance
+        endLaser = startLaser + direction * distanceEffective;
+
+        // 5. Détection des collisions avec les Barils
+        int hitBarrelIndex = -1;
+        for (int i = 0; i < barrelSpots.Count; i++)
+        {
+            Program.BarrelSpot spot = barrelSpots[i];
+            if (!spot.hasBarrel) continue;
+            
+            // ON UTILISE 'distanceEffective' AU LIEU DE 'range' !
+            if (Program.IsPointOnLaser(spot.position, startLaser, direction, distanceEffective))
+            {
+                hitBarrelIndex = i;
+                break;
+            }
+        }
+
+        if (hitBarrelIndex >= 0)
+        {
+            Program.OnBarrelHit(hitBarrelIndex);
+        }
+        else
+        {
+            // 6. Détection des collisions avec les Ennemis
+            foreach (Program.Enemy enemy in enemies.ToList())
+            {
+                float distanceToEnemy = Vector3.Distance(startLaser, enemy.position);
+                
+                // ON UTILISE 'distanceEffective' AU LIEU DE 'range' !
+                if (distanceToEnemy <= distanceEffective)
+                {
+                    Vector3 toEnemy = Vector3.Normalize(enemy.position - startLaser);
+                    float dot = Vector3.Dot(direction, toEnemy);
+                    if (dot > 0.995f) 
+                    {
+                        enemy.health -= damage;
+                        Program.hitmarkerTimer = 0.3f;
+                        if (enemy.health <= 0) enemies.Remove(enemy);
+                    }
+                }
+            }
+        }
+
+        return true; // Le tir a bien été validé et calculé !
     }
     
 
