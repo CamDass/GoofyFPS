@@ -56,7 +56,7 @@ public class Enemy
         float distanceToPlayer = Vector3.Distance(positionEnnemiPlate, positionJoueurPlate);
         float differenceHauteur = playerPos.Y - enemyBody.Pose.Position.Y;
         
-        if (distanceHorizontale < 2f && differenceHauteur < 2.5f && attackCooldown <= 0)
+        if (distanceHorizontale < 2.2f && differenceHauteur < 3.5f && attackCooldown <= 0)
         {
             // Il te met une claque !
             Program.localPlayer.TakeDamage(10); 
@@ -83,7 +83,7 @@ public class Enemy
 
         // CORRECTION DU BUG : On utilise une seule logique de distance
         // Si on est à plus de 1.8 mètre, on court vers le joueur
-        if (distanceToPlayer > 1f) 
+        if (distanceToPlayer > 1.4f) 
         {
             dirVoulue = Vector3.Normalize(dirVoulue);
 
