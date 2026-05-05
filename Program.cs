@@ -389,6 +389,12 @@ public partial class Program
         Raylib.UnloadSound(snipershot);
         Raylib.UnloadSound(karambitshot);
         
+        // Unload death sounds
+        for (int i = 0; i < deathSounds.Length; i++)
+        {
+            Raylib.UnloadSound(deathSounds[i]);
+        }
+        
         simulation.Dispose();
         pool.Clear();
         Raylib.CloseWindow();
