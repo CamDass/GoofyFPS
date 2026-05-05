@@ -105,4 +105,128 @@ partial class Program
 
 
     }
+
+    public static void Menumaps()
+    {
+         Raylib.BeginDrawing();
+
+
+
+            // pour "quitter"
+            if (Raylib.IsKeyDown(KeyboardKey.Space)) 
+            {
+                Raylib.PlaySound(select);
+                Raylib.DisableCursor();
+
+                endroit = "boucle";
+            }
+
+            // pour gerer les clic 
+            // --- ÉTAPE 3 : LA CRÉATION (Quand on clique) ---
+            // On utilise Pressed (1 seule fois) et non Down (en continu)
+            if (Raylib.IsMouseButtonPressed(MouseButton.Left)) 
+            {
+                int randValue = Raylib.GetRandomValue(1, 3);
+                Texture2D textureChoisie = clic1; // Par défaut
+                
+                if (randValue == 2) textureChoisie = clic2;
+                if (randValue == 3) textureChoisie = clic3;
+
+                // calcule position
+                float x_clic = textureChoisie.Width * 0.2f;
+                float y_clic = textureChoisie.Height * 0.2f;
+                Vector2 tailleImage = new Vector2(x_clic, y_clic);
+                Vector2 positionCentree = Raylib.GetMousePosition() - (tailleImage / 2f);
+
+                // ajouter à la liste le nouveau clic
+                ListeEffets.Add(new EffetClic(positionCentree, textureChoisie));
+            }
+
+
+            // ===== Vecteurs =====
+
+            Vector2 souris = Raylib.GetMousePosition();
+            //float echelle_background = 0.2f;
+
+            // background 
+            Vector2 BackgroundPos = new Vector2(0,0);
+
+            float rotation = 0.0f;
+
+            
+
+             // === BOUTON MENU ===
+            float echelleBoutons = 0.2f;
+            float echelleBoutonActif = 0.205f;
+            float echelleQuit = 0.190f;
+            int posX_boutons = Raylib.GetScreenHeight()/2 + 250;
+
+            int posY_quit = 750;
+            Vector2 positionQuit = new Vector2(posX_boutons, posY_quit);
+
+            Vector2 ajustement = new Vector2(0,20);
+            Vector2 ajustement_draw = new Vector2(5,5);
+            Vector2 ajustement_quit = new Vector2(10,5);
+            //collisions 
+
+            Rectangle boxQuit = new Rectangle(positionQuit+ajustement, 300,120);
+
+
+
+            // ==== debut du draw ====
+
+            // On nettoie l'écran à chaque frame avec une couleur de fond
+            Raylib.ClearBackground(Color.DarkGray);
+            Raylib.DrawTextureEx(background, BackgroundPos, rotation, 1f,Color.White);
+
+            //======= vrai boutons =======
+
+
+            //quit
+            if (Raylib.CheckCollisionPointRec(souris, boxQuit))
+            {
+                //bouton quitter activé
+                Raylib.DrawTextureEx(quit_active, positionQuit+ajustement_quit, rotation, echelleQuit, Color.White);
+                //Raylib.PlaySound(survole);
+                //Console.WriteLine("quit");
+
+                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                {
+                    //quitter le jeu
+                    foreach(var texture in ListeTexture)
+                    {
+                        Raylib.UnloadTexture(texture);
+                    }
+                    
+                    Raylib.CloseWindow();
+                }
+            }
+            else 
+            {
+                Raylib.DrawTextureEx(quit_button, positionQuit, rotation, echelleBoutons, Color.White);
+            }
+
+            // === AFFICHAGE CLIC ===
+
+            for (int i = ListeEffets.Count - 1; i >= 0; i--)
+            {
+                // effet fondu
+                ListeEffets[i].Opacite -= 5; 
+
+                if (ListeEffets[i].Opacite <= 0)
+                {
+                    ListeEffets.RemoveAt(i);
+                }
+                else 
+                {
+                    //ici la couleur marche comme un masque sur photoshop : de blanc visible à noir invisible, donc on modifie l'alpha pour faire l'effet "opacité"
+                    Color couleurFondu = new Color(255, 255, 255, ListeEffets[i].Opacite);
+                    
+                    Raylib.DrawTextureEx(ListeEffets[i].Texture, ListeEffets[i].Position, 0.0f, 0.2f, couleurFondu);
+                }
+            }
+
+
+            Raylib.EndDrawing();
+    }
 }
