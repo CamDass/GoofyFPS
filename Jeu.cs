@@ -14,7 +14,7 @@ partial class Program
     // VARIABLES DES ARMES (ILIAN)
     // ========================================================
     static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
-    static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot, 0f);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f);
     static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
     static Weapon pistolWeapon = new Weapon("Pistol", 3, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
@@ -77,13 +77,15 @@ partial class Program
         new BarrelSpot(new Vector3(-18f, -0.55f, 71f)),
     };
 
-    static void SwitchWeaponFromBarrel()
+    public static void SwitchWeaponFromBarrel(bool excludeBazooka = false)
     {
-        if (weapons.Count <= 1) return;
+        List<Weapon> allowedWeapons = weapons.Where(w => !excludeBazooka || !string.Equals(w.name, "Bazooka", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (allowedWeapons.Count <= 1) return;
+
         Weapon newWeapon = currentWeapon;
         while (newWeapon == currentWeapon)
         {
-            newWeapon = weapons[random.Next(weapons.Count)];
+            newWeapon = allowedWeapons[random.Next(allowedWeapons.Count)];
         }
         currentWeapon = newWeapon;
     }
@@ -160,6 +162,56 @@ static void InitBarrels()
         activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
     }
 
+    public static void BreakBarrelAt(int index, bool playSound = false, bool spawnEffect = false)
+    {
+        if (index < 0 || index >= barrelSpots.Count) return;
+        if (!barrelSpots[index].hasBarrel) return;
+
+        barrelSpots[index].hasBarrel = false;
+        barrelSpots[index].respawnPending = true;
+        barrelSpots[index].respawnTimer = barrelRespawnSeconds;
+
+        if (barrelSpots[index].estSolide)
+        {
+            simulation.Statics.Remove(barrelSpots[index].handlePhysique);
+            barrelSpots[index].estSolide = false;
+        }
+
+        if (playSound)
+        {
+            Raylib.PlaySound(explosion);
+        }
+
+        if (spawnEffect)
+        {
+            activeExplosions.Add(new ExplosionEffect(barrelSpots[index].position, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
+        }
+    }
+
+    public static bool BreakBarrelsInRadius(Vector3 center, float radius)
+    {
+        bool anyBroken = false;
+        for (int i = 0; i < barrelSpots.Count; i++)
+        {
+            if (!barrelSpots[i].hasBarrel) continue;
+            float dist = Vector3.Distance(center, barrelSpots[i].position);
+            if (dist <= radius)
+            {
+                BreakBarrelAt(i, true, true);
+                anyBroken = true;
+            }
+        }
+        return anyBroken;
+    }
+
+    public static void SpawnExplosionEffect(Vector3 position)
+    {
+        float effectDuration = 0.5f;
+        float startSize = 0.5f;
+        float maxSize = 6f;
+        activeExplosions.Add(new ExplosionEffect(position, effectDuration, startSize, maxSize));
+    }
+
     public class ExplosionEffect
     {
         public Vector3 position;
@@ -180,12 +232,13 @@ static void InitBarrels()
         public float GetSize()
         {
             float progress = 1f - (timer / duration);
-            return initialSize + (maxSize - initialSize) * progress;
+            float easedProgress = 1f - (1f - progress) * (1f - progress);
+            return initialSize + (maxSize - initialSize) * easedProgress;
         }
 
         public float GetAlpha()
         {
-            return (timer / duration) * 255f;
+            return (timer / duration) * 204f;
         }
     }
 
@@ -416,9 +469,13 @@ static void InitBarrels()
 
         WallSensor capteurMurDroit = new WallSensor(espionCube.CollidableReference);
         WallSensor capteurMurGauche = new WallSensor(espionCube.CollidableReference);
+        WallSensor capteurMurAvant = new WallSensor(espionCube.CollidableReference);
+        WallSensor capteurMurArriere = new WallSensor(espionCube.CollidableReference);
         float longueurLaserMur = 0.8f;
         simulation.RayCast(posCube, GroundRight, longueurLaserMur, ref capteurMurDroit);
         simulation.RayCast(posCube, -GroundRight, longueurLaserMur, ref capteurMurGauche);
+        simulation.RayCast(posCube, GroundForward, longueurLaserMur, ref capteurMurAvant);
+        simulation.RayCast(posCube, -GroundForward, longueurLaserMur, ref capteurMurArriere);
 
 
 
@@ -469,11 +526,14 @@ static void InitBarrels()
         // Déplacements & WallRun
         if (!capteurSol.toucheSol)
         {
-            if ((capteurMurDroit.toucheMur && Raylib.IsKeyDown(KeyboardKey.D)) || (capteurMurGauche.toucheMur && Raylib.IsKeyDown(KeyboardKey.A))) IsWallRunning = true; 
+            if ((capteurMurDroit.toucheMur && Raylib.IsKeyDown(KeyboardKey.D)) || (capteurMurGauche.toucheMur && Raylib.IsKeyDown(KeyboardKey.A)) || (capteurMurAvant.toucheMur && Raylib.IsKeyDown(KeyboardKey.W)) || (capteurMurArriere.toucheMur && Raylib.IsKeyDown(KeyboardKey.S)))
+            {
+                IsWallRunning = true;
+            }
         }
 
-        if (Raylib.IsKeyDown(KeyboardKey.W) || Raylib.IsKeyDown(KeyboardKey.Up)) deplacementVoulu += GroundForward;
-        if (Raylib.IsKeyDown(KeyboardKey.S) || Raylib.IsKeyDown(KeyboardKey.Down)) deplacementVoulu -= GroundForward;
+        if ((Raylib.IsKeyDown(KeyboardKey.W) || Raylib.IsKeyDown(KeyboardKey.Up)) && !capteurMurAvant.toucheMur) deplacementVoulu += GroundForward;
+        if ((Raylib.IsKeyDown(KeyboardKey.S) || Raylib.IsKeyDown(KeyboardKey.Down)) && !capteurMurArriere.toucheMur) deplacementVoulu -= GroundForward;
         if ((Raylib.IsKeyDown(KeyboardKey.A) || Raylib.IsKeyDown(KeyboardKey.Left)) && !capteurMurGauche.toucheMur) deplacementVoulu -= GroundRight; 
         if ((Raylib.IsKeyDown(KeyboardKey.D) || Raylib.IsKeyDown(KeyboardKey.Right)) && !capteurMurDroit.toucheMur) deplacementVoulu += GroundRight;
 
@@ -511,6 +571,8 @@ static void InitBarrels()
                 espionCube.Velocity.Linear.Y += 2f;
                 if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
                 if (capteurMurGauche.toucheMur) deplacementVoulu += GroundRight*20;
+                if (capteurMurAvant.toucheMur) deplacementVoulu -= GroundForward*20;
+                if (capteurMurArriere.toucheMur) deplacementVoulu += GroundForward*20;
                 Console.WriteLine("wall jump");
             }
 
@@ -638,6 +700,7 @@ static void InitBarrels()
         
         // On envoie la position de la caméra pour le brouillard 
         Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
+        Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
         
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Color.SkyBlue);
@@ -726,13 +789,17 @@ static void InitBarrels()
                 }
             }
 
-            // Dessiner les explosions
+            // Dessiner les explosions en sphère orange avec un coeur rouge plus petit
             foreach (ExplosionEffect exp in activeExplosions)
             {
                 float size = exp.GetSize();
                 byte alpha = (byte)exp.GetAlpha();
-                Color expColor = new Color((byte)255, (byte)255, (byte)255, alpha);
-                Raylib.DrawBillboard(camera, imageexplosion, exp.position, size, expColor);
+                Color orangeColor = new Color((byte)255, (byte)165, (byte)0, alpha);
+                Raylib.DrawSphere(exp.position, size, orangeColor);
+
+                float redSize = size * 0.9f;
+                Color redColor = new Color((byte)255, (byte)0, (byte)0, alpha);
+                Raylib.DrawSphere(exp.position, redSize, redColor);
             }
             
             // Dessiner le laser (Code ILIAN)
@@ -920,9 +987,9 @@ static void InitBarrels()
                 Vector3 weaponPos = new Vector3(posX + balancementX, posY + balancementY, posZ); 
                 Vector3 weaponScale = new Vector3(0.1f, 0.1f, 0.1f);
                 
+                Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 0 }, ShaderUniformDataType.Int);
                 Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, weaponScale, Color.White);
-
-                
+                Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
 
             Raylib.EndMode3D();
             

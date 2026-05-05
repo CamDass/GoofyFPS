@@ -54,6 +54,7 @@ public partial class Program
     static int lightPosLoc;
     static int lightColorLoc;
     static int viewPosLoc;
+    public static int applyFogLoc;
 
 
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
@@ -231,6 +232,7 @@ public partial class Program
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
         lightColorLoc = Raylib.GetShaderLocation(lightShader, "lightColor");
         viewPosLoc = Raylib.GetShaderLocation(lightShader, "viewPos");
+        applyFogLoc = Raylib.GetShaderLocation(lightShader, "applyFog");
         
         // APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE ET LES ARMES
         unsafe
