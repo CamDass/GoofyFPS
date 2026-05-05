@@ -20,6 +20,9 @@ partial class Program
 
     public static void Menu()
     {
+        SetActiveMusic(ActiveMusic.Menu);
+        UpdateActiveMusicStream();
+
         // --- RENDU (Draw) ---
             Raylib.BeginDrawing();
 
@@ -240,6 +243,9 @@ partial class Program
 
     public static void ChoiceMap()
     {
+        SetActiveMusic(ActiveMusic.Menu);
+        UpdateActiveMusicStream();
+
         simulation.Statics.Clear();
 
         foreach (Enemy enemy in enemiesList)

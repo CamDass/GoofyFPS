@@ -246,6 +246,8 @@ static void InitBarrels()
     //===== BOUCLE DU JEU =====
     public static void BouclePrincipale()
     {
+        SetActiveMusic(ActiveMusic.Game);
+        UpdateActiveMusicStream();
         
         // ========================================================
         // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS

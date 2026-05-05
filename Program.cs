@@ -37,6 +37,13 @@ public partial class Program
     static bool isMenuGameOpen = false;
 
     static List<Texture2D> ListeTexture = new List<Texture2D>();
+
+    enum ActiveMusic
+    {
+        None,
+        Menu,
+        Game
+    }
     
     // Images & HUD
     static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, ImageMapTest, ImageMapVille, Imageville2;
@@ -50,6 +57,9 @@ public partial class Program
     public static Sound[] deathSounds = new Sound[4]; // Pool de 4 sons de death pour éviter les conflits
     public static int deathSoundIndex = 0;
     static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
+    static Music menuMusic, gameMusic;
+    static float musicVolume = 0.4f;
+    static ActiveMusic currentMusicState = ActiveMusic.None;
     static Shader lightShader;
     static int lightPosLoc;
     static int lightColorLoc;
@@ -199,6 +209,10 @@ public partial class Program
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
 
         Raylib.InitAudioDevice();
+        menuMusic = Raylib.LoadMusicStream("assets\\sounds\\menuMusic.mp3");
+        gameMusic = Raylib.LoadMusicStream("assets\\sounds\\gameMusic.mp3");
+        Raylib.SetMusicVolume(menuMusic, musicVolume);
+        Raylib.SetMusicVolume(gameMusic, musicVolume);
         explosion = Raylib.LoadSound("assets\\sounds\\fahh-bomb.mp3");
         shotgunshot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
         karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
@@ -286,10 +300,24 @@ public partial class Program
             }
         }
 
-        ListeTexture.Add(Logo); ListeTexture.Add(clic1); ListeTexture.Add(clic2); ListeTexture.Add(clic3);
-        ListeTexture.Add(play_active); ListeTexture.Add(play_button); ListeTexture.Add(option_active);
-        ListeTexture.Add(option_button); ListeTexture.Add(quit_active); ListeTexture.Add(quit_button);
+        ListeTexture.Add(Logo);
+        ListeTexture.Add(startimg);
+        ListeTexture.Add(clic1);
+        ListeTexture.Add(clic2);
+        ListeTexture.Add(clic3);
+        ListeTexture.Add(play_active);
+        ListeTexture.Add(play_button);
+        ListeTexture.Add(option_active);
+        ListeTexture.Add(option_button);
+        ListeTexture.Add(quit_active);
+        ListeTexture.Add(quit_button);
         ListeTexture.Add(background);
+        ListeTexture.Add(BlurBackground);
+        ListeTexture.Add(imageexplosion);
+        ListeTexture.Add(ImageMapTest);
+        ListeTexture.Add(ImageMapVille);
+        ListeTexture.Add(Imageville2);
+        ListeTexture.Add(sniperaim);
 
 
         // --- 2. CONFIGURATION DE LA CAMÉRA ---
@@ -376,7 +404,10 @@ public partial class Program
         {
             if (endroit == "menu") Menu();
             else if (endroit == "boucle") BouclePrincipale();
-            else if (endroit == "option") Menugame();
+            else if (endroit == "option") {
+                Console.WriteLine("option");
+                endroit = "menu";
+            }
             else if (endroit == "choice map") ChoiceMap();
         }
 
@@ -396,6 +427,9 @@ public partial class Program
         Raylib.UnloadSound(snipershot);
         Raylib.UnloadSound(karambitshot);
         
+        Raylib.UnloadMusicStream(menuMusic);
+        Raylib.UnloadMusicStream(gameMusic);
+        
         // Unload death sounds
         for (int i = 0; i < deathSounds.Length; i++)
         {
@@ -405,5 +439,44 @@ public partial class Program
         simulation.Dispose();
         pool.Clear();
         Raylib.CloseWindow();
+    }
+
+    static void SetActiveMusic(ActiveMusic desired)
+    {
+        if (currentMusicState == desired) return;
+
+        if (currentMusicState == ActiveMusic.Menu)
+        {
+            Raylib.StopMusicStream(menuMusic);
+        }
+        else if (currentMusicState == ActiveMusic.Game)
+        {
+            Raylib.StopMusicStream(gameMusic);
+        }
+
+        currentMusicState = desired;
+
+        if (currentMusicState == ActiveMusic.Menu)
+        {
+            Raylib.SetMusicVolume(menuMusic, musicVolume);
+            Raylib.PlayMusicStream(menuMusic);
+        }
+        else if (currentMusicState == ActiveMusic.Game)
+        {
+            Raylib.SetMusicVolume(gameMusic, musicVolume);
+            Raylib.PlayMusicStream(gameMusic);
+        }
+    }
+
+    static void UpdateActiveMusicStream()
+    {
+        if (currentMusicState == ActiveMusic.Menu)
+        {
+            Raylib.UpdateMusicStream(menuMusic);
+        }
+        else if (currentMusicState == ActiveMusic.Game)
+        {
+            Raylib.UpdateMusicStream(gameMusic);
+        }
     }
 }
