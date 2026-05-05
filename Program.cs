@@ -23,7 +23,7 @@ public partial class Program
         new Vector3(3, 0, -21),     
         new Vector3(-104, 21, 45),
         new Vector3(-107, 0, 155),    
-        new Vector3(-8, 9, 96), 
+        new Vector3(-8, 10, 96), 
         new Vector3(-39, 31, 85), 
     };
 
@@ -47,6 +47,7 @@ public partial class Program
 
     // Modèles 3D et Sons
     static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
+    public static Sound death;
     static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
     static Shader lightShader;
     static int lightPosLoc;
@@ -190,19 +191,27 @@ public partial class Program
 
         Raylib.InitAudioDevice();
         explosion = Raylib.LoadSound("assets\\sounds\\fahh-bomb.mp3");
-        snipershot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
+        shotgunshot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
         karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
         bazookashot = Raylib.LoadSound("assets\\sounds\\loud-explosion.mp3");
-        shotgunshot = Raylib.LoadSound("assets\\sounds\\fouchette-4.mp3");
-        pistolshot = Raylib.LoadSound("assets\\sounds\\small-gun.mp3");
+        snipershot = Raylib.LoadSound("assets\\sounds\\awp_02.mp3");
+        pistolshot = Raylib.LoadSound("assets\\sounds\\gunshots-mixed.mp3");
         revolvershot = Raylib.LoadSound("assets\\sounds\\lobotomy.mp3");
         swoosh = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
-        swordslash = swoosh;
-        sniperrifle.soundname = snipershot;
-        karambitknife.soundname = karambitshot;
+        swordslash = Raylib.LoadSound("assets\\sounds\\batteuse.mp3");
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
+        death = Raylib.LoadSound("assets\\sounds\\death.mp3");
+
+        // Affectation des sons aux armes après le chargement
+        sniperrifle.soundname = snipershot;
+        karambitknife.soundname = karambitshot;
+        bazookaWeapon.soundname = bazookashot;
+        shotgunWeapon.soundname = shotgunshot;
+        pistolWeapon.soundname = pistolshot;
+        revolverWeapon.soundname = revolvershot;
+        swordWeapon.soundname = swordslash;
 
         lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
