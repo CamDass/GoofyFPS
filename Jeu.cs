@@ -316,9 +316,6 @@ static void InitBarrels()
 
         if (!localPlayer.IsAlive)
         {
-            Raylib.EnableCursor(); // On libère la souris
-            
-            // 1. Dessin de l'écran noir
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Color.Black);
             Raylib.DrawText("VOUS ÉTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
@@ -335,6 +332,7 @@ static void InitBarrels()
                 joueurMort.Velocity.Linear = Vector3.Zero;
                 
                 endroit = "menu"; 
+                Raylib.EnableCursor();
             }
             
             // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
