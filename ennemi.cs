@@ -122,7 +122,7 @@ public class Enemy
             enemyBody.Velocity.Linear.X = 0;
             enemyBody.Velocity.Linear.Z = 0;
         }
-    }
+    } // test
 
     // La Gestion des dégâts
     public void TakeDamage(int damage)
