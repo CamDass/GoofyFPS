@@ -49,9 +49,7 @@ public partial class Program
     static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
     public static Sound[] deathSounds = new Sound[4]; // Pool de 4 sons de death pour éviter les conflits
     public static int deathSoundIndex = 0;
-    static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion, rahh;
-    static Sound gameMusic, menuMusic;
-    static bool isMusicPlaying = false;
+    static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
     static Shader lightShader;
     static int lightPosLoc;
     static int lightColorLoc;
@@ -85,6 +83,7 @@ public partial class Program
     public static List<DamageText> activeDamageTexts = new List<DamageText>();
 
     public static TypedIndex formeBarilIndex;
+    public static Vector3 barrelPhysicsCenterOffset;
 
     
 
@@ -190,6 +189,13 @@ public partial class Program
         revolver = Raylib.LoadModel("assets\\3D\\revolver.glb");
         revolverWeapon.modelname = revolver;
         barrelModel = Raylib.LoadModel("assets\\3D\\barril.glb");
+        // Calculer la bounding box du modèle pour une hitbox précise et l'aligner sur le modèle
+        BoundingBox barrelBB = Raylib.GetModelBoundingBox(barrelModel);
+        Vector3 barrelSize = barrelBB.Max - barrelBB.Min;
+        Vector3 barrelHalfExtents = barrelSize * 0.5f;
+        barrelPhysicsCenterOffset = (barrelBB.Max + barrelBB.Min) * 0.5f;
+        float barrelHitboxInflation = 2f; // Agrandit la box de détection des tirs
+        Box formeBaril = new Box(barrelHalfExtents.X * barrelHitboxInflation, barrelHalfExtents.Y * barrelHitboxInflation, barrelHalfExtents.Z * barrelHitboxInflation);
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
 
         Raylib.InitAudioDevice();
@@ -205,15 +211,6 @@ public partial class Program
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
-        rahh = Raylib.LoadSound("assets\\sounds\\raaaah.mp3");
-        
-        // Charger la musique de jeu et menu
-        gameMusic = Raylib.LoadSound("assets\\sounds\\gameMusic.mp3");
-        menuMusic = Raylib.LoadSound("assets\\sounds\\menuMusic.mp3");
-        
-        // Mettre le volume à 40%
-        Raylib.SetSoundVolume(gameMusic, 0.4f);
-        Raylib.SetSoundVolume(menuMusic, 0.4f);
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -362,7 +359,7 @@ public partial class Program
         ticketCube = simulation.Shapes.Add(Cube);
         inertieCube = Cube.ComputeInertia(1f);
 
-        Cylinder formeBaril = new Cylinder(0.5f, 1f);
+        // La forme du baril est maintenant définie plus tôt avec la bounding box
         formeBarilIndex = simulation.Shapes.Add(formeBaril);
 
         
@@ -377,39 +374,13 @@ public partial class Program
         // --- BOUCLE DE JEU ---
         while (!Raylib.WindowShouldClose())
         {
-            // Gestion de la musique
-            if (endroit == "boucle")
-            {
-                // En partie: jouer gameMusic
-                if (!isMusicPlaying || !Raylib.IsSoundPlaying(gameMusic))
-                {
-                    Raylib.StopSound(menuMusic);
-                    Raylib.PlaySound(gameMusic);
-                    isMusicPlaying = true;
-                }
-            }
-            else
-            {
-                // Au menu: jouer menuMusic
-                if (!Raylib.IsSoundPlaying(menuMusic))
-                {
-                    Raylib.StopSound(gameMusic);
-                    Raylib.PlaySound(menuMusic);
-                    isMusicPlaying = false;
-                }
-            }
-            
             if (endroit == "menu") Menu();
             else if (endroit == "boucle") BouclePrincipale();
-            else if (endroit == "option") AfficherMenuOptions(ref endroit);
+            else if (endroit == "option") Menugame();
             else if (endroit == "choice map") ChoiceMap();
         }
 
         // --- NETTOYAGE ---
-        Raylib.StopSound(gameMusic);
-        Raylib.StopSound(menuMusic);
-        Raylib.UnloadSound(gameMusic);
-        Raylib.UnloadSound(menuMusic);
         foreach(var texture in ListeTexture) Raylib.UnloadTexture(texture);
         Raylib.UnloadModel(mapModel);
         Raylib.UnloadModel(ennemiModel);

@@ -102,7 +102,7 @@ static void InitBarrels()
             // Ajout physique initial tout neuf !
             if (barrelSpots[i].hasBarrel)
             {
-                barrelSpots[i].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[i].position, formeBarilIndex));
+                barrelSpots[i].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[i].position + Program.barrelPhysicsCenterOffset * barrelScale, formeBarilIndex));
                 barrelSpots[i].estSolide = true;
             }
         }
@@ -129,7 +129,7 @@ static void InitBarrels()
                         barrelSpots[targetIndex].hasBarrel = true;
                         
                         // Le baril réapparaît, on lui redonne un mur physique !
-                        barrelSpots[targetIndex].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[targetIndex].position + new Vector3(0, 0.5f, 0), formeBarilIndex));
+                        barrelSpots[targetIndex].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[targetIndex].position + Program.barrelPhysicsCenterOffset * barrelScale, formeBarilIndex));
                         barrelSpots[targetIndex].estSolide = true;
                     }
                 }
