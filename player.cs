@@ -28,7 +28,11 @@ public class Player
 
         Health -= amount;
         
-        // Effet visuel ou sonore possible ici plus tard (ex: écran rouge)
+        // Effet visuel : overlay rouge
+        Program.damageOverlayOpacity = 0.4f; // 40% d'opacité
+        
+        // Effet sonore : son de dégât
+        Raylib.PlaySound(Program.hitSound);
 
         if (Health <= 0)
         {

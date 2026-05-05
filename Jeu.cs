@@ -356,6 +356,13 @@ static void InitBarrels()
             }
         }
 
+        // Gestion de l'overlay de dégâts
+        if (damageOverlayOpacity > 0)
+        {
+            damageOverlayOpacity -= deltaTime * 2f; // Diminue en 0.5 seconde
+            if (damageOverlayOpacity < 0) damageOverlayOpacity = 0;
+        }
+
 
         recoilAngle = recoilAngle + (0.0f - recoilAngle) * 15f * deltaTime;
         
@@ -1239,6 +1246,12 @@ static void InitBarrels()
         // Bordure Droite
         Raylib.DrawRectangleGradientH(LargeurFenetre - 100, 0, 100, HauteurFenetre, Color.Blank, ombreBord);
 
+        // Overlay de dégâts rouge
+        if (damageOverlayOpacity > 0)
+        {
+            Color damageColor = new Color(255, 0, 0, (int)(damageOverlayOpacity * 255));
+            Raylib.DrawRectangle(0, 0, LargeurFenetre, HauteurFenetre, damageColor);
+        }
 
 
         Raylib.EndDrawing();

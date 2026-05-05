@@ -66,6 +66,10 @@ public partial class Program
     static int viewPosLoc;
     public static int applyFogLoc;
 
+    // Overlay de dégâts
+    public static float damageOverlayOpacity = 0f;
+    public static Sound hitSound;
+
 
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
     static float mapScale = 1f;
@@ -226,6 +230,7 @@ public partial class Program
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
+        hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -428,6 +433,7 @@ public partial class Program
         Raylib.UnloadShader(lightShader);
         Raylib.UnloadSound(snipershot);
         Raylib.UnloadSound(karambitshot);
+        Raylib.UnloadSound(hitSound);
         
         Raylib.UnloadMusicStream(menuMusic);
         Raylib.UnloadMusicStream(gameMusic);
