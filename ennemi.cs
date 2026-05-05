@@ -1,4 +1,5 @@
 using System.Numerics;
+using Raylib_cs;
 using BepuPhysics;
 using BepuPhysics.Collidables;
 
@@ -146,6 +147,7 @@ public class Enemy
         if (health <= 0)
         {
             isAlive = false;
+            Raylib.PlaySound(Program.death);
             // On le supprime physiquement du monde
             Program.simulation.Bodies.Remove(bodyId); 
         }

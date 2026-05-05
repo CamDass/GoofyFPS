@@ -19,10 +19,10 @@ partial class Program
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
     static Weapon pistolWeapon = new Weapon("Pistol", 3, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
     static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
-    static Weapon swordWeapon = new Weapon("Sword", 15, 100, 0.3f, 30, 4, sword, swordslash, 4f);
+    static Weapon swordWeapon = new Weapon("Sword", 10, 100, 0.15f, 30, 4, sword, swordslash, 4f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
-    static Weapon currentWeapon = revolverWeapon;
+    static Weapon currentWeapon = pistolWeapon;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
