@@ -187,9 +187,12 @@ public struct LaserSensor : IRayHitHandler
     public void OnRayHit(in RayData ray, ref float maximumT, float t, in Vector3 hitNormal, CollidableReference collidable, int childIndex)
     {
         aTouche = true;
-        if (t < maximumT) maximumT = t; 
-        distanceImpact = maximumT;
 
-        ObjetTouche = collidable;
+        if (t < maximumT){
+            maximumT = t; 
+            distanceImpact = maximumT;
+
+            ObjetTouche = collidable;
+        }
     }
 }

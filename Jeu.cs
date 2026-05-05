@@ -102,7 +102,7 @@ static void InitBarrels()
             // Ajout physique initial tout neuf !
             if (barrelSpots[i].hasBarrel)
             {
-                barrelSpots[i].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[i].position + new Vector3(0, 0.5f, 0), formeBarilIndex));
+                barrelSpots[i].handlePhysique = simulation.Statics.Add(new StaticDescription(barrelSpots[i].position, formeBarilIndex));
                 barrelSpots[i].estSolide = true;
             }
         }
@@ -140,6 +140,7 @@ static void InitBarrels()
 
     public static void OnBarrelHit(int index)
     {
+        localPlayer.Heal(25);
         if (index < 0 || index >= barrelSpots.Count) return;
         Vector3 barrelPos = barrelSpots[index].position;
         
