@@ -331,4 +331,4 @@ Ce projet est sous licence MIT. Voir le fichier LICENSE pour plus de détails.
 
 ---
 
-Développé avec ❤️ en C# utilisant Raylib et BepuPhysics.
+Développé par Camille Dassonneville et Ilian Briki en C# utilisant Raylib, BepuPhysics et Blender.
