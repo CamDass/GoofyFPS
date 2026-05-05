@@ -16,11 +16,14 @@ public class Enemy
     public float speed;
     public bool isAlive;
 
+    public Sound attackSound;
+
     public Enemy(Vector3 startPos, int hp, float spd)
     {
         health = hp;
         speed = spd;
         isAlive = true;
+        attackSound = Raylib.LoadSound("assets\\sounds\\raaaah.mp3");
 
         Capsule shape = new Capsule(0.5f,1f);
         TypedIndex shapeIndex = Program.simulation.Shapes.Add(shape);
@@ -58,6 +61,7 @@ public class Enemy
         
         if (distanceHorizontale < 2.2f && differenceHauteur < 3.5f && attackCooldown <= 0)
         {
+            Raylib.PlaySound(attackSound);
             // Il te met une claque !
             Program.localPlayer.TakeDamage(10); 
             attackCooldown = 0.5f; 
@@ -85,6 +89,7 @@ public class Enemy
         // Si on est à plus de 1.8 mètre, on court vers le joueur
         if (distanceToPlayer > 1.4f) 
         {
+            
             dirVoulue = Vector3.Normalize(dirVoulue);
 
             WallSensor capteurVue = new WallSensor(enemyBody.CollidableReference);
