@@ -559,7 +559,7 @@ static void InitBarrels()
 
         // Dash
         if (Raylib.IsKeyPressed(KeyboardKey.LeftControl) && CanDash && dashChrono >= 90){
-            //Raylib.PlaySound(swoosh);
+            Raylib.PlaySound(swoosh);
             Vector3 directionDash = GroundForward; 
 
             if (deplacementVoulu.LengthSquared() > 0)
@@ -848,7 +848,7 @@ static void InitBarrels()
 
         if (Raylib.IsKeyDown(KeyboardKey.F3)) showweapon = false;
 
-        
+
 
 
         // --- GESTION DU ZOOM (FOV) ---

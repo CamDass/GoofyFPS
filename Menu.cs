@@ -15,6 +15,9 @@ partial class Program
 
     static float echelle = 0.2f; 
     static bool agrandissement = true;
+    // 0 = Page Principale (Son/FOV), 1 = Page Raccourcis (Keybinds)
+    public static int ongletOptionActif = 0;
+
     public static void Menu()
     {
         // --- RENDU (Draw) ---
@@ -150,7 +153,7 @@ partial class Program
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
-                    //endroit = "option";
+                    endroit = "option";
                     Console.WriteLine("option");
                 }
             }
@@ -457,6 +460,114 @@ partial class Program
                 Color couleurFondu = new Color(255, 255, 255, ListeEffets[i].Opacite);
                 Raylib.DrawTextureEx(ListeEffets[i].Texture, ListeEffets[i].Position, 0.0f, 0.2f, couleurFondu);
             }
+        }
+
+        Raylib.EndDrawing();
+    }
+
+    public static void AfficherMenuOptions(ref string etatJeu)
+    {
+        int ecranLargeur = Raylib.GetScreenWidth();
+        int ecranHauteur = Raylib.GetScreenHeight();
+        Vector2 souris = Raylib.GetMousePosition();
+
+        Raylib.BeginDrawing();
+        Raylib.ClearBackground(new Color(30, 30, 30, 255)); // Fond sombre classique
+
+        // ==========================================
+        // 1. LE TITRE
+        // ==========================================
+        int tailleTitre = 50;
+        int largeurTitre = Raylib.MeasureText("PARAMÈTRES", tailleTitre);
+        Raylib.DrawText("PARAMÈTRES", (ecranLargeur - largeurTitre) / 2, 40, tailleTitre, Color.White);
+
+        // ==========================================
+        // 2. LES ONGLETS (Navigation)
+        // ==========================================
+        Rectangle btnOnglet1 = new Rectangle(ecranLargeur / 2 - 220, 120, 200, 40);
+        Rectangle btnOnglet2 = new Rectangle(ecranLargeur / 2 + 20, 120, 200, 40);
+
+        // Changement d'onglet au clic
+        if (Raylib.CheckCollisionPointRec(souris, btnOnglet1) && Raylib.IsMouseButtonPressed(MouseButton.Left)) ongletOptionActif = 0;
+        if (Raylib.CheckCollisionPointRec(souris, btnOnglet2) && Raylib.IsMouseButtonPressed(MouseButton.Left)) ongletOptionActif = 1;
+
+        // Couleurs des onglets selon la sélection
+        Color couleurOnglet1 = (ongletOptionActif == 0) ? Color.Red : Color.DarkGray;
+        Color couleurOnglet2 = (ongletOptionActif == 1) ? Color.Red : Color.DarkGray;
+
+        Raylib.DrawRectangleRec(btnOnglet1, couleurOnglet1);
+        Raylib.DrawText("GÉNÉRAL", (int)btnOnglet1.X + 45, (int)btnOnglet1.Y + 10, 20, Color.White);
+
+        Raylib.DrawRectangleRec(btnOnglet2, couleurOnglet2);
+        Raylib.DrawText("RACCOURCIS", (int)btnOnglet2.X + 35, (int)btnOnglet2.Y + 10, 20, Color.White);
+
+        // Ligne de séparation sous les onglets
+        Raylib.DrawLine(ecranLargeur / 2 - 300, 170, ecranLargeur / 2 + 300, 170, Color.Gray);
+
+        // ==========================================
+        // 3. LE CONTENU (Fake Options)
+        // ==========================================
+        int debutX = ecranLargeur / 2 - 250;
+        int debutY = 220;
+
+        if (ongletOptionActif == 0) // --- PAGE PRINCIPALE ---
+        {
+            // Fake Slider Volume
+            Raylib.DrawText("Volume Général", debutX, debutY, 20, Color.LightGray);
+            Raylib.DrawRectangle(debutX + 250, debutY, 200, 20, Color.DarkGray);
+            Raylib.DrawRectangle(debutX + 250, debutY, 160, 20, Color.White); // 80% rempli
+            Raylib.DrawText("80%", debutX + 460, debutY, 20, Color.White);
+
+            // Fake Slider FOV
+            Raylib.DrawText("Champ de Vision (FOV)", debutX, debutY + 60, 20, Color.LightGray);
+            Raylib.DrawRectangle(debutX + 250, debutY + 60, 200, 20, Color.DarkGray);
+            Raylib.DrawRectangle(debutX + 250, debutY + 60, 120, 20, Color.White); // 90 FOV rempli
+            Raylib.DrawText("90", debutX + 460, debutY + 60, 20, Color.White);
+
+            // Fake Bouton Qualité
+            Raylib.DrawText("Qualité des Ombres", debutX, debutY + 120, 20, Color.LightGray);
+            Raylib.DrawRectangle(debutX + 250, debutY + 115, 100, 30, Color.DarkGray);
+            Raylib.DrawText("ULTRA", debutX + 265, debutY + 120, 20, Color.White);
+
+            // Fake Bouton Plein Écran
+            Raylib.DrawText("Mode d'affichage", debutX, debutY + 180, 20, Color.LightGray);
+            Raylib.DrawRectangle(debutX + 250, debutY + 175, 150, 30, Color.DarkGray);
+            Raylib.DrawText("Plein Écran", debutX + 265, debutY + 180, 20, Color.White);
+        }
+        else // --- PAGE RACCOURCIS (KEYBINDS) ---
+        {
+            // Liste de touches fake
+            string[] actions = { "Avancer", "Reculer", "Aller à Gauche", "Aller à Droite", "Sauter", "S'accroupir", "Tirer", "Recharger" };
+            string[] touches = { "W", "S", "A", "D", "ESPACE", "C", "CLIC GAUCHE", "R" };
+
+            for (int i = 0; i < actions.Length; i++)
+            {
+                int yPos = debutY + (i * 45);
+                
+                // Dessine un fond légèrement plus clair 1 ligne sur 2
+                if (i % 2 == 0) Raylib.DrawRectangle(debutX - 10, yPos - 5, 520, 35, new Color(40, 40, 40, 255));
+
+                Raylib.DrawText(actions[i], debutX, yPos, 20, Color.LightGray);
+                
+                // Dessine la fausse touche
+                Raylib.DrawRectangle(debutX + 300, yPos - 5, 150, 30, Color.DarkGray);
+                Raylib.DrawText(touches[i], debutX + 315, yPos, 20, Color.White);
+            }
+        }
+
+        // ==========================================
+        // 4. BOUTON RETOUR
+        // ==========================================
+        Rectangle btnRetour = new Rectangle(ecranLargeur / 2 - 100, ecranHauteur - 100, 200, 50);
+        bool retourHover = Raylib.CheckCollisionPointRec(souris, btnRetour);
+
+        Raylib.DrawRectangleRec(btnRetour, retourHover ? Color.Red : Color.DarkGray);
+        Raylib.DrawText("RETOUR", (int)btnRetour.X + 55, (int)btnRetour.Y + 15, 20, Color.White);
+
+        // Si on clique sur Retour, on change l'état du jeu pour revenir à l'écran titre
+        if (retourHover && Raylib.IsMouseButtonPressed(MouseButton.Left))
+        {
+            etatJeu = "menu"; // Retour au menu principal
         }
 
         Raylib.EndDrawing();
