@@ -266,7 +266,7 @@ static void InitBarrels()
             // 1. Dessin de l'écran noir
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Color.Black);
-            Raylib.DrawText("GAME OVER...", LargeurFenetre / 2 - 150, HauteurFenetre / 2 - 50, 50, Color.Red);
+            Raylib.DrawText("VOUS ÉTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
             Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
             Raylib.DrawText("Appuyez sur une touche pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
             Raylib.EndDrawing();
@@ -861,6 +861,7 @@ static void InitBarrels()
                 targetFov = 20.0f; // Gros zoom
                 showweapon = false; // On cache l'arme 3D
                 Raylib.DrawTextureEx(sniperaim, new Vector2(0,0), 0, 1, Color.White); // Image lunette
+            
             }
             else
             {
