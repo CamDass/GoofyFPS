@@ -44,7 +44,17 @@ public class Enemy
 
         if (attackCooldown > 0) attackCooldown -= Raylib_cs.Raylib.GetFrameTime();
 
-        BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(bodyId);
+        BodyReference enemyBody;
+        try
+        {
+            enemyBody = Program.simulation.Bodies.GetBodyReference(bodyId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] Enemy.Maj ignored invalid bodyId {bodyId}: {ex.Message}");
+            isAlive = false;
+            return;
+        }
         
         // ==========================================
         // CORRECTION DE LA DISTANCE (On ignore la hauteur Y)
@@ -134,8 +144,17 @@ public class Enemy
     {
         if (!isAlive) return;
 
-        //la pos a sa grosse buz cut
-        Vector3 headPosition = GetPosition() + new Vector3(0, 1.8f, 0);
+        Vector3 headPosition;
+        try
+        {
+            headPosition = GetPosition() + new Vector3(0, 1.8f, 0);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] Enemy.TakeDamage ignored invalid bodyId {bodyId}: {ex.Message}");
+            isAlive = false;
+            return;
+        }
 
         Random rand = new Random();
         float randomX = (float)(rand.NextDouble() * 0.6f - 0.3f);
@@ -155,8 +174,8 @@ public class Enemy
             // Utiliser le pool de sounds de death pour permettre plusieurs lectures simultan\u00e9es
             Raylib.PlaySound(Program.deathSounds[Program.deathSoundIndex]);
             Program.deathSoundIndex = (Program.deathSoundIndex + 1) % Program.deathSounds.Length;
-            // On le supprime physiquement du monde
-            Program.simulation.Bodies.Remove(bodyId); 
+            // On laisse la suppression du corps à la boucle de nettoyage du jeu,
+            // pour éviter de modifier le monde physique pendant un raycast ou un autre traitement.
         }
     }
 
@@ -164,7 +183,16 @@ public class Enemy
     public Vector3 GetPosition()
     {
         if (!isAlive) return Vector3.Zero;
-        return Program.simulation.Bodies.GetBodyReference(bodyId).Pose.Position;
+        try
+        {
+            return Program.simulation.Bodies.GetBodyReference(bodyId).Pose.Position;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] Enemy.GetPosition invalid bodyId {bodyId}: {ex.Message}");
+            isAlive = false;
+            return Vector3.Zero;
+        }
     }
 
     public int GetLife()

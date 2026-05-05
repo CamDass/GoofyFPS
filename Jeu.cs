@@ -19,7 +19,7 @@ partial class Program
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
     static Weapon pistolWeapon = new Weapon("Pistol", 3, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
     static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
-    static Weapon swordWeapon = new Weapon("Sword", 10, 100, 0.15f, 30, 4, sword, swordslash, 4f);
+    static Weapon swordWeapon = new Weapon("Sword", 10, 100, 0.15f, 30, 4, sword, swordslash, 3f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
     static Weapon currentWeapon = pistolWeapon;
@@ -348,6 +348,14 @@ static void InitBarrels()
 
 
 
+        // Nettoyage des ennemis morts : retirer d'abord leurs corps physiques, puis supprimer les instances.
+        foreach (Enemy enemy in enemiesList)
+        {
+            if (!enemy.isAlive)
+            {
+                simulation.Bodies.Remove(enemy.bodyId);
+            }
+        }
         enemiesList.RemoveAll(e => !e.isAlive);
 
         // ACTIVATION DES CERVEAUX (IA)
@@ -809,6 +817,7 @@ static void InitBarrels()
                 
                 // LE FONDU : Plus le timer approche de 0, plus l'alpha devient transparent
                 int alpha = (int)((dt.timer / dt.maxTimer) * 255);
+                alpha = Math.Clamp(alpha, 0, 255);
                 Color textColor = new Color(255, 200, 0, alpha); // Jaune/Orange pétant
                 Color shadowColor = new Color(0, 0, 0, alpha);   // Ombre noire
 
@@ -1062,6 +1071,7 @@ static void InitBarrels()
             hitmarkerTimer -= deltaTime; 
             
             int alphaHit = (int)((hitmarkerTimer / 0.3f) * 255);
+            alphaHit = Math.Clamp(alphaHit, 0, 255);
             Color hitColor = new Color(255, 255, 255, alphaHit); 
 
             int taille = 15;      // Longueur de la branche
