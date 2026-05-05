@@ -18,6 +18,15 @@ public partial class Program
     public static Player localPlayer = new Player(100);
     public static float hitmarkerTimer = 0f;
 
+    public static List<Vector3> listeSpawns = new List<Vector3>
+    {
+        new Vector3(3, 0, -21),     
+        new Vector3(-104, 21, 45),
+        new Vector3(-107, 0, 155),    
+        new Vector3(-8, 9, 96), 
+        new Vector3(-39, 31, 85), 
+    };
+
 
     static int FPS = 60;
     static int HauteurFenetre = 1080;
@@ -314,7 +323,12 @@ public partial class Program
         PlayerTicketAccroupi = simulation.Shapes.Add(PlayerFromAccroupi);
 
         BodyInertia PlayerInertie = new BodyInertia { InverseMass = 1f / 10f, InverseInertiaTensor = new BepuUtilities.Symmetric3x3() };
-        BodyDescription Playerdescription = BodyDescription.CreateDynamic(new Vector3(0, 100, 0), PlayerInertie, PlayerTicket, 0.01f);
+
+
+        int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+        Vector3 pointDeDepart = listeSpawns[indexAleatoire];
+
+        BodyDescription Playerdescription = BodyDescription.CreateDynamic(pointDeDepart, PlayerInertie, PlayerTicket, 0.01f);
         PlayerId = simulation.Bodies.Add(Playerdescription);
 
         // Cube Spawner

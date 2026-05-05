@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using Raylib_cs;
+using System.Numerics;
+using System.Linq;
 
 public class Player
 {
@@ -46,9 +50,9 @@ public class Player
     }
 
     private void Die()
-    {
-        IsAlive = false;
-        Console.WriteLine("[INFO] Le joueur est mort !");
-        // Plus tard, on appellera un écran de Game Over ici
-    }
+{
+    IsAlive = false;
+    Console.WriteLine("[INFO] Le joueur est mort !");
+    Health = MaxHealth;
+}
 }

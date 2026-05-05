@@ -16,13 +16,13 @@ partial class Program
     static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
     static Weapon karambitknife = new Weapon("Karambit", 75, 3, 0.4f, 1, 0, karambit, karambitshot, 0f);
     static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
-    static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 2f, 5, 2, shotgun, shotgunshot, 7.0f);
-    static Weapon pistolWeapon = new Weapon("Pistol", 20, 500, 0.3f, 12, 2, pistol, pistolshot, 0f);
+    static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 3, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
     static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
-    static Weapon swordWeapon = new Weapon("Sword", 8, 100, 0.15f, 30, 4, sword, swordslash, 4f);
+    static Weapon swordWeapon = new Weapon("Sword", 15, 100, 0.3f, 30, 4, sword, swordslash, 4f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
-    static Weapon currentWeapon = bazookaWeapon;
+    static Weapon currentWeapon = revolverWeapon;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
@@ -258,6 +258,33 @@ static void InitBarrels()
         }
 
         if (isMenuGameOpen) { Menugame(); return; }
+
+        if (!localPlayer.IsAlive)
+        {
+            Raylib.EnableCursor(); // On libère la souris
+            
+            // 1. Dessin de l'écran noir
+            Raylib.BeginDrawing();
+            Raylib.ClearBackground(Color.Black);
+            Raylib.DrawText("GAME OVER...", LargeurFenetre / 2 - 150, HauteurFenetre / 2 - 50, 50, Color.Red);
+            Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
+            Raylib.DrawText("Appuyez sur une touche pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
+            Raylib.EndDrawing();
+
+            if (Raylib.GetKeyPressed() != 0)
+            {
+                localPlayer.Respawn(); 
+
+                BodyReference joueurMort = simulation.Bodies.GetBodyReference(PlayerId);
+                joueurMort.Pose.Position = new Vector3(0, 50, 0); 
+                joueurMort.Velocity.Linear = Vector3.Zero;
+                
+                endroit = "menu"; 
+            }
+            
+            // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
+            return; 
+        }
 
         // Le changement d'arme se fait désormais uniquement via les barrils touchés
 
@@ -1091,6 +1118,13 @@ static void InitBarrels()
         {
             Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,Color.LightGray);
         }
+
+
+        
+
+
+
+
         
         // ==========================================
         // HUD : LE CHRONOMÈTRE DE SURVIE
@@ -1109,6 +1143,8 @@ static void InitBarrels()
 
         
         Raylib.DrawFPS(LargeurFenetre-90,10);
+
+
 
         // ==========================================
         // POST-PROCESSING BASIQUE (VIGNETTAGE)
