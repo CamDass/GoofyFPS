@@ -12,6 +12,7 @@ uniform vec3 lightPos;
 uniform vec4 lightColor;
 
 uniform vec3 viewPos; 
+uniform bool applyFog;
 
 out vec4 finalColor;
 
@@ -39,21 +40,25 @@ void main()
     // ==========================================
     // 3. LE BROUILLARD (FOG)
     // ==========================================
-    // Calcul de la distance entre tes yeux et le mur
-    float dist = length(viewPos - fragPosition);
-    
-    // Réglages du brouillard (Tu pourras modifier ces chiffres !)
-    float fogStart = 40.0; // Le brouillard commence à 15 mètres
-    float fogEnd = 100.0;   // On ne voit plus rien à 80 mètres
-    
-    // On calcule un pourcentage d'opacité du brouillard (entre 0.0 et 1.0)
-    float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
-    
-    // Couleur du brouillard (C'est exactement le orange de ton Horizon de l'Étape 4 !)
-    vec3 fogColor = vec3(120.0/255.0, 60.0/255.0, 50.0/255.0);
+    vec3 finalRGB = lightingResult;
+    if (applyFog)
+    {
+        // Calcul de la distance entre tes yeux et le mur
+        float dist = length(viewPos - fragPosition);
+        
+        // Réglages du brouillard (Tu pourras modifier ces chiffres !)
+        float fogStart = 40.0; // Le brouillard commence à 15 mètres
+        float fogEnd = 100.0;   // On ne voit plus rien à 80 mètres
+        
+        // On calcule un pourcentage d'opacité du brouillard (entre 0.0 et 1.0)
+        float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
+        
+        // Couleur du brouillard (C'est exactement le orange de ton Horizon de l'Étape 4 !)
+        vec3 fogColor = vec3(120.0/255.0, 60.0/255.0, 50.0/255.0);
 
-    // On utilise "mix" pour mélanger la vraie couleur avec le brouillard selon la distance
-    vec3 finalRGB = mix(lightingResult, fogColor, fogFactor);
+        // On utilise "mix" pour mélanger la vraie couleur avec le brouillard selon la distance
+        finalRGB = mix(lightingResult, fogColor, fogFactor);
+    }
 
     // Résultat final !
     finalColor = vec4(finalRGB, baseColor.a);

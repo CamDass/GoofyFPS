@@ -92,15 +92,19 @@ public class Weapon
             {
                 if (range >= 10)
                 {
-                    BodyHandle hitHandle = capteurLaser.ObjetTouche.BodyHandle;
-                    
-                    foreach (Enemy enemy in enemiesList)
+                    bool isBazookaWeapon = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
+                    if (!isBazookaWeapon)
                     {
-                        if (enemy.isAlive && enemy.bodyId == hitHandle)
+                        BodyHandle hitHandle = capteurLaser.ObjetTouche.BodyHandle;
+                        
+                        foreach (Enemy enemy in enemiesList)
                         {
-                            enemy.TakeDamage(damage);
-                            Program.hitmarkerTimer = 0.3f;
-                            break;
+                            if (enemy.isAlive && enemy.bodyId == hitHandle)
+                            {
+                                enemy.TakeDamage(damage);
+                                Program.hitmarkerTimer = 0.3f;
+                                break;
+                            }
                         }
                     }
                 }
@@ -125,6 +129,21 @@ public class Weapon
 
         // On arrête le visuel du laser au point d'impact
         endLaser = startLaser + direction * distanceEffective;
+
+        Vector3 impactPoint = physiqueStart + direction * distanceEffective;
+        bool isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
+        if (isBazooka && capteurLaser.aTouche)
+        {
+            float explosionRadius = 6f;
+            ExplodeAt(impactPoint, explosionRadius, damage, enemiesList);
+            bool brokeAnyBarrel = Program.BreakBarrelsInRadius(impactPoint, explosionRadius);
+            if (brokeAnyBarrel)
+            {
+                Program.SwitchWeaponFromBarrel();
+            }
+            Program.SpawnExplosionEffect(impactPoint);
+            Program.hitmarkerTimer = 0.3f;
+        }
 
         // ==========================================
         // 3. LE HACK DE LA MÊLÉE (Cône large pour le couteau)
@@ -155,6 +174,19 @@ public class Weapon
         return true;
     }
     
+    private void ExplodeAt(Vector3 center, float radius, int explosionDamage, List<Enemy> enemiesList)
+    {
+        foreach (Enemy enemy in enemiesList)
+        {
+            if (!enemy.isAlive) continue;
+            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.5f, 0);
+            float distToEnemy = Vector3.Distance(center, enemyCenter);
+            if (distToEnemy <= radius)
+            {
+                enemy.TakeDamage(explosionDamage);
+            }
+        }
+    }
 
     public void Reload()
     {
