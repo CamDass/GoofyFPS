@@ -62,7 +62,7 @@ public class Weapon
         ammo--;
 
         // 3. Le recul physique sur le joueur
-        float forceRecul = 0.5f;
+        float forceRecul = 1f;
         playerBody.Velocity.Linear -= direction * forceRecul * force;
 
         // ==========================================

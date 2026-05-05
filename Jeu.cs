@@ -22,7 +22,7 @@ partial class Program
     static Weapon swordWeapon = new Weapon("Sword", 10, 100, 0.15f, 30, 4, sword, swordslash, 4f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
-    static Weapon currentWeapon = swordWeapon;
+    static Weapon currentWeapon = pistolWeapon;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
@@ -354,7 +354,7 @@ static void InitBarrels()
         foreach (Enemy enemy in enemiesList)
         {
             // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
-            enemy.Maj(posCube);
+            enemy.Maj(posCube, ref espionCube);
         }
 
 
@@ -605,7 +605,7 @@ static void InitBarrels()
             enemySpawnTimer -= deltaTime;
 
             // Si le temps est écoulé, et qu'il n'y a pas déjà trop de zombies (ex: limite de 30)
-            if (enemySpawnTimer <= 0f && enemiesList.Count < 70)
+            if (enemySpawnTimer <= 0f && enemiesList.Count < 40)
             {
                 // On choisit un point de spawn au hasard
                 int randomSpawnIndex = random.Next(enemySpawnPoints.Count);
