@@ -29,7 +29,7 @@ partial class Program
             // pour "quitter"
             if (Raylib.IsKeyDown(KeyboardKey.Space)) 
             {
-                Raylib.PlaySound(select);
+                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                 endroit = "choice map";
             }
 
@@ -136,7 +136,7 @@ partial class Program
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
-                    Raylib.PlaySound(select);
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                     endroit = "choice map";
                 }
             }

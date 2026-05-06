@@ -57,7 +57,7 @@ public class Weapon
         }
 
         // 2. Le tir part !
-        Raylib.PlaySound(soundname);
+        Program.PlaySoundWithPriority(soundname, Program.SoundPriority.High);
         lastShotTime = (float)Raylib.GetTime();
         ammo--;
 

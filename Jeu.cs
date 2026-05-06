@@ -17,7 +17,7 @@ partial class Program
     static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f);
     static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
-    static Weapon pistolWeapon = new Weapon("Pistol", 3, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 5, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
     static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
     static Weapon swordWeapon = new Weapon("Sword", 10, 100, 0.15f, 30, 4, sword, swordslash, 3f);
 
@@ -88,6 +88,9 @@ partial class Program
             newWeapon = allowedWeapons[random.Next(allowedWeapons.Count)];
         }
         currentWeapon = newWeapon;
+        
+        // Jouer le son de changement d'arme
+        Program.PlaySoundWithPriority(Program.weaponSwitchSound, Program.SoundPriority.Medium);
     }
 static void InitBarrels()
     {
@@ -158,7 +161,7 @@ static void InitBarrels()
         }
 
         SwitchWeaponFromBarrel();
-        Raylib.PlaySound(explosion);
+        Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
         activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
     }
 
@@ -179,7 +182,7 @@ static void InitBarrels()
 
         if (playSound)
         {
-            Raylib.PlaySound(explosion);
+            Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
         }
 
         if (spawnEffect)
@@ -308,8 +311,8 @@ static void InitBarrels()
         if (Raylib.IsKeyPressed(KeyboardKey.LeftAlt))
         {
             isMenuGameOpen = !isMenuGameOpen; 
-            if (isMenuGameOpen) { Raylib.EnableCursor(); Raylib.PlaySound(unselect); }
-            else { Raylib.DisableCursor(); Raylib.PlaySound(select); }
+            if (isMenuGameOpen) { Raylib.EnableCursor(); Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low); }
+            else { Raylib.DisableCursor(); Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); }
         }
 
         if (isMenuGameOpen) { Menugame(); return; }

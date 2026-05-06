@@ -32,14 +32,14 @@ public class Player
         Program.damageOverlayOpacity = 0.4f; // 40% d'opacité
         
         // Effet sonore : son de dégât
-        Raylib.PlaySound(Program.hitSound);
+        Program.PlaySoundWithPriority(Program.hitSound, Program.SoundPriority.Medium);
 
         if (Health <= 0)
         {
             Health = 0;
             Die();
-            Raylib.PlaySound(paw);
-            Raylib.PlaySound(gameover);
+            Program.PlaySoundWithPriority(paw, Program.SoundPriority.Critical);
+            Program.PlaySoundWithPriority(gameover, Program.SoundPriority.Critical);
         }
     }
 

@@ -68,7 +68,19 @@ public partial class Program
 
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
-    public static Sound hitSound;
+    public static Sound hitSound, weaponSwitchSound;
+
+    // Gestion des sons pour éviter les chevauchements
+    public enum SoundPriority
+    {
+        Low,      // Sons UI, ambiance
+        Medium,   // Sons de dégâts, effets secondaires
+        High,     // Sons critiques : tirs, explosions, changements d'armes
+        Critical  // Sons vitaux : mort, game over
+    }
+
+    private static float lastSoundTime = 0f;
+    private static SoundPriority lastSoundPriority = SoundPriority.Low;
 
 
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
@@ -231,6 +243,7 @@ public partial class Program
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
         hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
+        weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -434,6 +447,7 @@ public partial class Program
         Raylib.UnloadSound(snipershot);
         Raylib.UnloadSound(karambitshot);
         Raylib.UnloadSound(hitSound);
+        Raylib.UnloadSound(weaponSwitchSound);
         
         Raylib.UnloadMusicStream(menuMusic);
         Raylib.UnloadMusicStream(gameMusic);
@@ -485,6 +499,29 @@ public partial class Program
         else if (currentMusicState == ActiveMusic.Game)
         {
             Raylib.UpdateMusicStream(gameMusic);
+        }
+    }
+
+    // Fonction pour jouer un son avec gestion de priorité
+    public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
+    {
+        float currentTime = (float)Raylib.GetTime();
+        
+        // Si c'est un son critique, on le joue toujours
+        if (priority == SoundPriority.Critical)
+        {
+            Raylib.PlaySound(sound);
+            lastSoundTime = currentTime;
+            lastSoundPriority = priority;
+            return;
+        }
+        
+        // Pour les autres sons, vérifier la priorité et le timing
+        if (priority >= lastSoundPriority || currentTime - lastSoundTime > 0.1f)
+        {
+            Raylib.PlaySound(sound);
+            lastSoundTime = currentTime;
+            lastSoundPriority = priority;
         }
     }
 }

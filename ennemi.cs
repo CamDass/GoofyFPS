@@ -71,7 +71,7 @@ public class Enemy
         
         if (distanceHorizontale < 1.7f && differenceHauteur < 3.5f && attackCooldown <= 0)
         {
-            Raylib.PlaySound(attackSound);
+            Program.PlaySoundWithPriority(attackSound, Program.SoundPriority.Medium);
             // Il te met une claque !
             Program.localPlayer.TakeDamage(10); 
             attackCooldown = 0.5f; 
