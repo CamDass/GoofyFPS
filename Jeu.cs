@@ -14,7 +14,7 @@ partial class Program
     // VARIABLES DES ARMES (ILIAN)
     // ========================================================
     static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
-    static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f, false);
     static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
     static Weapon pistolWeapon = new Weapon("Pistol", 5, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
@@ -997,8 +997,12 @@ static void InitBarrels()
                 Vector3 weaponPos = new Vector3(posX + balancementX, posY + balancementY, posZ); 
                 Vector3 weaponScale = new Vector3(0.1f, 0.1f, 0.1f);
                 
+                // Combiner le recul avec l'inclinaison du rechargement
+                float reloadRotation = currentWeapon.GetReloadRotationAngle();
+                float totalRotation = recoilAngle + reloadRotation;
+                
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 0 }, ShaderUniformDataType.Int);
-                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, weaponScale, Color.White);
+                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, totalRotation, weaponScale, Color.White);
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
 
             Raylib.EndMode3D();

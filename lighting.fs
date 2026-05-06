@@ -47,7 +47,7 @@ void main()
         float dist = length(viewPos - fragPosition);
         
         // Réglages du brouillard (Tu pourras modifier ces chiffres !)
-        float fogStart = 40.0; // Le brouillard commence à 15 mètres
+        float fogStart = 25.0; // Le brouillard commence à 15 mètres
         float fogEnd = 100.0;   // On ne voit plus rien à 80 mètres
         
         // On calcule un pourcentage d'opacité du brouillard (entre 0.0 et 1.0)

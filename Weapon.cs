@@ -16,16 +16,18 @@ public class Weapon
     public float fireRate;
     public int maxammo;
     public int ammo;
-    public int reloadtime;
+    public float reloadtime; // Changé en float pour précision
     public Model modelname;
     public Sound soundname;
     public float lastShotTime;
     public bool isReloading;
     public float reloadStartTime;
     public float force;
+    public bool requiresReload; // true si l'arme a besoin de recharger, false pour les armes infinies
+    private bool reloadSoundPlayed = false; // Pour jouer le son une seule fois
 
     // constructeur
-    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son, float power)
+    public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son, float power, bool needsReload = true)
     {
         name = nom;
         damage = degats;
@@ -33,13 +35,15 @@ public class Weapon
         fireRate = cadence;
         maxammo = munitionsMax;
         ammo = munitionsMax;
-        reloadtime = tempsRecharge;
+        reloadtime = 1.7f; // Temps de rechargement fixe à 1.7s
         modelname = modele3D;
         soundname = son;
         lastShotTime = 0.0f;
         isReloading = false;
         reloadStartTime = 0.0f;
         force = power;
+        requiresReload = needsReload;
+        reloadSoundPlayed = false;
     }
 
 
@@ -51,15 +55,25 @@ public class Weapon
         endLaser = Vector3.Zero;
 
         // 1. Vérification : A-t-on le droit de tirer ?
-        if (ammo <= 0 || isReloading || (float)Raylib.GetTime() - lastShotTime < fireRate)
+        // Pour les armes qui ne se rechargent pas, ignorer la vérification des munitions
+        bool outOfAmmo = requiresReload && ammo <= 0;
+        if (outOfAmmo || isReloading || (float)Raylib.GetTime() - lastShotTime < fireRate)
         {
+            // Jouer le son no-ammo si on essaie de tirer sans munitions
+            if (outOfAmmo && !isReloading && (float)Raylib.GetTime() - lastShotTime >= fireRate)
+            {
+                Program.PlaySoundWithPriority(Program.noAmmoSound, Program.SoundPriority.Low);
+            }
             return false; // Le tir ne part pas
         }
 
         // 2. Le tir part !
         Program.PlaySoundWithPriority(soundname, Program.SoundPriority.High);
         lastShotTime = (float)Raylib.GetTime();
-        ammo--;
+        
+        // Décrémenter les munitions seulement si l'arme en nécessite
+        if (requiresReload)
+            ammo--;
 
         // 3. Le recul physique sur le joueur
         float forceRecul = 1f;
@@ -190,15 +204,70 @@ public class Weapon
 
     public void Reload()
     {
-        if ((Raylib.IsKeyPressed(KeyboardKey.R) || ammo <= 0) && !isReloading)
+        // Ne pas permettre le rechargement si l'arme ne le nécessite pas
+        if (!requiresReload)
+            return;
+
+        // Recharge uniquement si on appuie sur R ET qu'on n'est pas déjà en train de recharger
+        if (Raylib.IsKeyPressed(KeyboardKey.R) && !isReloading)
         {
             isReloading = true;
             reloadStartTime = (float)Raylib.GetTime();
+            reloadSoundPlayed = false; // Réinitialiser le flag du son
         }
-        if (isReloading && (float)Raylib.GetTime() - reloadStartTime >= reloadtime)
+
+        // Gérer le rechargement en cours
+        if (isReloading)
         {
-            ammo = maxammo;
-            isReloading = false;
+            // Jouer le son de rechargement UNE SEULE FOIS au début
+            if (!reloadSoundPlayed)
+            {
+                Program.PlaySoundWithPriority(Program.reloadSound, Program.SoundPriority.Medium);
+                reloadSoundPlayed = true;
+            }
+
+            // Vérifier si le rechargement est terminé
+            if ((float)Raylib.GetTime() - reloadStartTime >= reloadtime)
+            {
+                ammo = maxammo;
+                isReloading = false;
+            }
+        }
+    }
+
+    // Retourner l'angle de rotation pour l'inclinaison de l'arme pendant le rechargement
+    // Phase 1 (0 à 1/3) : incliner progressivement vers -45°
+    // Phase 2 (1/3 à 2/3) : rester à -45°
+    // Phase 3 (2/3 à 1) : revenir progressivement à 0°
+    public float GetReloadRotationAngle()
+    {
+        if (!isReloading)
+            return 0f;
+
+        float elapsed = (float)Raylib.GetTime() - reloadStartTime;
+        float progress = Math.Min(elapsed / reloadtime, 1f); // 0 à 1
+        
+        float thirdTime = reloadtime / 5f;
+        float twoThirdTime = 3f * reloadtime / 5f;
+        
+        if (elapsed <= thirdTime)
+        {
+            // Phase 1 : interpoler de 0° à -45°
+            float phaseProgress = elapsed / thirdTime; // 0 à 1
+            return -45f * phaseProgress;
+        }
+        else if (elapsed <= twoThirdTime)
+        {
+            // Phase 2 : rester à -45°
+            return -45f;
+        }
+        else
+        {
+            // Phase 3 : interpoler de -45° à 0°
+            float phaseProgress = (elapsed - twoThirdTime) / thirdTime; // 0 à 1
+            float finalangle = -45f + (45f * phaseProgress);
+            if (finalangle >= 0) finalangle = 0;
+            return finalangle;
         }
     }
 

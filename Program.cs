@@ -68,7 +68,7 @@ public partial class Program
 
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
-    public static Sound hitSound, weaponSwitchSound;
+    public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound;
 
     // Gestion des sons pour éviter les chevauchements
     public enum SoundPriority
@@ -244,6 +244,8 @@ public partial class Program
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
         hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
+        reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
+        noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -448,6 +450,8 @@ public partial class Program
         Raylib.UnloadSound(karambitshot);
         Raylib.UnloadSound(hitSound);
         Raylib.UnloadSound(weaponSwitchSound);
+        Raylib.UnloadSound(reloadSound);
+        Raylib.UnloadSound(noAmmoSound);
         
         Raylib.UnloadMusicStream(menuMusic);
         Raylib.UnloadMusicStream(gameMusic);
