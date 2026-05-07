@@ -113,7 +113,7 @@ partial class Program
 
 
             // pour "quitter"
-            if (Raylib.IsKeyDown(KeyboardKey.Space)) 
+            if (Raylib.IsKeyDown(KeyBinds.SelectMenu)) 
             {
                 Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                 Raylib.DisableCursor();

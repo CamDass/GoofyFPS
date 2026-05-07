@@ -18,6 +18,11 @@ partial class Program
     // 0 = Page Principale (Son/FOV), 1 = Page Raccourcis (Keybinds)
     public static int ongletOptionActif = 0;
 
+    // Variables pour le rebinding des touches
+    private static bool isRebindingKey = false;
+    private static string rebindingAction = "";
+    private static int rebindingIndex = -1;
+
     public static void Menu()
     {
         SetActiveMusic(ActiveMusic.Menu);
@@ -27,7 +32,7 @@ partial class Program
             Raylib.BeginDrawing();
 
             // pour "quitter"
-            if (Raylib.IsKeyDown(KeyboardKey.Space)) 
+            if (Raylib.IsKeyDown(KeyBinds.SelectMenu)) 
             {
                 Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                 endroit = "choice map";
@@ -471,6 +476,8 @@ partial class Program
         Raylib.EndDrawing();
     }
 
+    // Variables pour le rebinding des touches sont déclarées plus haut à la ligne 22
+
     public static void AfficherMenuOptions(ref string etatJeu)
     {
         int ecranLargeur = Raylib.GetScreenWidth();
@@ -478,7 +485,7 @@ partial class Program
         Vector2 souris = Raylib.GetMousePosition();
 
         Raylib.BeginDrawing();
-        Raylib.ClearBackground(new Color(30, 30, 30, 255)); // Fond sombre classique
+        Raylib.ClearBackground(new Color(30, 30, 30, 255));
 
         // ==========================================
         // 1. LE TITRE
@@ -493,11 +500,11 @@ partial class Program
         Rectangle btnOnglet1 = new Rectangle(ecranLargeur / 2 - 220, 120, 200, 40);
         Rectangle btnOnglet2 = new Rectangle(ecranLargeur / 2 + 20, 120, 200, 40);
 
-        // Changement d'onglet au clic
-        if (Raylib.CheckCollisionPointRec(souris, btnOnglet1) && Raylib.IsMouseButtonPressed(MouseButton.Left)) ongletOptionActif = 0;
-        if (Raylib.CheckCollisionPointRec(souris, btnOnglet2) && Raylib.IsMouseButtonPressed(MouseButton.Left)) ongletOptionActif = 1;
+        if (Raylib.CheckCollisionPointRec(souris, btnOnglet1) && Raylib.IsMouseButtonPressed(MouseButton.Left)) 
+            ongletOptionActif = 0;
+        if (Raylib.CheckCollisionPointRec(souris, btnOnglet2) && Raylib.IsMouseButtonPressed(MouseButton.Left)) 
+            ongletOptionActif = 1;
 
-        // Couleurs des onglets selon la sélection
         Color couleurOnglet1 = (ongletOptionActif == 0) ? Color.Red : Color.DarkGray;
         Color couleurOnglet2 = (ongletOptionActif == 1) ? Color.Red : Color.DarkGray;
 
@@ -507,58 +514,67 @@ partial class Program
         Raylib.DrawRectangleRec(btnOnglet2, couleurOnglet2);
         Raylib.DrawText("RACCOURCIS", (int)btnOnglet2.X + 35, (int)btnOnglet2.Y + 10, 20, Color.White);
 
-        // Ligne de séparation sous les onglets
         Raylib.DrawLine(ecranLargeur / 2 - 300, 170, ecranLargeur / 2 + 300, 170, Color.Gray);
 
         // ==========================================
-        // 3. LE CONTENU (Fake Options)
+        // 3. LE CONTENU
         // ==========================================
-        int debutX = ecranLargeur / 2 - 250;
+        int debutX = ecranLargeur / 2 - 300;
         int debutY = 220;
+        int espacementLigne = 70;
 
-        if (ongletOptionActif == 0) // --- PAGE PRINCIPALE ---
+        if (ongletOptionActif == 0) // --- PAGE GÉNÉRALE ---
         {
-            // Fake Slider Volume
-            Raylib.DrawText("Volume Général", debutX, debutY, 20, Color.LightGray);
-            Raylib.DrawRectangle(debutX + 250, debutY, 200, 20, Color.DarkGray);
-            Raylib.DrawRectangle(debutX + 250, debutY, 160, 20, Color.White); // 80% rempli
-            Raylib.DrawText("80%", debutX + 460, debutY, 20, Color.White);
+            // === VOLUME GÉNÉRAL ===
+            Raylib.DrawText("Volume Général", debutX, debutY, 22, Color.LightGray);
+            DrawVolumeSlider(debutX, debutY + 30, 300, ref Settings.MasterVolume, "Master");
 
-            // Fake Slider FOV
-            Raylib.DrawText("Champ de Vision (FOV)", debutX, debutY + 60, 20, Color.LightGray);
-            Raylib.DrawRectangle(debutX + 250, debutY + 60, 200, 20, Color.DarkGray);
-            Raylib.DrawRectangle(debutX + 250, debutY + 60, 120, 20, Color.White); // 90 FOV rempli
-            Raylib.DrawText("90", debutX + 460, debutY + 60, 20, Color.White);
+            // === VOLUME SFX ===
+            Raylib.DrawText("Volume SFX", debutX, debutY + espacementLigne, 22, Color.LightGray);
+            DrawVolumeSlider(debutX, debutY + espacementLigne + 30, 300, ref Settings.SFXVolume, "SFX");
 
-            // Fake Bouton Qualité
-            Raylib.DrawText("Qualité des Ombres", debutX, debutY + 120, 20, Color.LightGray);
-            Raylib.DrawRectangle(debutX + 250, debutY + 115, 100, 30, Color.DarkGray);
-            Raylib.DrawText("ULTRA", debutX + 265, debutY + 120, 20, Color.White);
+            // === VOLUME MUSIQUE ===
+            Raylib.DrawText("Volume Musique", debutX, debutY + espacementLigne * 2, 22, Color.LightGray);
+            DrawVolumeSlider(debutX, debutY + espacementLigne * 2 + 30, 300, ref Settings.MusicVolume, "Music");
 
-            // Fake Bouton Plein Écran
-            Raylib.DrawText("Mode d'affichage", debutX, debutY + 180, 20, Color.LightGray);
-            Raylib.DrawRectangle(debutX + 250, debutY + 175, 150, 30, Color.DarkGray);
-            Raylib.DrawText("Plein Écran", debutX + 265, debutY + 180, 20, Color.White);
-        }
-        else // --- PAGE RACCOURCIS (KEYBINDS) ---
-        {
-            // Liste de touches fake
-            string[] actions = { "Avancer", "Reculer", "Aller à Gauche", "Aller à Droite", "Sauter", "S'accroupir", "Tirer", "Recharger" };
-            string[] touches = { "W", "S", "A", "D", "ESPACE", "C", "CLIC GAUCHE", "R" };
-
-            for (int i = 0; i < actions.Length; i++)
+            // === FOV ===
+            Raylib.DrawText("Champ de Vision (FOV)", debutX, debutY + espacementLigne * 3, 22, Color.LightGray);
+            Raylib.DrawRectangle(debutX, debutY + espacementLigne * 3 + 30, 300, 25, new Color(50, 50, 50, 255));
+            
+            // Slider FOV
+            int fovFilled = (int)((Settings.BaseFOV - 40f) / (120f - 40f) * 300f);
+            Raylib.DrawRectangle(debutX, debutY + espacementLigne * 3 + 30, fovFilled, 25, Color.Red);
+            Raylib.DrawText($"{(int)Settings.BaseFOV}°", debutX + 310, debutY + espacementLigne * 3 + 30, 20, Color.White);
+            
+            // Interaction avec le slider FOV
+            Rectangle fovSlider = new Rectangle(debutX, debutY + espacementLigne * 3 + 30, 300, 25);
+            if (Raylib.CheckCollisionPointRec(souris, fovSlider) && (Raylib.IsMouseButtonDown(MouseButton.Left)))
             {
-                int yPos = debutY + (i * 45);
-                
-                // Dessine un fond légèrement plus clair 1 ligne sur 2
-                if (i % 2 == 0) Raylib.DrawRectangle(debutX - 10, yPos - 5, 520, 35, new Color(40, 40, 40, 255));
-
-                Raylib.DrawText(actions[i], debutX, yPos, 20, Color.LightGray);
-                
-                // Dessine la fausse touche
-                Raylib.DrawRectangle(debutX + 300, yPos - 5, 150, 30, Color.DarkGray);
-                Raylib.DrawText(touches[i], debutX + 315, yPos, 20, Color.White);
+                float relativeX = souris.X - fovSlider.X;
+                Settings.BaseFOV = 40f + (relativeX / 300f) * (120f - 40f);
+                Settings.BaseFOV = Math.Clamp(Settings.BaseFOV, 40f, 120f);
             }
+
+            // === SENSIBILITÉ SOURIS ===
+            Raylib.DrawText("Sensibilité Souris", debutX, debutY + espacementLigne * 4, 22, Color.LightGray);
+            Raylib.DrawRectangle(debutX, debutY + espacementLigne * 4 + 30, 300, 25, new Color(50, 50, 50, 255));
+            
+            float mouseSensPercent = (Settings.MouseSensitivity - 0.001f) / (0.01f - 0.001f);
+            int mouseSensFilled = (int)(Math.Clamp(mouseSensPercent, 0, 1) * 300f);
+            Raylib.DrawRectangle(debutX, debutY + espacementLigne * 4 + 30, mouseSensFilled, 25, Color.Red);
+            Raylib.DrawText($"{(int)(mouseSensPercent * 100)}%", debutX + 310, debutY + espacementLigne * 4 + 30, 20, Color.White);
+            
+            Rectangle mouseSlider = new Rectangle(debutX, debutY + espacementLigne * 4 + 30, 300, 25);
+            if (Raylib.CheckCollisionPointRec(souris, mouseSlider) && Raylib.IsMouseButtonDown(MouseButton.Left))
+            {
+                float relativeX = souris.X - mouseSlider.X;
+                mouseSensPercent = Math.Clamp(relativeX / 300f, 0, 1);
+                Settings.MouseSensitivity = 0.001f + mouseSensPercent * (0.01f - 0.001f);
+            }
+        }
+        else // --- PAGE RACCOURCIS ---
+        {
+            DrawKeybindsMenu(debutX, debutY, ecranLargeur, ecranHauteur, souris);
         }
 
         // ==========================================
@@ -570,13 +586,128 @@ partial class Program
         Raylib.DrawRectangleRec(btnRetour, retourHover ? Color.Red : Color.DarkGray);
         Raylib.DrawText("RETOUR", (int)btnRetour.X + 55, (int)btnRetour.Y + 15, 20, Color.White);
 
-        // Si on clique sur Retour, on change l'état du jeu pour revenir à l'écran titre
         if (retourHover && Raylib.IsMouseButtonPressed(MouseButton.Left))
         {
-            etatJeu = "menu"; // Retour au menu principal
+            etatJeu = "menu";
+            isRebindingKey = false;
         }
 
         Raylib.EndDrawing();
+    }
+
+    private static void DrawVolumeSlider(int x, int y, int width, ref float volume, string label)
+    {
+        Vector2 souris = Raylib.GetMousePosition();
+        
+        // Fond du slider
+        Raylib.DrawRectangle(x, y, width, 25, new Color(50, 50, 50, 255));
+        
+        // Portion remplie
+        int filledWidth = (int)(volume * width);
+        Raylib.DrawRectangle(x, y, filledWidth, 25, Color.Red);
+        
+        // Texte du pourcentage
+        Raylib.DrawText($"{(int)(volume * 100)}%", x + width + 10, y, 20, Color.White);
+        
+        // Interaction avec le slider
+        Rectangle sliderRect = new Rectangle(x, y, width, 25);
+        if (Raylib.CheckCollisionPointRec(souris, sliderRect) && Raylib.IsMouseButtonDown(MouseButton.Left))
+        {
+            float relativeX = souris.X - x;
+            volume = Math.Clamp(relativeX / width, 0, 1);
+        }
+    }
+
+    private static void DrawKeybindsMenu(int startX, int startY, int screenWidth, int screenHeight, Vector2 mourisPos)
+    {
+        // Liste des actions personnalisables
+        var keybindsMap = new List<(string name, KeyboardKey[] keys)>
+        {
+            ("Avancer", new[] { Settings.KEY_MoveForward, Settings.KEY_MoveForwardAlt }),
+            ("Reculer", new[] { Settings.KEY_MoveBackward, Settings.KEY_MoveBackwardAlt }),
+            ("Gauche", new[] { Settings.KEY_MoveLeft, Settings.KEY_MoveLeftAlt }),
+            ("Droite", new[] { Settings.KEY_MoveRight, Settings.KEY_MoveRightAlt }),
+            ("Sauter", new[] { Settings.KEY_Jump }),
+            ("S'accroupir", new[] { Settings.KEY_Crouch }),
+            ("Sprint", new[] { Settings.KEY_Sprint }),
+            ("Dash", new[] { Settings.KEY_Dash }),
+            ("Recharger", new[] { Settings.KEY_Reload }),
+            ("Menu Jeu", new[] { Settings.KEY_ToggleGameMenu }),
+        };
+
+        int y = startY;
+        int lineHeight = 50;
+
+        for (int i = 0; i < keybindsMap.Count; i++)
+        {
+            // Fond alternant
+            if (i % 2 == 0) 
+                Raylib.DrawRectangle(startX - 20, y - 5, 620, lineHeight - 5, new Color(40, 40, 40, 255));
+
+            Raylib.DrawText(keybindsMap[i].name, startX, y + 10, 22, Color.LightGray);
+
+            // Afficher les touches
+            string keyDisplay = "";
+            foreach (var key in keybindsMap[i].keys)
+            {
+                keyDisplay += (keyDisplay.Length > 0 ? " / " : "") + Settings.GetKeyName(key);
+            }
+
+            Rectangle keyButton = new Rectangle(startX + 350, y, 200, lineHeight - 10);
+            bool isHover = Raylib.CheckCollisionPointRec(mourisPos, keyButton);
+            
+            Raylib.DrawRectangleRec(keyButton, isHover ? new Color(80, 40, 40, 255) : Color.DarkGray);
+            Raylib.DrawText(keyDisplay, (int)keyButton.X + 10, (int)keyButton.Y + 12, 18, Color.White);
+
+            if (isHover && Raylib.IsMouseButtonPressed(MouseButton.Left))
+            {
+                isRebindingKey = true;
+                rebindingAction = keybindsMap[i].name;
+                rebindingIndex = i;
+            }
+
+            y += lineHeight;
+        }
+
+        // Afficher le message de rebinding
+        if (isRebindingKey)
+        {
+            // Overlay semi-transparent
+            Raylib.DrawRectangle(0, 0, screenWidth, screenHeight, new Color(0, 0, 0, 180));
+            
+            // Texte d'instructions
+            string message = $"Appuyez sur une touche pour '{rebindingAction}'";
+            int msgWidth = Raylib.MeasureText(message, 30);
+            Raylib.DrawText(message, (screenWidth - msgWidth) / 2, screenHeight / 2 - 50, 30, Color.White);
+            
+            // Attendre une touche
+            int pressedKeyCode = Raylib.GetKeyPressed();
+            if (pressedKeyCode != 0)
+            {
+                KeyboardKey pressedKey = (KeyboardKey)pressedKeyCode;
+                // Appliquer le changement de touche
+                ApplyKeybindChange(rebindingIndex, pressedKey);
+                isRebindingKey = false;
+                rebindingIndex = -1;
+            }
+        }
+    }
+
+    private static void ApplyKeybindChange(int index, KeyboardKey newKey)
+    {
+        switch (index)
+        {
+            case 0: Settings.KEY_MoveForward = newKey; break;
+            case 1: Settings.KEY_MoveBackward = newKey; break;
+            case 2: Settings.KEY_MoveLeft = newKey; break;
+            case 3: Settings.KEY_MoveRight = newKey; break;
+            case 4: Settings.KEY_Jump = newKey; break;
+            case 5: Settings.KEY_Crouch = newKey; break;
+            case 6: Settings.KEY_Sprint = newKey; break;
+            case 7: Settings.KEY_Dash = newKey; break;
+            case 8: Settings.KEY_Reload = newKey; break;
+            case 9: Settings.KEY_ToggleGameMenu = newKey; break;
+        }
     }
 
 }

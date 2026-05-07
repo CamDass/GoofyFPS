@@ -209,7 +209,7 @@ public class Weapon
             return;
 
         // Recharge uniquement si on appuie sur R ET qu'on n'est pas déjà en train de recharger
-        if (Raylib.IsKeyPressed(KeyboardKey.R) && !isReloading)
+        if (KeyBinds.IsReloadingPressed() && !isReloading)
         {
             isReloading = true;
             reloadStartTime = (float)Raylib.GetTime();

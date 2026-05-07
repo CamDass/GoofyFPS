@@ -379,7 +379,7 @@ static void InitBarrels()
         // ========================================================
         // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
         // ========================================================
-        if (Raylib.IsKeyPressed(KeyboardKey.LeftAlt))
+        if (Raylib.IsKeyPressed(KeyBinds.ToggleGameMenu))
         {
             isMenuGameOpen = !isMenuGameOpen; 
             if (isMenuGameOpen) { Raylib.EnableCursor(); Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low); }
@@ -542,7 +542,7 @@ static void InitBarrels()
         
 
 
-        if (Raylib.IsKeyDown(KeyboardKey.Tab))
+        if (Raylib.IsKeyDown(KeyBinds.ExitToMenu))
         {
             espionCube.Pose.Position = new Vector3(0,50,0);
             NbJump = NbJumpMax + 1;
@@ -554,8 +554,8 @@ static void InitBarrels()
 
         // LE CERVEAU DE LA CAMÉRA FPS
         Vector2 mouseDelta = Raylib.GetMouseDelta();
-        CameraYaw -= mouseDelta.X * MouseSensi;
-        CameraPitch -= mouseDelta.Y * MouseSensi;
+        CameraYaw -= mouseDelta.X * Settings.MouseSensitivity;
+        CameraPitch -= mouseDelta.Y * Settings.MouseSensitivity;
 
         float PitchLimit = 1.55f;
         if (CameraPitch > PitchLimit) CameraPitch = PitchLimit;
@@ -588,7 +588,7 @@ static void InitBarrels()
 
 
         //vide
-        if (Raylib.IsKeyPressed(KeyboardKey.P))
+        if (Raylib.IsKeyPressed(KeyBinds.DebugTeleportCenter))
             {
                 // 1. On modifie les coordonnées instantanément (ex: on le remet à 10m de haut au centre)
                 espionCube.Pose.Position = new Vector3(0, 10f, 0); 
@@ -599,8 +599,8 @@ static void InitBarrels()
 
             }
         
-        if (Raylib.IsKeyPressed(KeyboardKey.K)) localPlayer.TakeDamage(15);
-        if (Raylib.IsKeyPressed(KeyboardKey.H)) localPlayer.Heal(25);
+        if (Raylib.IsKeyPressed(KeyBinds.DebugTakeDamage)) localPlayer.TakeDamage(15);
+        if (Raylib.IsKeyPressed(KeyBinds.DebugHeal)) localPlayer.Heal(25);
         
         if (espionCube.Pose.Position.Y < -30f) localPlayer.TakeDamage(1);
 
@@ -617,12 +617,12 @@ static void InitBarrels()
 
 
         //print coordonés 
-        if (Raylib.IsKeyPressed(KeyboardKey.RightShift)) Console.WriteLine($"{espionCube.Pose.Position}");
+        if (Raylib.IsKeyPressed(KeyBinds.DebugPrintPosition)) Console.WriteLine($"{espionCube.Pose.Position}");
 
 
 
         // Saut
-        if (Raylib.IsKeyPressed(KeyboardKey.Space))
+        if (Raylib.IsKeyPressed(KeyBinds.Jump))
         {
             if (NbJump > NbJumpMax)
             {
@@ -634,16 +634,16 @@ static void InitBarrels()
         // Déplacements & WallRun
         if (!capteurSol.toucheSol)
         {
-            if ((capteurMurDroit.toucheMur && Raylib.IsKeyDown(KeyboardKey.D)) || (capteurMurGauche.toucheMur && Raylib.IsKeyDown(KeyboardKey.A)) || (capteurMurAvant.toucheMur && Raylib.IsKeyDown(KeyboardKey.W)) || (capteurMurArriere.toucheMur && Raylib.IsKeyDown(KeyboardKey.S)))
+            if ((capteurMurDroit.toucheMur && KeyBinds.IsMoveRightPressed()) || (capteurMurGauche.toucheMur && KeyBinds.IsMoveLeftPressed()) || (capteurMurAvant.toucheMur && KeyBinds.IsMoveForwardPressed()) || (capteurMurArriere.toucheMur && KeyBinds.IsMoveBackwardPressed()))
             {
                 IsWallRunning = true;
             }
         }
 
-        if ((Raylib.IsKeyDown(KeyboardKey.W) || Raylib.IsKeyDown(KeyboardKey.Up)) && !capteurMurAvant.toucheMur) deplacementVoulu += GroundForward;
-        if ((Raylib.IsKeyDown(KeyboardKey.S) || Raylib.IsKeyDown(KeyboardKey.Down)) && !capteurMurArriere.toucheMur) deplacementVoulu -= GroundForward;
-        if ((Raylib.IsKeyDown(KeyboardKey.A) || Raylib.IsKeyDown(KeyboardKey.Left)) && !capteurMurGauche.toucheMur) deplacementVoulu -= GroundRight; 
-        if ((Raylib.IsKeyDown(KeyboardKey.D) || Raylib.IsKeyDown(KeyboardKey.Right)) && !capteurMurDroit.toucheMur) deplacementVoulu += GroundRight;
+        if (KeyBinds.IsMoveForwardPressed() && !capteurMurAvant.toucheMur) deplacementVoulu += GroundForward;
+        if (KeyBinds.IsMoveBackwardPressed() && !capteurMurArriere.toucheMur) deplacementVoulu -= GroundForward;
+        if (KeyBinds.IsMoveLeftPressed() && !capteurMurGauche.toucheMur) deplacementVoulu -= GroundRight; 
+        if (KeyBinds.IsMoveRightPressed() && !capteurMurDroit.toucheMur) deplacementVoulu += GroundRight;
 
         if (deplacementVoulu.LengthSquared() > 0)
         {
@@ -666,7 +666,7 @@ static void InitBarrels()
             }
         }
 
-        bool IsSprinting = Raylib.IsKeyDown(KeyboardKey.LeftShift);
+        bool IsSprinting = KeyBinds.IsSprintingPressed();
         float SpeedCoef = IsSprinting ? 1.7f : 1f;
         float vMax = 8f; 
         float fAcceleration = 0.2f; 
@@ -674,7 +674,7 @@ static void InitBarrels()
 
         if (IsWallRunning)
         {
-            if (Raylib.IsKeyPressed(KeyboardKey.Space))
+            if (Raylib.IsKeyPressed(KeyBinds.Jump))
             {
                 espionCube.Velocity.Linear.Y += 2f;
                 if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
@@ -689,8 +689,8 @@ static void InitBarrels()
 
             fAcceleration = 0.1f;
             if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
-            if (Raylib.IsKeyDown(KeyboardKey.A)) rollActuel = 0.25f;
-            else if (Raylib.IsKeyDown(KeyboardKey.D)) rollActuel = -0.25f;
+            if (KeyBinds.IsMoveLeftPressed()) rollActuel = 0.25f;
+            else if (KeyBinds.IsMoveRightPressed()) rollActuel = -0.25f;
         } 
         else { rollActuel = 0f; fAcceleration = 0.2f; }
 
@@ -699,7 +699,7 @@ static void InitBarrels()
         float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
         float vitesseDescente = 0f;
 
-        if (Raylib.IsKeyDown(KeyboardKey.C) && !Raylib.IsKeyDown(KeyboardKey.Space))
+        if (KeyBinds.IsCrouchingPressed() && !Raylib.IsKeyDown(KeyBinds.Jump))
         {
             if (!capteurGlissade.toucheSol) 
             {
@@ -714,7 +714,7 @@ static void InitBarrels()
                 espionCube.SetShape(PlayerTicketAccroupi);
                 if (vitesseHorizontale > 4) fAcceleration = 0.01f; else vMax = 3f;
             }
-            if (Raylib.IsKeyPressed(KeyboardKey.C) && !Raylib.IsKeyDown(KeyboardKey.Space) && capteurSol.toucheSol && vitesseHorizontale > 4) espionCube.Velocity.Linear += GroundForward * 5;
+            if (Raylib.IsKeyPressed(KeyBinds.Crouch) && !Raylib.IsKeyDown(KeyBinds.Jump) && capteurSol.toucheSol && vitesseHorizontale > 4) espionCube.Velocity.Linear += GroundForward * 5;
         } 
         else 
         {
@@ -723,7 +723,7 @@ static void InitBarrels()
         }
 
         // Ground Slam : Si on appuie sur C en tombant rapidement
-        if (Raylib.IsKeyDown(KeyboardKey.C) && capteurSol.toucheSol && espionCube.Velocity.Linear.Y < -9f)
+        if (KeyBinds.IsCrouchingPressed() && capteurSol.toucheSol && espionCube.Velocity.Linear.Y < -9f)
         {
             PerformGroundSlam();
         }
@@ -732,7 +732,7 @@ static void InitBarrels()
         espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
         espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
 
-        if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyboardKey.Space))
+        if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyBinds.Jump))
         {
             if (targetVelocity.Y > 0) 
             {
@@ -742,7 +742,7 @@ static void InitBarrels()
         }
 
         // Dash
-        if (Raylib.IsKeyPressed(KeyboardKey.LeftControl) && CanDash && dashChrono >= 90){
+        if (KeyBinds.IsDashingPressed() && CanDash && dashChrono >= 90){
             Raylib.PlaySound(swoosh);
             Vector3 directionDash = GroundForward; 
 
@@ -769,7 +769,7 @@ static void InitBarrels()
 
 
 
-        if (Raylib.IsKeyPressed(KeyboardKey.F2)){
+        if (Raylib.IsKeyPressed(KeyBinds.DebugToggleInfo)){
             if (debugInfo)
             {
                 debugInfo = false;
@@ -1045,13 +1045,13 @@ static void InitBarrels()
         
         showweapon = true;
 
-        if (Raylib.IsKeyDown(KeyboardKey.F3)) showweapon = false;
+        if (Raylib.IsKeyDown(KeyBinds.DebugToggleWeapon)) showweapon = false;
 
 
 
 
         // --- GESTION DU ZOOM (FOV) ---
-        float targetFov = 60.0f; // FOV de base
+        float targetFov = Settings.BaseFOV; // FOV de base depuis les paramètres
 
         if (isAiming)
         {

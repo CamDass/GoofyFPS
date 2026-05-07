@@ -431,8 +431,7 @@ public partial class Program
             if (endroit == "menu") Menu();
             else if (endroit == "boucle") BouclePrincipale();
             else if (endroit == "option") {
-                Console.WriteLine("option");
-                endroit = "menu";
+                AfficherMenuOptions(ref endroit);
             }
             else if (endroit == "choice map") ChoiceMap();
         }
