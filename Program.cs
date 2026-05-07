@@ -46,7 +46,7 @@ public partial class Program
     }
     
     // Images & HUD
-    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, ImageMapTest, ImageMapVille, Imageville2;
+    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, cibleTexture, ImageMapTest, ImageMapVille, Imageville2;
     static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, BlurBackground, imageexplosion;
     static float tempsAffichage = 3.0f; 
     static float opaciteImage = 255.0f; 
@@ -68,7 +68,7 @@ public partial class Program
 
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
-    public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound;
+    public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound, groundImpactSound;
 
     // Gestion des sons pour éviter les chevauchements
     public enum SoundPriority
@@ -155,6 +155,7 @@ public partial class Program
     // GESTIONNAIRE DE SURVIE ET SPAWNS
     // ========================================================
     public static float survivalTime = 0f;
+    public static int killCount = 0;
     public static float enemySpawnTimer = 0f;
     public static float timeBetweenSpawns = 3.0f; // 1 ennemi toutes les 3 secondes
     public static List<Vector3> enemySpawnPoints = new List<Vector3>();
@@ -224,6 +225,7 @@ public partial class Program
         float barrelHitboxInflation = 2f; // Agrandit la box de détection des tirs
         Box formeBaril = new Box(barrelHalfExtents.X * barrelHitboxInflation, barrelHalfExtents.Y * barrelHitboxInflation, barrelHalfExtents.Z * barrelHitboxInflation);
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
+        cibleTexture = Raylib.LoadTexture("assets\\2D\\cible.png");
 
         Raylib.InitAudioDevice();
         menuMusic = Raylib.LoadMusicStream("assets\\sounds\\menuMusic.mp3");
@@ -246,6 +248,7 @@ public partial class Program
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
+        groundImpactSound = Raylib.LoadSound("assets\\sounds\\ground-impact.mp3");
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -340,6 +343,7 @@ public partial class Program
         ListeTexture.Add(ImageMapVille);
         ListeTexture.Add(Imageville2);
         ListeTexture.Add(sniperaim);
+        ListeTexture.Add(cibleTexture);
 
 
         // --- 2. CONFIGURATION DE LA CAMÉRA ---
@@ -452,6 +456,7 @@ public partial class Program
         Raylib.UnloadSound(weaponSwitchSound);
         Raylib.UnloadSound(reloadSound);
         Raylib.UnloadSound(noAmmoSound);
+        Raylib.UnloadSound(groundImpactSound);
         
         Raylib.UnloadMusicStream(menuMusic);
         Raylib.UnloadMusicStream(gameMusic);
