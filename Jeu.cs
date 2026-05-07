@@ -318,7 +318,7 @@ static void InitBarrels()
         {
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Color.Black);
-            Raylib.DrawText("VOUS ÉTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
+            Raylib.DrawText("VOUS ÊTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
             Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
             Raylib.DrawText("Appuyez sur une touche pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
             Raylib.EndDrawing();
