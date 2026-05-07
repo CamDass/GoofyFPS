@@ -69,24 +69,24 @@ public class Enemy
         float distanceToPlayer = Vector3.Distance(positionEnnemiPlate, positionJoueurPlate);
         float differenceHauteur = playerPos.Y - enemyBody.Pose.Position.Y;
         
-        if (distanceHorizontale < 2.2f && differenceHauteur < 3.5f && attackCooldown <= 0)
+        if (distanceHorizontale < 1.7f && differenceHauteur < 3.5f && attackCooldown <= 0)
         {
-            Raylib.PlaySound(attackSound);
+            Program.PlaySoundWithPriority(attackSound, Program.SoundPriority.Medium);
             // Il te met une claque !
             Program.localPlayer.TakeDamage(10); 
             attackCooldown = 0.5f; 
 
             // ==========================================
-            // NOUVEAU : LE KNOCKBACK !
+            // NOUVEAU : LE KNOCKBACK ! (réduit pour éviter les attaques vers le haut)
             // ==========================================
             // 1. On calcule la direction de la claque (de l'ennemi vers toi)
             Vector3 pushDir = Vector3.Normalize(positionJoueurPlate - positionEnnemiPlate);
             
-            // 2. On ajoute un petit saut vers le haut pour bien désorienter la caméra
-            pushDir.Y = 0.3f; 
+            // 2. Petit saut vers le haut pour désorienter (réduit)
+            pushDir.Y = 0.1f; 
             
             // 3. On applique une force violente sur le corps physique de ton joueur (espionCube)
-            PlayerBody.Velocity.Linear += pushDir * 20f; // Modifie le '15f' si ça pousse trop ou pas assez !
+            PlayerBody.Velocity.Linear += pushDir * 15f; // Force réduite
         }
 
         enemyBody.Awake = true;

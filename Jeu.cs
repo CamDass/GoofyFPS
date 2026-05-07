@@ -14,10 +14,10 @@ partial class Program
     // VARIABLES DES ARMES (ILIAN)
     // ========================================================
     static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
-    static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f);
+    static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f, false);
     static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
-    static Weapon pistolWeapon = new Weapon("Pistol", 3, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 5, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
     static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
     static Weapon swordWeapon = new Weapon("Sword", 10, 100, 0.15f, 30, 4, sword, swordslash, 3f);
 
@@ -88,6 +88,9 @@ partial class Program
             newWeapon = allowedWeapons[random.Next(allowedWeapons.Count)];
         }
         currentWeapon = newWeapon;
+        
+        // Jouer le son de changement d'arme
+        Program.PlaySoundWithPriority(Program.weaponSwitchSound, Program.SoundPriority.Medium);
     }
 static void InitBarrels()
     {
@@ -158,7 +161,7 @@ static void InitBarrels()
         }
 
         SwitchWeaponFromBarrel();
-        Raylib.PlaySound(explosion);
+        Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
         activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
     }
 
@@ -179,7 +182,7 @@ static void InitBarrels()
 
         if (playSound)
         {
-            Raylib.PlaySound(explosion);
+            Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
         }
 
         if (spawnEffect)
@@ -242,7 +245,36 @@ static void InitBarrels()
         }
     }
 
+    public class GroundSlamEffect
+    {
+        public Vector3 position;
+        public float timer;
+        public float duration;
+        public float maxRadius;
+
+        public GroundSlamEffect(Vector3 pos, float dur = 0.8f, float radius = 3f)
+        {
+            position = pos;
+            timer = dur;
+            duration = dur;
+            maxRadius = radius;
+        }
+
+        public float GetRadius()
+        {
+            float progress = 1f - (timer / duration);
+            float easedProgress = 1f - (1f - progress) * (1f - progress);
+            return maxRadius * easedProgress;
+        }
+
+        public float GetAlpha()
+        {
+            return (timer / duration) * 100f; // Plus transparent que les explosions
+        }
+    }
+
     static List<ExplosionEffect> activeExplosions = new List<ExplosionEffect>();
+    static List<GroundSlamEffect> activeGroundSlams = new List<GroundSlamEffect>();
 
     public static bool IsPointOnLaser(Vector3 point, Vector3 laserStart, Vector3 direction, float range)
     {
@@ -252,6 +284,48 @@ static void InitBarrels()
         Vector3 toPointNorm = Vector3.Normalize(toPoint);
         float dot = Vector3.Dot(direction, toPointNorm);
         return dot > 0.995f;
+    }
+
+    public static void PerformGroundSlam()
+    {
+        Console.WriteLine("slam");
+        BodyReference playerBody = Program.simulation.Bodies.GetBodyReference(Program.PlayerId);
+        Vector3 playerPos = playerBody.Pose.Position;
+        float slamRadius = 5f;
+        
+        // Jouer le son d'impact
+        Program.PlaySoundWithPriority(Program.groundImpactSound, Program.SoundPriority.High);
+        
+        // Créer l'effet visuel
+        activeGroundSlams.Add(new GroundSlamEffect(playerPos, 1f, slamRadius));
+        
+        // Appliquer le knockback aux ennemis dans le rayon
+        foreach (Enemy enemy in Program.enemiesList)
+        {
+            if (!enemy.isAlive) continue;
+            
+            Vector3 enemyPos = enemy.GetPosition();
+            float distance = Vector3.Distance(playerPos, enemyPos);
+            
+            if (distance <= slamRadius)
+            {
+                // Calculer la direction du knockback (loin du joueur)
+                Vector3 knockbackDirection = Vector3.Normalize(enemyPos - playerPos);
+                
+                // Appliquer une force de knockback (ajustable)
+                float knockbackForce = 1000f; // Force du knockback
+                
+                try
+                {
+                    BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(enemy.bodyId);
+                    enemyBody.Velocity.Linear += knockbackDirection * knockbackForce;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[WARN] GroundSlam knockback failed for enemy {enemy.bodyId}: {ex.Message}");
+                }
+            }
+        }
     }
 
 
@@ -308,8 +382,8 @@ static void InitBarrels()
         if (Raylib.IsKeyPressed(KeyboardKey.LeftAlt))
         {
             isMenuGameOpen = !isMenuGameOpen; 
-            if (isMenuGameOpen) { Raylib.EnableCursor(); Raylib.PlaySound(unselect); }
-            else { Raylib.DisableCursor(); Raylib.PlaySound(select); }
+            if (isMenuGameOpen) { Raylib.EnableCursor(); Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low); }
+            else { Raylib.DisableCursor(); Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); }
         }
 
         if (isMenuGameOpen) { Menugame(); return; }
@@ -354,6 +428,23 @@ static void InitBarrels()
             {
                 activeExplosions.RemoveAt(i);
             }
+        }
+
+        // Mise à jour des ground slams
+        for (int i = activeGroundSlams.Count - 1; i >= 0; i--)
+        {
+            activeGroundSlams[i].timer -= deltaTime;
+            if (activeGroundSlams[i].timer <= 0)
+            {
+                activeGroundSlams.RemoveAt(i);
+            }
+        }
+
+        // Gestion de l'overlay de dégâts
+        if (damageOverlayOpacity > 0)
+        {
+            damageOverlayOpacity -= deltaTime * 2f; // Diminue en 0.5 seconde
+            if (damageOverlayOpacity < 0) damageOverlayOpacity = 0;
         }
 
 
@@ -402,13 +493,16 @@ static void InitBarrels()
 
 
         // Nettoyage des ennemis morts : retirer d'abord leurs corps physiques, puis supprimer les instances.
+        int deadEnemiesCount = 0;
         foreach (Enemy enemy in enemiesList)
         {
             if (!enemy.isAlive)
             {
                 simulation.Bodies.Remove(enemy.bodyId);
+                deadEnemiesCount++;
             }
         }
+        Program.killCount += deadEnemiesCount;
         enemiesList.RemoveAll(e => !e.isAlive);
 
         // ACTIVATION DES CERVEAUX (IA)
@@ -416,6 +510,20 @@ static void InitBarrels()
         {
             // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
             enemy.Maj(posCube, ref espionCube);
+            
+            // Vérifier si l'ennemi tombe dans le vide (limite de void)
+            try
+            {
+                BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(enemy.bodyId);
+                if (enemyBody.Pose.Position.Y < -30f)
+                {
+                    enemy.TakeDamage(1);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Void damage check failed for enemy {enemy.bodyId}: {ex.Message}");
+            }
         }
 
 
@@ -614,6 +722,12 @@ static void InitBarrels()
             hauteurVoulue = 0.8f; vMax = 8f; fAcceleration = 0.2f; vitesseDescente = 0;
         }
 
+        // Ground Slam : Si on appuie sur C en tombant rapidement
+        if (Raylib.IsKeyDown(KeyboardKey.C) && capteurSol.toucheSol && espionCube.Velocity.Linear.Y < -9f)
+        {
+            PerformGroundSlam();
+        }
+
         Vector3 targetVelocity = deplacementVoulu * vMax * SpeedCoef;
         espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
         espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
@@ -801,6 +915,15 @@ static void InitBarrels()
                 Color redColor = new Color((byte)255, (byte)0, (byte)0, alpha);
                 Raylib.DrawSphere(exp.position, redSize, redColor);
             }
+
+            // Dessiner les ground slams en sphère blanche transparente
+            foreach (GroundSlamEffect slam in activeGroundSlams)
+            {
+                float radius = slam.GetRadius();
+                byte alpha = (byte)slam.GetAlpha();
+                Color whiteColor = new Color((byte)255, (byte)255, (byte)255, alpha);
+                Raylib.DrawSphere(slam.position, radius, whiteColor);
+            }
             
             // Dessiner le laser (Code ILIAN)
             if (laserTimer > 0)
@@ -987,8 +1110,12 @@ static void InitBarrels()
                 Vector3 weaponPos = new Vector3(posX + balancementX, posY + balancementY, posZ); 
                 Vector3 weaponScale = new Vector3(0.1f, 0.1f, 0.1f);
                 
+                // Combiner le recul avec l'inclinaison du rechargement
+                float reloadRotation = currentWeapon.GetReloadRotationAngle();
+                float totalRotation = recoilAngle + reloadRotation;
+                
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 0 }, ShaderUniformDataType.Int);
-                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, recoilAngle, weaponScale, Color.White);
+                Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, totalRotation, weaponScale, Color.White);
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
 
             Raylib.EndMode3D();
@@ -1022,6 +1149,35 @@ static void InitBarrels()
             Raylib.DrawText(maxAmmoStr, petitPosX + 2, petitPosY + 2, taillePetitTexte, Color.Black);
             Raylib.DrawText(maxAmmoStr, petitPosX, petitPosY, taillePetitTexte, Color.LightGray);
 
+        }
+
+        // ==========================================
+        // HUD KILL COUNT (Top Right)
+        // ==========================================
+        {
+            int iconSize = 50;
+            int textSize = 40;
+            int padding = 25;
+
+            
+            // Position en haut à droite
+            int iconX = Raylib.GetScreenWidth() - iconSize - padding;
+            int iconY = padding*2;
+            
+            // Dessiner l'icône cible
+            Raylib.DrawTextureEx(Program.cibleTexture, new Vector2(iconX, iconY), 0, (float)iconSize / Program.cibleTexture.Width, Color.White);
+            
+            // Texte du nombre de kills
+            string killText = Program.killCount.ToString();
+            int textWidth = Raylib.MeasureText(killText, textSize);
+            
+            // Position du texte à gauche de l'icône
+            int textX = iconX - textWidth - padding;
+            int textY = iconY + (iconSize - textSize) / 2; // Centré verticalement avec l'icône
+            
+            // Ombre + Texte
+            Raylib.DrawText(killText, textX + 2, textY + 2, textSize, Color.Black);
+            Raylib.DrawText(killText, textX, textY, textSize, Color.White);
         }
 
         // ========================================================
@@ -1239,6 +1395,12 @@ static void InitBarrels()
         // Bordure Droite
         Raylib.DrawRectangleGradientH(LargeurFenetre - 100, 0, 100, HauteurFenetre, Color.Blank, ombreBord);
 
+        // Overlay de dégâts rouge
+        if (damageOverlayOpacity > 0)
+        {
+            Color damageColor = new Color(255, 0, 0, (int)(damageOverlayOpacity * 255));
+            Raylib.DrawRectangle(0, 0, LargeurFenetre, HauteurFenetre, damageColor);
+        }
 
 
         Raylib.EndDrawing();

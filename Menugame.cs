@@ -57,7 +57,7 @@ partial class Program
             {
                 isMenuGameOpen = false; // Fermer le menu
                 Raylib.DisableCursor();
-                Raylib.PlaySound(select);
+                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                 return;
             }
         }
@@ -115,7 +115,7 @@ partial class Program
             // pour "quitter"
             if (Raylib.IsKeyDown(KeyboardKey.Space)) 
             {
-                Raylib.PlaySound(select);
+                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                 Raylib.DisableCursor();
 
                 endroit = "boucle";

@@ -46,7 +46,7 @@ public partial class Program
     }
     
     // Images & HUD
-    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, ImageMapTest, ImageMapVille, Imageville2;
+    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, cibleTexture, ImageMapTest, ImageMapVille, Imageville2;
     static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, BlurBackground, imageexplosion;
     static float tempsAffichage = 3.0f; 
     static float opaciteImage = 255.0f; 
@@ -65,6 +65,22 @@ public partial class Program
     static int lightColorLoc;
     static int viewPosLoc;
     public static int applyFogLoc;
+
+    // Overlay de dégâts
+    public static float damageOverlayOpacity = 0f;
+    public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound, groundImpactSound;
+
+    // Gestion des sons pour éviter les chevauchements
+    public enum SoundPriority
+    {
+        Low,      // Sons UI, ambiance
+        Medium,   // Sons de dégâts, effets secondaires
+        High,     // Sons critiques : tirs, explosions, changements d'armes
+        Critical  // Sons vitaux : mort, game over
+    }
+
+    private static float lastSoundTime = 0f;
+    private static SoundPriority lastSoundPriority = SoundPriority.Low;
 
 
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
@@ -139,6 +155,7 @@ public partial class Program
     // GESTIONNAIRE DE SURVIE ET SPAWNS
     // ========================================================
     public static float survivalTime = 0f;
+    public static int killCount = 0;
     public static float enemySpawnTimer = 0f;
     public static float timeBetweenSpawns = 3.0f; // 1 ennemi toutes les 3 secondes
     public static List<Vector3> enemySpawnPoints = new List<Vector3>();
@@ -208,6 +225,7 @@ public partial class Program
         float barrelHitboxInflation = 2f; // Agrandit la box de détection des tirs
         Box formeBaril = new Box(barrelHalfExtents.X * barrelHitboxInflation, barrelHalfExtents.Y * barrelHitboxInflation, barrelHalfExtents.Z * barrelHitboxInflation);
         sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
+        cibleTexture = Raylib.LoadTexture("assets\\2D\\cible.png");
 
         Raylib.InitAudioDevice();
         menuMusic = Raylib.LoadMusicStream("assets\\sounds\\menuMusic.mp3");
@@ -226,6 +244,11 @@ public partial class Program
         select = Raylib.LoadSound("assets\\sounds\\select.mp3");
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
+        hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
+        weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
+        reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
+        noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
+        groundImpactSound = Raylib.LoadSound("assets\\sounds\\ground-impact.mp3");
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -320,6 +343,7 @@ public partial class Program
         ListeTexture.Add(ImageMapVille);
         ListeTexture.Add(Imageville2);
         ListeTexture.Add(sniperaim);
+        ListeTexture.Add(cibleTexture);
 
 
         // --- 2. CONFIGURATION DE LA CAMÉRA ---
@@ -428,6 +452,11 @@ public partial class Program
         Raylib.UnloadShader(lightShader);
         Raylib.UnloadSound(snipershot);
         Raylib.UnloadSound(karambitshot);
+        Raylib.UnloadSound(hitSound);
+        Raylib.UnloadSound(weaponSwitchSound);
+        Raylib.UnloadSound(reloadSound);
+        Raylib.UnloadSound(noAmmoSound);
+        Raylib.UnloadSound(groundImpactSound);
         
         Raylib.UnloadMusicStream(menuMusic);
         Raylib.UnloadMusicStream(gameMusic);
@@ -479,6 +508,29 @@ public partial class Program
         else if (currentMusicState == ActiveMusic.Game)
         {
             Raylib.UpdateMusicStream(gameMusic);
+        }
+    }
+
+    // Fonction pour jouer un son avec gestion de priorité
+    public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
+    {
+        float currentTime = (float)Raylib.GetTime();
+        
+        // Si c'est un son critique, on le joue toujours
+        if (priority == SoundPriority.Critical)
+        {
+            Raylib.PlaySound(sound);
+            lastSoundTime = currentTime;
+            lastSoundPriority = priority;
+            return;
+        }
+        
+        // Pour les autres sons, vérifier la priorité et le timing
+        if (priority >= lastSoundPriority || currentTime - lastSoundTime > 0.1f)
+        {
+            Raylib.PlaySound(sound);
+            lastSoundTime = currentTime;
+            lastSoundPriority = priority;
         }
     }
 }
