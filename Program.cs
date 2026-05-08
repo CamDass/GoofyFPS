@@ -230,8 +230,8 @@ public partial class Program
         Raylib.InitAudioDevice();
         menuMusic = Raylib.LoadMusicStream("assets\\sounds\\menuMusic.mp3");
         gameMusic = Raylib.LoadMusicStream("assets\\sounds\\gameMusic.mp3");
-        Raylib.SetMusicVolume(menuMusic, musicVolume);
-        Raylib.SetMusicVolume(gameMusic, musicVolume);
+        Raylib.SetMusicVolume(menuMusic, Settings.MasterVolume * Settings.MusicVolume);
+        Raylib.SetMusicVolume(gameMusic, Settings.MasterVolume * Settings.MusicVolume);
         explosion = Raylib.LoadSound("assets\\sounds\\fahh-bomb.mp3");
         shotgunshot = Raylib.LoadSound("assets\\sounds\\sniper_shot.wav");
         karambitshot = Raylib.LoadSound("assets\\sounds\\fouchette-1.mp3");
@@ -488,12 +488,12 @@ public partial class Program
 
         if (currentMusicState == ActiveMusic.Menu)
         {
-            Raylib.SetMusicVolume(menuMusic, musicVolume);
+            Raylib.SetMusicVolume(menuMusic, Settings.MasterVolume * Settings.MusicVolume);
             Raylib.PlayMusicStream(menuMusic);
         }
         else if (currentMusicState == ActiveMusic.Game)
         {
-            Raylib.SetMusicVolume(gameMusic, musicVolume);
+            Raylib.SetMusicVolume(gameMusic, Settings.MasterVolume * Settings.MusicVolume);
             Raylib.PlayMusicStream(gameMusic);
         }
     }
@@ -510,6 +510,19 @@ public partial class Program
         }
     }
 
+    static void UpdateMusicVolume()
+    {
+        float effectiveVolume = Settings.MasterVolume * Settings.MusicVolume;
+        if (currentMusicState == ActiveMusic.Menu)
+        {
+            Raylib.SetMusicVolume(menuMusic, effectiveVolume);
+        }
+        else if (currentMusicState == ActiveMusic.Game)
+        {
+            Raylib.SetMusicVolume(gameMusic, effectiveVolume);
+        }
+    }
+
     // Fonction pour jouer un son avec gestion de priorité
     public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
     {
@@ -518,6 +531,7 @@ public partial class Program
         // Si c'est un son critique, on le joue toujours
         if (priority == SoundPriority.Critical)
         {
+            Raylib.SetSoundVolume(sound, Settings.MasterVolume * Settings.SFXVolume);
             Raylib.PlaySound(sound);
             lastSoundTime = currentTime;
             lastSoundPriority = priority;
@@ -527,6 +541,7 @@ public partial class Program
         // Pour les autres sons, vérifier la priorité et le timing
         if (priority >= lastSoundPriority || currentTime - lastSoundTime > 0.1f)
         {
+            Raylib.SetSoundVolume(sound, Settings.MasterVolume * Settings.SFXVolume);
             Raylib.PlaySound(sound);
             lastSoundTime = currentTime;
             lastSoundPriority = priority;

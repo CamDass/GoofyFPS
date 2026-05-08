@@ -480,6 +480,10 @@ partial class Program
 
     public static void AfficherMenuOptions(ref string etatJeu)
     {
+        // Keep music playing in options menu
+        SetActiveMusic(ActiveMusic.Menu);
+        UpdateActiveMusicStream();
+
         int ecranLargeur = Raylib.GetScreenWidth();
         int ecranHauteur = Raylib.GetScreenHeight();
         Vector2 souris = Raylib.GetMousePosition();
@@ -611,11 +615,34 @@ partial class Program
         
         // Interaction avec le slider
         Rectangle sliderRect = new Rectangle(x, y, width, 25);
-        if (Raylib.CheckCollisionPointRec(souris, sliderRect) && Raylib.IsMouseButtonDown(MouseButton.Left))
+        bool isHovering = Raylib.CheckCollisionPointRec(souris, sliderRect);
+        bool mouseDown = Raylib.IsMouseButtonDown(MouseButton.Left);
+        bool mouseReleased = Raylib.IsMouseButtonReleased(MouseButton.Left);
+        
+        if (isHovering && mouseDown)
         {
             float relativeX = souris.X - x;
             volume = Math.Clamp(relativeX / width, 0, 1);
+            
+            // Apply volume changes immediately
+            ApplyVolumeChanges(label);
         }
+        
+        // Play SFX sound only on mouse release for SFX slider
+        if (label == "SFX" && isHovering && mouseReleased)
+        {
+            Program.PlaySoundWithPriority(pistolshot, Program.SoundPriority.Low);
+        }
+    }
+
+    private static void ApplyVolumeChanges(string label)
+    {
+        // Update music volume if changed
+        if (label == "Music")
+        {
+            UpdateMusicVolume();
+        }
+        // SFX and Master volumes will be applied when sounds are played via PlaySoundWithPriority
     }
 
     private static void DrawKeybindsMenu(int startX, int startY, int screenWidth, int screenHeight, Vector2 mourisPos)
@@ -695,6 +722,39 @@ partial class Program
 
     private static void ApplyKeybindChange(int index, KeyboardKey newKey)
     {
+        // Prevent changing to invalid keys
+        if (newKey == KeyboardKey.Null) return;
+        
+        // Check for conflicts with other keybinds
+        var allKeys = new List<KeyboardKey>
+        {
+            Settings.KEY_MoveForward, Settings.KEY_MoveForwardAlt,
+            Settings.KEY_MoveBackward, Settings.KEY_MoveBackwardAlt,
+            Settings.KEY_MoveLeft, Settings.KEY_MoveLeftAlt,
+            Settings.KEY_MoveRight, Settings.KEY_MoveRightAlt,
+            Settings.KEY_Jump, Settings.KEY_Crouch, Settings.KEY_Sprint,
+            Settings.KEY_Dash, Settings.KEY_Reload, Settings.KEY_ToggleGameMenu
+        };
+        
+        // Remove the current key being changed (to allow reassigning the same key)
+        switch (index)
+        {
+            case 0: allKeys.Remove(Settings.KEY_MoveForward); break;
+            case 1: allKeys.Remove(Settings.KEY_MoveBackward); break;
+            case 2: allKeys.Remove(Settings.KEY_MoveLeft); break;
+            case 3: allKeys.Remove(Settings.KEY_MoveRight); break;
+            case 4: allKeys.Remove(Settings.KEY_Jump); break;
+            case 5: allKeys.Remove(Settings.KEY_Crouch); break;
+            case 6: allKeys.Remove(Settings.KEY_Sprint); break;
+            case 7: allKeys.Remove(Settings.KEY_Dash); break;
+            case 8: allKeys.Remove(Settings.KEY_Reload); break;
+            case 9: allKeys.Remove(Settings.KEY_ToggleGameMenu); break;
+        }
+        
+        // If the new key is already used, don't assign
+        if (allKeys.Contains(newKey)) return;
+        
+        // Now assign the new key
         switch (index)
         {
             case 0: Settings.KEY_MoveForward = newKey; break;
