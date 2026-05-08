@@ -348,7 +348,7 @@ static void InitBarrels()
         enemySpawnPoints.Add(new Vector3(-28f, 2f, 127f));
         enemySpawnPoints.Add(new Vector3(4f, 2f, 83f));
         enemySpawnPoints.Add(new Vector3(-80f, 2f, 27f));
-        enemySpawnPoints.Add(new Vector3(-63f, 2f, 3f));
+        enemySpawnPoints.Add(new Vector3(-94f, 2f, 13f));
 
 
         // 3. On réinitialise les chronos
@@ -510,7 +510,7 @@ static void InitBarrels()
         {
             // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
             enemy.Maj(posCube, ref espionCube);
-            
+                        
             // Vérifier si l'ennemi tombe dans le vide (limite de void)
             try
             {
@@ -1150,35 +1150,7 @@ static void InitBarrels()
             Raylib.DrawText(maxAmmoStr, petitPosX, petitPosY, taillePetitTexte, Color.LightGray);
 
         }
-
-        // ==========================================
-        // HUD KILL COUNT (Top Right)
-        // ==========================================
-        {
-            int iconSize = 50;
-            int textSize = 40;
-            int padding = 25;
-
-            
-            // Position en haut à droite
-            int iconX = Raylib.GetScreenWidth() - iconSize - padding;
-            int iconY = padding*2;
-            
-            // Dessiner l'icône cible
-            Raylib.DrawTextureEx(Program.cibleTexture, new Vector2(iconX, iconY), 0, (float)iconSize / Program.cibleTexture.Width, Color.White);
-            
-            // Texte du nombre de kills
-            string killText = Program.killCount.ToString();
-            int textWidth = Raylib.MeasureText(killText, textSize);
-            
-            // Position du texte à gauche de l'icône
-            int textX = iconX - textWidth - padding;
-            int textY = iconY + (iconSize - textSize) / 2; // Centré verticalement avec l'icône
-            
-            // Ombre + Texte
-            Raylib.DrawText(killText, textX + 2, textY + 2, textSize, Color.Black);
-            Raylib.DrawText(killText, textX, textY, textSize, Color.White);
-        }
+        
 
         // ========================================================
         // [ZONE ILIAN] 5. LOGIQUE DES TIRS
@@ -1271,112 +1243,152 @@ static void InitBarrels()
             Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10, 340, 20, Color.DarkGreen);
         }
 
-        Color chrossairColor = Color.Red;
-        //wall run 
-        if (capteurMurDroit.toucheMur)
-        {
-            Raylib.DrawRectangle(LargeurFenetre/2+50,HauteurFenetre/2-5,3,10,chrossairColor);
-        }
-        if (capteurMurGauche.toucheMur)
-        {
-            Raylib.DrawRectangle(LargeurFenetre/2-50,HauteurFenetre/2-5,3,10,chrossairColor);
-        }
+        
 
-        //crosshair 
+        if (showweapon){
+            Color chrossairColor = Color.Red;
+            //wall run 
+            if (capteurMurDroit.toucheMur)
+            {
+                Raylib.DrawRectangle(LargeurFenetre/2+50,HauteurFenetre/2-5,3,10,chrossairColor);
+            }
+            if (capteurMurGauche.toucheMur)
+            {
+                Raylib.DrawRectangle(LargeurFenetre/2-50,HauteurFenetre/2-5,3,10,chrossairColor);
+            }
 
-        int centreX = LargeurFenetre / 2;
-        int centreY = HauteurFenetre / 2;
+            //crosshair 
 
-        Raylib.DrawCircle(centreX, centreY, 3f, chrossairColor);
+            int centreX = LargeurFenetre / 2;
+            int centreY = HauteurFenetre / 2;
 
-        if (hitmarkerTimer > 0)
-        {
-            hitmarkerTimer -= deltaTime; 
+            Raylib.DrawCircle(centreX, centreY, 3f, chrossairColor);
+
+            if (hitmarkerTimer > 0)
+            {
+                hitmarkerTimer -= deltaTime; 
+                
+                int alphaHit = (int)((hitmarkerTimer / 0.3f) * 255);
+                alphaHit = Math.Clamp(alphaHit, 0, 255);
+                Color hitColor = new Color(255, 255, 255, alphaHit); 
+
+                int taille = 15;      // Longueur de la branche
+                int trou = 7;         // L'espace vide au centre
+                float epaisseur = 3f; // L'ÉPAISSEUR DU HITMARKER !
+
+                // Haut-Gauche
+                Raylib.DrawLineEx(new Vector2(centreX - trou, centreY - trou), new Vector2(centreX - taille, centreY - taille), epaisseur, hitColor);
+                // Bas-Droite
+                Raylib.DrawLineEx(new Vector2(centreX + trou, centreY + trou), new Vector2(centreX + taille, centreY + taille), epaisseur, hitColor);
+                // Bas-Gauche
+                Raylib.DrawLineEx(new Vector2(centreX - trou, centreY + trou), new Vector2(centreX - taille, centreY + taille), epaisseur, hitColor);
+                // Haut-Droite
+                Raylib.DrawLineEx(new Vector2(centreX + trou, centreY - trou), new Vector2(centreX + taille, centreY - taille), epaisseur, hitColor);
+            }
+
+
+
+
+
+            Color missingLife = new Color(255, 50, 50, 40);
+
+            float lifePercentage = (float)localPlayer.Health / localPlayer.MaxHealth;
+
+            int lifePixel = (int)(400 * lifePercentage);
+
+            Raylib.DrawRectangle(100, HauteurFenetre - 150, 400, 80, missingLife); 
             
-            int alphaHit = (int)((hitmarkerTimer / 0.3f) * 255);
-            alphaHit = Math.Clamp(alphaHit, 0, 255);
-            Color hitColor = new Color(255, 255, 255, alphaHit); 
+            // La barre de vie réelle (Blanche si > 25%, Rouge clignotant si <= 25%)
+            if (lifePercentage > 0.25f)
+            {
+                Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.White);
+            } 
+            else if (localPlayer.IsAlive)
+            {
+                // Effet Urgence : Clignotement rouge si la vie est critique
+                if (MathF.Sin((float)Raylib.GetTime() * 10f) > 0)
+                    Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.Red);
+                else
+                    Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.DarkGray);
+            }
 
-            int taille = 15;      // Longueur de la branche
-            int trou = 7;         // L'espace vide au centre
-            float epaisseur = 3f; // L'ÉPAISSEUR DU HITMARKER !
+            // Le texte des HP (Noir)
+            Raylib.DrawText($"{localPlayer.Health}", 100 + 10, HauteurFenetre - 150 + 25, 50, Color.Black);
 
-            // Haut-Gauche
-            Raylib.DrawLineEx(new Vector2(centreX - trou, centreY - trou), new Vector2(centreX - taille, centreY - taille), epaisseur, hitColor);
-            // Bas-Droite
-            Raylib.DrawLineEx(new Vector2(centreX + trou, centreY + trou), new Vector2(centreX + taille, centreY + taille), epaisseur, hitColor);
-            // Bas-Gauche
-            Raylib.DrawLineEx(new Vector2(centreX - trou, centreY + trou), new Vector2(centreX - taille, centreY + taille), epaisseur, hitColor);
-            // Haut-Droite
-            Raylib.DrawLineEx(new Vector2(centreX + trou, centreY - trou), new Vector2(centreX + taille, centreY - taille), epaisseur, hitColor);
+            Color missingDash = new Color(150, 150, 150, 50);
+            Color dashColor = new Color(150, 255, 150, 255);
+            int dashPixel = (int)(100*dashChrono/90);
+
+            Raylib.DrawRectangle(100, HauteurFenetre - 200, 100,40,missingDash); //arriere plan pour si on enleve la vie on voit encore la barre
+            if (CanDash && dashChrono >= 90)
+            {
+                Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,dashColor);
+            } else
+            {
+                Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,Color.LightGray);
+            }
+
+
+            
+
+
+
+
+            
+            // ==========================================
+            // HUD : LE CHRONOMÈTRE DE SURVIE
+            // ==========================================
+            // On convertit les secondes en un texte propre (ex: "Survie : 45s")
+            string chronoTexte = $"SURVIE : {MathF.Floor(survivalTime)}s";
+            int tailleChrono = 40;
+            int largeurChrono = Raylib.MeasureText(chronoTexte, tailleChrono);
+            
+            int chronoX = (LargeurFenetre - largeurChrono) / 2; // Centré en haut
+            int chronoY = 30;
+
+            // Effet d'ombre pour que ce soit bien lisible
+            Raylib.DrawText(chronoTexte, chronoX + 3, chronoY + 3, tailleChrono, Color.Black);
+            Raylib.DrawText(chronoTexte, chronoX, chronoY, tailleChrono, Color.White);
+
+
+
+            
+            // ==========================================
+            // HUD KILL COUNT (Top Right)
+            // ==========================================
+            {
+                int iconSize = 50;
+                int textSize = 40;
+                int padding = 25;
+
+                
+                // Position en haut à droite
+                int iconX = Raylib.GetScreenWidth() - iconSize - padding;
+                int iconY = padding*2;
+                
+                // Dessiner l'icône cible
+                Raylib.DrawTextureEx(Program.cibleTexture, new Vector2(iconX, iconY), 0, (float)iconSize / Program.cibleTexture.Width, Color.White);
+                
+                // Texte du nombre de kills
+                string killText = Program.killCount.ToString();
+                int textWidth = Raylib.MeasureText(killText, textSize);
+                
+                // Position du texte à gauche de l'icône
+                int textX = iconX - textWidth - padding;
+                int textY = iconY + (iconSize - textSize) / 2; // Centré verticalement avec l'icône
+                
+                // Ombre + Texte
+                Raylib.DrawText(killText, textX + 2, textY + 2, textSize, Color.Black);
+                Raylib.DrawText(killText, textX, textY, textSize, Color.White);
+            }
+
+
+
+
+
+            
+            Raylib.DrawFPS(LargeurFenetre-90,10);
         }
-
-
-
-
-
-        Color missingLife = new Color(255, 50, 50, 40);
-
-        float lifePercentage = (float)localPlayer.Health / localPlayer.MaxHealth;
-
-        int lifePixel = (int)(400 * lifePercentage);
-
-        Raylib.DrawRectangle(100, HauteurFenetre - 150, 400, 80, missingLife); 
-        
-        // La barre de vie réelle (Blanche si > 25%, Rouge clignotant si <= 25%)
-        if (lifePercentage > 0.25f)
-        {
-            Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.White);
-        } 
-        else if (localPlayer.IsAlive)
-        {
-            // Effet Urgence : Clignotement rouge si la vie est critique
-            if (MathF.Sin((float)Raylib.GetTime() * 10f) > 0)
-                Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.Red);
-            else
-                Raylib.DrawRectangle(100, HauteurFenetre - 150, lifePixel, 80, Color.DarkGray);
-        }
-
-        // Le texte des HP (Noir)
-        Raylib.DrawText($"{localPlayer.Health}", 100 + 10, HauteurFenetre - 150 + 25, 50, Color.Black);
-
-        Color missingDash = new Color(150, 150, 150, 50);
-        Color dashColor = new Color(150, 255, 150, 255);
-        int dashPixel = (int)(100*dashChrono/90);
-
-        Raylib.DrawRectangle(100, HauteurFenetre - 200, 100,40,missingDash); //arriere plan pour si on enleve la vie on voit encore la barre
-        if (CanDash && dashChrono >= 90)
-        {
-            Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,dashColor);
-        } else
-        {
-            Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,Color.LightGray);
-        }
-
-
-        
-
-
-
-
-        
-        // ==========================================
-        // HUD : LE CHRONOMÈTRE DE SURVIE
-        // ==========================================
-        // On convertit les secondes en un texte propre (ex: "Survie : 45s")
-        string chronoTexte = $"SURVIE : {MathF.Floor(survivalTime)}s";
-        int tailleChrono = 40;
-        int largeurChrono = Raylib.MeasureText(chronoTexte, tailleChrono);
-        
-        int chronoX = (LargeurFenetre - largeurChrono) / 2; // Centré en haut
-        int chronoY = 30;
-
-        // Effet d'ombre pour que ce soit bien lisible
-        Raylib.DrawText(chronoTexte, chronoX + 3, chronoY + 3, tailleChrono, Color.Black);
-        Raylib.DrawText(chronoTexte, chronoX, chronoY, tailleChrono, Color.White);
-
-        
-        Raylib.DrawFPS(LargeurFenetre-90,10);
 
 
 
