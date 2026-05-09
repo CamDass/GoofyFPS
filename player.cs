@@ -7,8 +7,8 @@ using System.Linq;
 public class Player
 {
     // --- Statistiques ---
-    static Sound gameover = Raylib.LoadSound("assets\\sounds\\gameover.mp3");
-    static Sound paw = Raylib.LoadSound("assets\\sounds\\paw.mp3");
+    public static Sound gameover = Raylib.LoadSound("assets\\sounds\\gameover.mp3");
+    public static Sound paw = Raylib.LoadSound("assets\\sounds\\paw.mp3");
     public int MaxHealth;
     public int Health;
     public bool IsAlive;

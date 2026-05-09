@@ -637,11 +637,9 @@ partial class Program
 
     private static void ApplyVolumeChanges(string label)
     {
-        // Update music volume if changed
-        if (label == "Music")
-        {
-            UpdateMusicVolume();
-        }
+        // Peu importe quel slider a bougé (Master, SFX, ou Music), 
+        // on met à jour toute la carte son !
+        Program.UpdateAllVolumes();
         // SFX and Master volumes will be applied when sounds are played via PlaySoundWithPriority
     }
 

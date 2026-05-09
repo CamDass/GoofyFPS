@@ -24,6 +24,7 @@ public class Enemy
         speed = spd;
         isAlive = true;
         attackSound = Raylib.LoadSound("assets\\sounds\\raaaah.mp3");
+        Raylib.SetSoundVolume(attackSound, Settings.SFXVolume);
 
         Capsule shape = new Capsule(0.5f,1f);
         TypedIndex shapeIndex = Program.simulation.Shapes.Add(shape);

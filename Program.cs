@@ -419,7 +419,7 @@ public partial class Program
         
         
 
-        
+        UpdateAllVolumes();        
 
         Raylib.SetTargetFPS(FPS); 
         X_carre = Raylib.GetScreenWidth()/2;
@@ -509,42 +509,83 @@ public partial class Program
             Raylib.UpdateMusicStream(gameMusic);
         }
     }
-
     static void UpdateMusicVolume()
-    {
-        float effectiveVolume = Settings.MasterVolume * Settings.MusicVolume;
-        if (currentMusicState == ActiveMusic.Menu)
         {
-            Raylib.SetMusicVolume(menuMusic, effectiveVolume);
+            // On ne multiplie plus par le Master, Raylib le fait tout seul
+            if (currentMusicState == ActiveMusic.Menu) Raylib.SetMusicVolume(menuMusic, Settings.MusicVolume);
+            else if (currentMusicState == ActiveMusic.Game) Raylib.SetMusicVolume(gameMusic, Settings.MusicVolume);
         }
-        else if (currentMusicState == ActiveMusic.Game)
-        {
-            Raylib.SetMusicVolume(gameMusic, effectiveVolume);
-        }
-    }
 
-    // Fonction pour jouer un son avec gestion de priorité
     public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
     {
         float currentTime = (float)Raylib.GetTime();
-        
-        // Si c'est un son critique, on le joue toujours
         if (priority == SoundPriority.Critical)
         {
-            Raylib.SetSoundVolume(sound, Settings.MasterVolume * Settings.SFXVolume);
+            // On a supprimé le SetSoundVolume ici, l'arme connaît déjà son volume
             Raylib.PlaySound(sound);
             lastSoundTime = currentTime;
             lastSoundPriority = priority;
             return;
         }
         
-        // Pour les autres sons, vérifier la priorité et le timing
         if (priority >= lastSoundPriority || currentTime - lastSoundTime > 0.1f)
         {
-            Raylib.SetSoundVolume(sound, Settings.MasterVolume * Settings.SFXVolume);
             Raylib.PlaySound(sound);
             lastSoundTime = currentTime;
             lastSoundPriority = priority;
         }
     }
+
+
+    public static void UpdateAllVolumes()
+    {
+        // 1. LE MASTER VOLUME : Raylib s'occupe du coefficient multiplicateur pour nous !
+        Raylib.SetMasterVolume(Settings.MasterVolume);
+
+        // 2. LA MUSIQUE (Plus besoin de multiplier par le Master ici)
+        if (currentMusicState == ActiveMusic.Menu) Raylib.SetMusicVolume(menuMusic, Settings.MusicVolume);
+        else if (currentMusicState == ActiveMusic.Game) Raylib.SetMusicVolume(gameMusic, Settings.MusicVolume);
+
+        // 3. LES SFX (On définit le volume de TOUTES les variables Sound du jeu)
+        // -> Les Armes
+        Raylib.SetSoundVolume(snipershot, Settings.SFXVolume);
+        Raylib.SetSoundVolume(karambitshot, Settings.SFXVolume);
+        Raylib.SetSoundVolume(bazookashot, Settings.SFXVolume);
+        Raylib.SetSoundVolume(shotgunshot, Settings.SFXVolume);
+        Raylib.SetSoundVolume(pistolshot, Settings.SFXVolume);
+        Raylib.SetSoundVolume(revolvershot, Settings.SFXVolume);
+        Raylib.SetSoundVolume(swordslash, Settings.SFXVolume);
+        
+        // -> Les Effets, UI et Mouvements
+        Raylib.SetSoundVolume(explosion, Settings.SFXVolume);
+        Raylib.SetSoundVolume(select, Settings.SFXVolume);
+        Raylib.SetSoundVolume(unselect, Settings.SFXVolume);
+        Raylib.SetSoundVolume(survole, Settings.SFXVolume);
+        Raylib.SetSoundVolume(hitSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(weaponSwitchSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(reloadSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(noAmmoSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(groundImpactSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(swoosh, Settings.SFXVolume); // Même les swoosh sont pris en compte !
+
+        // -> Les sons du Joueur
+        Raylib.SetSoundVolume(Player.gameover, Settings.SFXVolume);
+        Raylib.SetSoundVolume(Player.paw, Settings.SFXVolume);
+
+        // -> Le pool de sons de mort
+        for (int i = 0; i < deathSounds.Length; i++)
+        {
+            if (deathSounds[i].Stream.Buffer != null) 
+                Raylib.SetSoundVolume(deathSounds[i], Settings.SFXVolume);
+        }
+
+        // -> Les cris des ennemis déjà présents sur la carte
+        foreach (Enemy enemy in enemiesList)
+        {
+            Raylib.SetSoundVolume(enemy.attackSound, Settings.SFXVolume);
+        }
+    }
+
+
+
 }
