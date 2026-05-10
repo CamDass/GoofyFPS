@@ -888,6 +888,12 @@ static void InitBarrels()
         if (recoilAngle > -0.01f) recoilAngle = 0;
 
 
+
+        
+
+
+
+
         // ========================================================
         // [ZONE BEPU] 2. PHYSIQUE ET MOUVEMENTS (TON CODE COMPLET)
         // ========================================================
@@ -1018,6 +1024,51 @@ static void InitBarrels()
         simulation.RayCast(posCube, -GroundRight, longueurLaserMur, ref capteurMurGauche);
         simulation.RayCast(posCube, GroundForward, longueurLaserMur, ref capteurMurAvant);
         simulation.RayCast(posCube, -GroundForward, longueurLaserMur, ref capteurMurArriere);
+
+
+
+
+        // ==========================================
+        // MODE CONSTRUCTION (Touche F)
+        // ==========================================
+        modeConstruction = false;
+        if (Raylib.IsKeyDown(KeyboardKey.F))
+        {
+            modeConstruction = true;
+            // On active/désactive
+            //Console.WriteLine("construction");
+        }
+
+        // Variables pour mémoriser l'aperçu dynamique
+        Vector3 positionPrevueMur = Vector3.Zero;
+        Quaternion rotationPrevueMur = Quaternion.Identity;
+
+        if (modeConstruction)
+        {
+            // 1. On garde la direction pure de la caméra (sans annuler le Y !)
+            Vector3 directionRegard = CamFroward;
+            
+            // 2. Position : à 3 mètres devant LES YEUX (camera.Position), plus les pieds
+            positionPrevueMur = camera.Position + (directionRegard * 3.0f);
+
+            // 3. Calcul de la rotation 3D (Yaw = Horizontal, Pitch = Vertical)
+            float yaw = MathF.Atan2(directionRegard.X, directionRegard.Z);
+            float pitch = MathF.Asin(directionRegard.Y); 
+            
+            // On génère la rotation complexe pour BEPU
+            rotationPrevueMur = Quaternion.CreateFromYawPitchRoll(yaw, -pitch, 0);
+
+            // 4. Poser le mur au Clic Gauche
+            if (Raylib.IsMouseButtonPressed(MouseButton.Left))
+            {
+                StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
+                StaticHandle handle = simulation.Statics.Add(description);
+                
+                listeMur.Add(new MurPose(positionPrevueMur, rotationPrevueMur, handle));
+            }
+        }
+
+
 
 
 
@@ -1264,6 +1315,28 @@ static void InitBarrels()
             if (debugInfo) Raylib.DrawModelWires(mapModel, mapPosition, mapScale, Color.Black);
             
 
+            // ==========================================
+            // DESSIN DES MURS DU JOUEUR (3D Dynamique)
+            // ==========================================
+            foreach (MurPose mur in listeMur)
+            {
+                // Mathématiques : Quaternion BEPU -> Axe/Angle Raylib
+                float angleRadians = 2.0f * MathF.Acos(mur.rotation.W);
+                Vector3 axe = new Vector3(mur.rotation.X, mur.rotation.Y, mur.rotation.Z);
+                if (axe.LengthSquared() > 0.0001f) axe = Vector3.Normalize(axe); else axe = new Vector3(0, 1, 0);
+
+                float angleDegres = angleRadians * (180.0f / MathF.PI);
+                Color couleurMur = new Color(255, 130, 50, 255);
+                
+                Raylib.DrawModelEx(visuelMur, mur.position, axe, angleDegres, Vector3.One, couleurMur);
+                Raylib.DrawModelWiresEx(visuelMur, mur.position, axe, angleDegres, Vector3.One, Color.Black);
+            }
+
+            
+
+
+
+
 
             //COUCHES TRANSPARENTES (bas vers le haut)
             Color gazRouge = new Color(255, 50, 50, 8);
@@ -1387,6 +1460,18 @@ static void InitBarrels()
                         Raylib.DrawSphere(laserEnd, 0.3f, sparkColor);   
                     }
                 } 
+            }
+
+
+            // APERÇU TRANSPARENT (À Mettre tout en bas du rendu 3D)
+            if (modeConstruction)
+            {
+                float angleRadians = 2.0f * MathF.Acos(rotationPrevueMur.W);
+                Vector3 axe = new Vector3(rotationPrevueMur.X, rotationPrevueMur.Y, rotationPrevueMur.Z);
+                if (axe.LengthSquared() > 0.0001f) axe = Vector3.Normalize(axe); else axe = new Vector3(0, 1, 0);
+
+                float angleDegresPreview = angleRadians * (180.0f / MathF.PI);
+                Raylib.DrawModelEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, couleurMurTransparent);
             }
             
         Raylib.EndMode3D();
@@ -1590,7 +1675,7 @@ static void InitBarrels()
         // [ZONE ILIAN] 5. LOGIQUE DES TIRS
         // ========================================================
         // Si on a une arme et qu'on clique
-        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left))
+        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left) && !modeConstruction)
         {
             Vector3 direction = CamFroward;
             
@@ -3377,6 +3462,34 @@ public partial class Program
 
 
     // ========================================================
+    // SYSTÈME DE MURS (BUILD MODE)
+    // ========================================================
+    public static bool modeConstruction = false;
+    public static Color couleurMurTransparent = new Color(255, 130, 50, 150); // Bleu holographique transparent
+    
+    // La classe qui définit un mur posé
+    public class MurPose
+    {
+        public Vector3 position;
+        public Quaternion rotation; // NOUVEAU : Sauvegarde la rotation 3D !
+        public StaticHandle handlePhysique;
+
+        public MurPose(Vector3 pos, Quaternion angle, StaticHandle handle)
+        {
+            position = pos;
+            rotation = angle;
+            handlePhysique = handle;
+        }
+    }
+    public static List<MurPose> listeMur = new List<MurPose>();
+
+    public static TypedIndex formeMurIndex;
+    public static Model visuelMur;
+
+
+
+
+    // ========================================================
     // INITIALISATION PRINCIPALE
     // ========================================================
     static void Main()
@@ -3536,6 +3649,7 @@ public partial class Program
             {
                 barrelModel.Materials[i].Shader = lightShader;
             }
+
         }
 
         ListeTexture.Add(Logo);
@@ -3573,30 +3687,15 @@ public partial class Program
         Vector3 gravity = new Vector3(0, -10f, 0); // Ta gravité de la sandbox
         simulation = Simulation.Create(pool, new NarrowPhaseCallbacks(), new PoseIntegratorCallbacks(gravity), new SolveDescription(8, 1));
 
-        /*
-        // Sol
-        float taillePlatforme = 200f;
-        Box Sol = new Box(taillePlatforme, taillePlatforme, taillePlatforme);
-        TypedIndex SolShapeIndex = simulation.Shapes.Add(Sol);
-        simulation.Statics.Add(new StaticDescription(new Vector3(0, -taillePlatforme/2, 0), SolShapeIndex));
-
-        // Murs de test
-        Vector3 PosMur = new Vector3(-9.5f, 2.5f, 0);
-        Vector3 PosMur2 = new Vector3(-9.5f, 20f, 0);
-        Box Mur = new Box(1f, 5f, 20f);
-        TypedIndex MurShapeIndex = simulation.Shapes.Add(Mur);
-        simulation.Statics.Add(new StaticDescription(PosMur, MurShapeIndex));
-        simulation.Statics.Add(new StaticDescription(PosMur2, MurShapeIndex));
-
-        // Plateformes (de ta sandbox)
-        Box Platforme = new Box(10f, 1f, 10f);
-        TypedIndex PlatformeShapeIndex = simulation.Shapes.Add(Platforme);
-        simulation.Statics.Add(new StaticDescription(new Vector3(25, 4, 0), PlatformeShapeIndex));
-        simulation.Statics.Add(new StaticDescription(new Vector3(22, 10, -15), PlatformeShapeIndex));
-        simulation.Statics.Add(new StaticDescription(new Vector3(10, 18, -20), PlatformeShapeIndex));
-        */
 
 
+        // Le moule du mur (Largeur 2m, Hauteur 2m, Épaisseur 0.5m)
+        Box formeMur = new Box(2.0f, 2.0f, 0.5f);
+        formeMurIndex = simulation.Shapes.Add(formeMur);
+        // Le visuel Raylib (Un cube qu'on pourra faire tourner)
+        visuelMur = Raylib.LoadModelFromMesh(Raylib.GenMeshCube(2.0f, 2.0f, 0.5f));
+
+        unsafe { visuelMur.Materials[0].Shader = lightShader; }
 
 
 

@@ -164,6 +164,34 @@ public partial class Program
 
 
     // ========================================================
+    // SYSTÈME DE MURS (BUILD MODE)
+    // ========================================================
+    public static bool modeConstruction = false;
+    public static Color couleurMurTransparent = new Color(255, 130, 50, 150); // Bleu holographique transparent
+    
+    // La classe qui définit un mur posé
+    public class MurPose
+    {
+        public Vector3 position;
+        public Quaternion rotation; // NOUVEAU : Sauvegarde la rotation 3D !
+        public StaticHandle handlePhysique;
+
+        public MurPose(Vector3 pos, Quaternion angle, StaticHandle handle)
+        {
+            position = pos;
+            rotation = angle;
+            handlePhysique = handle;
+        }
+    }
+    public static List<MurPose> listeMur = new List<MurPose>();
+
+    public static TypedIndex formeMurIndex;
+    public static Model visuelMur;
+
+
+
+
+    // ========================================================
     // INITIALISATION PRINCIPALE
     // ========================================================
     static void Main()
@@ -323,6 +351,7 @@ public partial class Program
             {
                 barrelModel.Materials[i].Shader = lightShader;
             }
+
         }
 
         ListeTexture.Add(Logo);
@@ -360,30 +389,15 @@ public partial class Program
         Vector3 gravity = new Vector3(0, -10f, 0); // Ta gravité de la sandbox
         simulation = Simulation.Create(pool, new NarrowPhaseCallbacks(), new PoseIntegratorCallbacks(gravity), new SolveDescription(8, 1));
 
-        /*
-        // Sol
-        float taillePlatforme = 200f;
-        Box Sol = new Box(taillePlatforme, taillePlatforme, taillePlatforme);
-        TypedIndex SolShapeIndex = simulation.Shapes.Add(Sol);
-        simulation.Statics.Add(new StaticDescription(new Vector3(0, -taillePlatforme/2, 0), SolShapeIndex));
-
-        // Murs de test
-        Vector3 PosMur = new Vector3(-9.5f, 2.5f, 0);
-        Vector3 PosMur2 = new Vector3(-9.5f, 20f, 0);
-        Box Mur = new Box(1f, 5f, 20f);
-        TypedIndex MurShapeIndex = simulation.Shapes.Add(Mur);
-        simulation.Statics.Add(new StaticDescription(PosMur, MurShapeIndex));
-        simulation.Statics.Add(new StaticDescription(PosMur2, MurShapeIndex));
-
-        // Plateformes (de ta sandbox)
-        Box Platforme = new Box(10f, 1f, 10f);
-        TypedIndex PlatformeShapeIndex = simulation.Shapes.Add(Platforme);
-        simulation.Statics.Add(new StaticDescription(new Vector3(25, 4, 0), PlatformeShapeIndex));
-        simulation.Statics.Add(new StaticDescription(new Vector3(22, 10, -15), PlatformeShapeIndex));
-        simulation.Statics.Add(new StaticDescription(new Vector3(10, 18, -20), PlatformeShapeIndex));
-        */
 
 
+        // Le moule du mur (Largeur 2m, Hauteur 2m, Épaisseur 0.5m)
+        Box formeMur = new Box(2.0f, 2.0f, 0.5f);
+        formeMurIndex = simulation.Shapes.Add(formeMur);
+        // Le visuel Raylib (Un cube qu'on pourra faire tourner)
+        visuelMur = Raylib.LoadModelFromMesh(Raylib.GenMeshCube(2.0f, 2.0f, 0.5f));
+
+        unsafe { visuelMur.Materials[0].Shader = lightShader; }
 
 
 

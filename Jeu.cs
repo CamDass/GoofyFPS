@@ -245,36 +245,8 @@ static void InitBarrels()
         }
     }
 
-    public class GroundSlamEffect
-    {
-        public Vector3 position;
-        public float timer;
-        public float duration;
-        public float maxRadius;
-
-        public GroundSlamEffect(Vector3 pos, float dur = 0.8f, float radius = 3f)
-        {
-            position = pos;
-            timer = dur;
-            duration = dur;
-            maxRadius = radius;
-        }
-
-        public float GetRadius()
-        {
-            float progress = 1f - (timer / duration);
-            float easedProgress = 1f - (1f - progress) * (1f - progress);
-            return maxRadius * easedProgress;
-        }
-
-        public float GetAlpha()
-        {
-            return (timer / duration) * 100f; // Plus transparent que les explosions
-        }
-    }
 
     static List<ExplosionEffect> activeExplosions = new List<ExplosionEffect>();
-    static List<GroundSlamEffect> activeGroundSlams = new List<GroundSlamEffect>();
 
     public static bool IsPointOnLaser(Vector3 point, Vector3 laserStart, Vector3 direction, float range)
     {
@@ -286,47 +258,6 @@ static void InitBarrels()
         return dot > 0.995f;
     }
 
-    public static void PerformGroundSlam()
-    {
-        Console.WriteLine("slam");
-        BodyReference playerBody = Program.simulation.Bodies.GetBodyReference(Program.PlayerId);
-        Vector3 playerPos = playerBody.Pose.Position;
-        float slamRadius = 5f;
-        
-        // Jouer le son d'impact
-        Program.PlaySoundWithPriority(Program.groundImpactSound, Program.SoundPriority.High);
-        
-        // Créer l'effet visuel
-        activeGroundSlams.Add(new GroundSlamEffect(playerPos, 1f, slamRadius));
-        
-        // Appliquer le knockback aux ennemis dans le rayon
-        foreach (Enemy enemy in Program.enemiesList)
-        {
-            if (!enemy.isAlive) continue;
-            
-            Vector3 enemyPos = enemy.GetPosition();
-            float distance = Vector3.Distance(playerPos, enemyPos);
-            
-            if (distance <= slamRadius)
-            {
-                // Calculer la direction du knockback (loin du joueur)
-                Vector3 knockbackDirection = Vector3.Normalize(enemyPos - playerPos);
-                
-                // Appliquer une force de knockback (ajustable)
-                float knockbackForce = 1000f; // Force du knockback
-                
-                try
-                {
-                    BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(enemy.bodyId);
-                    enemyBody.Velocity.Linear += knockbackDirection * knockbackForce;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[WARN] GroundSlam knockback failed for enemy {enemy.bodyId}: {ex.Message}");
-                }
-            }
-        }
-    }
 
 
     // =============== enemis ===============
@@ -430,16 +361,6 @@ static void InitBarrels()
             }
         }
 
-        // Mise à jour des ground slams
-        for (int i = activeGroundSlams.Count - 1; i >= 0; i--)
-        {
-            activeGroundSlams[i].timer -= deltaTime;
-            if (activeGroundSlams[i].timer <= 0)
-            {
-                activeGroundSlams.RemoveAt(i);
-            }
-        }
-
         // Gestion de l'overlay de dégâts
         if (damageOverlayOpacity > 0)
         {
@@ -452,6 +373,12 @@ static void InitBarrels()
         
         // Anti-tremblement : on bloque à 0 quand on est presque arrivé
         if (recoilAngle > -0.01f) recoilAngle = 0;
+
+
+
+        
+
+
 
 
         // ========================================================
@@ -587,6 +514,51 @@ static void InitBarrels()
 
 
 
+
+        // ==========================================
+        // MODE CONSTRUCTION (Touche F)
+        // ==========================================
+        modeConstruction = false;
+        if (Raylib.IsKeyDown(KeyboardKey.F))
+        {
+            modeConstruction = true;
+            // On active/désactive
+            //Console.WriteLine("construction");
+        }
+
+        // Variables pour mémoriser l'aperçu dynamique
+        Vector3 positionPrevueMur = Vector3.Zero;
+        Quaternion rotationPrevueMur = Quaternion.Identity;
+
+        if (modeConstruction)
+        {
+            // 1. On garde la direction pure de la caméra (sans annuler le Y !)
+            Vector3 directionRegard = CamFroward;
+            
+            // 2. Position : à 3 mètres devant LES YEUX (camera.Position), plus les pieds
+            positionPrevueMur = camera.Position + (directionRegard * 3.0f);
+
+            // 3. Calcul de la rotation 3D (Yaw = Horizontal, Pitch = Vertical)
+            float yaw = MathF.Atan2(directionRegard.X, directionRegard.Z);
+            float pitch = MathF.Asin(directionRegard.Y); 
+            
+            // On génère la rotation complexe pour BEPU
+            rotationPrevueMur = Quaternion.CreateFromYawPitchRoll(yaw, -pitch, 0);
+
+            // 4. Poser le mur au Clic Gauche
+            if (Raylib.IsMouseButtonPressed(MouseButton.Left))
+            {
+                StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
+                StaticHandle handle = simulation.Statics.Add(description);
+                
+                listeMur.Add(new MurPose(positionPrevueMur, rotationPrevueMur, handle));
+            }
+        }
+
+
+
+
+
         //vide
         if (Raylib.IsKeyPressed(KeyBinds.DebugTeleportCenter))
             {
@@ -701,32 +673,86 @@ static void InitBarrels()
 
         if (KeyBinds.IsCrouchingPressed() && !Raylib.IsKeyDown(KeyBinds.Jump))
         {
+            espionCube.SetShape(PlayerTicketAccroupi);
+            hauteurVoulue = 0.5f;
+
             if (!capteurGlissade.toucheSol) 
             {
+                // On est en l'air et accroupi
                 vitesseDescente--;
                 if (vitesseDescente < -20) vitesseDescente = -20; 
                 espionCube.Velocity.Linear.Y += vitesseDescente;
             } 
             else 
             {
-                hauteurVoulue = 0.5f;
-                if (vitesseVerticale > 0) { espionCube.Velocity.Linear += GroundForward * (vitesseVerticale / 2); espionCube.Velocity.Linear.Y = 0.1f; }
-                espionCube.SetShape(PlayerTicketAccroupi);
-                if (vitesseHorizontale > 4) fAcceleration = 0.01f; else vMax = 3f;
+                // ==========================================
+                // LA NOUVELLE GLISSADE DYNAMIQUE (Style Apex)
+                // ==========================================
+                
+                // 1. LE BOOST INITIAL (Au moment exact où on clique, si on court assez vite)
+                if (Raylib.IsKeyPressed(KeyBinds.Crouch) && vitesseHorizontale > 4) 
+                {
+                    espionCube.Velocity.Linear += GroundForward * 6f; // Petite impulsion
+                    //Raylib.PlaySound(swoosh); // Petit son satisfaisant (optionnel)
+                }
+
+                // 2. DÉTECTION DE LA PENTE
+                Vector3 normale = capteurSol.normaleDuSol;
+                // Si l'axe Y de la normale est à 1, le sol est parfaitement plat.
+                // S'il est inférieur (ex: 0.95), c'est qu'on est sur une pente !
+                bool surPente = normale.Y < 0.98f; 
+
+                if (surPente)
+                {
+                    // --- MODE 1 : GLISSADE SUR PENTE (Accélération) ---
+                    // Mathématiques : On projette la gravité (-Y) sur la pente pour trouver la direction de descente.
+                    Vector3 gravite = new Vector3(0, -1f, 0);
+                    float dot = Vector3.Dot(gravite, normale);
+                    Vector3 directionDescente = gravite - (normale * dot);
+
+                    if (directionDescente.LengthSquared() > 0)
+                    {
+                        directionDescente = Vector3.Normalize(directionDescente);
+                        // On injecte de la vitesse en continu vers le bas de la pente !
+                        espionCube.Velocity.Linear += directionDescente * 40f * deltaTime;
+                    }
+
+                    // On permet d'aller très vite (vMax élevée) et on garde un petit contrôle
+                    vMax = 18f; 
+                    fAcceleration = 0.05f; 
+                }
+                else
+                {
+                    // --- MODE 2 : GLISSADE SUR LE PLAT (Freinage) ---
+                    if (vitesseHorizontale > 3f)
+                    {
+                        // On est en train de glisser vite sur du plat
+                        deplacementVoulu = Vector3.Zero; // On coupe les moteurs (ZQSD ne fait plus avancer)
+                        vMax = 0f; // Vitesse cible = Zéro (on veut s'arrêter à terme)
+                        
+                        // C'EST ICI QU'ON RÈGLE LA LONGUEUR DE LA GLISSADE :
+                        // 0.035f = Glisse moyenne. 0.05f = S'arrête vite. 0.01f = Glisse super loin.
+                        fAcceleration = 0.005f; 
+                    }
+                    else
+                    {
+                        // On va trop lentement, on repasse en simple "marche accroupie"
+                        vMax = 3f;
+                        fAcceleration = 0.2f;
+                    }
+                }
             }
-            if (Raylib.IsKeyPressed(KeyBinds.Crouch) && !Raylib.IsKeyDown(KeyBinds.Jump) && capteurSol.toucheSol && vitesseHorizontale > 4) espionCube.Velocity.Linear += GroundForward * 5;
         } 
         else 
         {
+            // Le joueur est debout
             espionCube.SetShape(PlayerTicket);
-            hauteurVoulue = 0.8f; vMax = 8f; fAcceleration = 0.2f; vitesseDescente = 0;
+            hauteurVoulue = 0.8f; 
+            vMax = 8f; 
+            fAcceleration = 0.2f; 
+            vitesseDescente = 0;
         }
 
-        // Ground Slam : Si on appuie sur C en tombant rapidement
-        if (KeyBinds.IsCrouchingPressed() && capteurSol.toucheSol && espionCube.Velocity.Linear.Y < -9f)
-        {
-            PerformGroundSlam();
-        }
 
         Vector3 targetVelocity = deplacementVoulu * vMax * SpeedCoef;
         espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
@@ -830,6 +856,28 @@ static void InitBarrels()
             if (debugInfo) Raylib.DrawModelWires(mapModel, mapPosition, mapScale, Color.Black);
             
 
+            // ==========================================
+            // DESSIN DES MURS DU JOUEUR (3D Dynamique)
+            // ==========================================
+            foreach (MurPose mur in listeMur)
+            {
+                // Mathématiques : Quaternion BEPU -> Axe/Angle Raylib
+                float angleRadians = 2.0f * MathF.Acos(mur.rotation.W);
+                Vector3 axe = new Vector3(mur.rotation.X, mur.rotation.Y, mur.rotation.Z);
+                if (axe.LengthSquared() > 0.0001f) axe = Vector3.Normalize(axe); else axe = new Vector3(0, 1, 0);
+
+                float angleDegres = angleRadians * (180.0f / MathF.PI);
+                Color couleurMur = new Color(255, 130, 50, 255);
+                
+                Raylib.DrawModelEx(visuelMur, mur.position, axe, angleDegres, Vector3.One, couleurMur);
+                //Raylib.DrawModelWiresEx(visuelMur, mur.position, axe, angleDegres, Vector3.One, Color.Black);
+            }
+
+            
+
+
+
+
 
             //COUCHES TRANSPARENTES (bas vers le haut)
             Color gazRouge = new Color(255, 50, 50, 8);
@@ -916,14 +964,6 @@ static void InitBarrels()
                 Raylib.DrawSphere(exp.position, redSize, redColor);
             }
 
-            // Dessiner les ground slams en sphère blanche transparente
-            foreach (GroundSlamEffect slam in activeGroundSlams)
-            {
-                float radius = slam.GetRadius();
-                byte alpha = (byte)slam.GetAlpha();
-                Color whiteColor = new Color((byte)255, (byte)255, (byte)255, alpha);
-                Raylib.DrawSphere(slam.position, radius, whiteColor);
-            }
             
             // Dessiner le laser (Code ILIAN)
             if (laserTimer > 0)
@@ -953,6 +993,18 @@ static void InitBarrels()
                         Raylib.DrawSphere(laserEnd, 0.3f, sparkColor);   
                     }
                 } 
+            }
+
+
+            // APERÇU TRANSPARENT (À Mettre tout en bas du rendu 3D)
+            if (modeConstruction)
+            {
+                float angleRadians = 2.0f * MathF.Acos(rotationPrevueMur.W);
+                Vector3 axe = new Vector3(rotationPrevueMur.X, rotationPrevueMur.Y, rotationPrevueMur.Z);
+                if (axe.LengthSquared() > 0.0001f) axe = Vector3.Normalize(axe); else axe = new Vector3(0, 1, 0);
+
+                float angleDegresPreview = angleRadians * (180.0f / MathF.PI);
+                Raylib.DrawModelEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, couleurMurTransparent);
             }
             
         Raylib.EndMode3D();
@@ -1156,7 +1208,7 @@ static void InitBarrels()
         // [ZONE ILIAN] 5. LOGIQUE DES TIRS
         // ========================================================
         // Si on a une arme et qu'on clique
-        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left))
+        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left) && !modeConstruction)
         {
             Vector3 direction = CamFroward;
             
