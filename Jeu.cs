@@ -594,12 +594,33 @@ static void InitBarrels()
 
 
         // Saut
+
+        float vitesseHorizontale = new Vector2(espionCube.Velocity.Linear.X, espionCube.Velocity.Linear.Z).Length();
+        float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
+        float vitesseDescente = 0f;
+        //la plus part des variables ici servent pour la glissade dynamique
+
+
         if (Raylib.IsKeyPressed(KeyBinds.Jump))
         {
             if (NbJump > NbJumpMax)
             {
                 NbJump--;
                 if (espionCube.Velocity.Linear.Y > 0) { espionCube.Velocity.Linear.Y += 5f; } else { espionCube.Velocity.Linear.Y = 5f; }
+                
+                // ==========================================
+                // NOUVEAU : LE SLIDE-JUMP (Bunny Hop) !
+                // ==========================================
+                // Si on saute PENDANT une glissade rapide, on gagne un boost massif vers l'avant !
+                if (KeyBinds.IsCrouchingPressed() && vitesseHorizontale > 5f)
+                {
+                    Vector3 boostDir = GroundForward;
+                    if (deplacementVoulu.LengthSquared() > 0) boostDir = Vector3.Normalize(deplacementVoulu);
+                    
+                    // L'impulsion du saut (ajoute +4m/s instantanément à ta vitesse)
+                    espionCube.Velocity.Linear += boostDir * 4f; 
+                    //Raylib.PlaySound(swoosh);
+                }
             }
         }
 
@@ -667,9 +688,6 @@ static void InitBarrels()
         else { rollActuel = 0f; fAcceleration = 0.2f; }
 
         // Accroupir & Glissade
-        float vitesseHorizontale = new Vector2(espionCube.Velocity.Linear.X, espionCube.Velocity.Linear.Z).Length();
-        float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
-        float vitesseDescente = 0f;
 
         if (KeyBinds.IsCrouchingPressed() && !Raylib.IsKeyDown(KeyBinds.Jump))
         {
@@ -678,34 +696,36 @@ static void InitBarrels()
 
             if (!capteurGlissade.toucheSol) 
             {
-                // On est en l'air et accroupi
+                // On est en l'air et accroupi (Prêt à atterrir)
                 vitesseDescente--;
                 if (vitesseDescente < -20) vitesseDescente = -20; 
                 espionCube.Velocity.Linear.Y += vitesseDescente;
+                
+                // AIR CONTROL : Permet de tourner en l'air sans perdre de vitesse !
+                fAcceleration = 0.02f; 
             } 
             else 
             {
                 // ==========================================
-                // LA NOUVELLE GLISSADE DYNAMIQUE (Style Apex)
+                // LA GLISSADE ULTRA DYNAMIQUE
                 // ==========================================
                 
-                // 1. LE BOOST INITIAL (Au moment exact où on clique, si on court assez vite)
-                if (Raylib.IsKeyPressed(KeyBinds.Crouch) && vitesseHorizontale > 4) 
+                // Boost d'entrée (Uniquement si on lance la glissade depuis un sprint)
+                if (Raylib.IsKeyPressed(KeyBinds.Crouch) && vitesseHorizontale > 6f) 
                 {
-                    espionCube.Velocity.Linear += GroundForward * 6f; // Petite impulsion
-                    //Raylib.PlaySound(swoosh); // Petit son satisfaisant (optionnel)
+                    espionCube.Velocity.Linear += GroundForward * 3f; 
+                    //Raylib.PlaySound(swoosh); 
                 }
 
-                // 2. DÉTECTION DE LA PENTE
                 Vector3 normale = capteurSol.normaleDuSol;
-                // Si l'axe Y de la normale est à 1, le sol est parfaitement plat.
-                // S'il est inférieur (ex: 0.95), c'est qu'on est sur une pente !
                 bool surPente = normale.Y < 0.98f; 
+
+                // On enlève la bride de vitesse : Le joueur peut dépasser la limite !
+                vMax = 30f; 
 
                 if (surPente)
                 {
-                    // --- MODE 1 : GLISSADE SUR PENTE (Accélération) ---
-                    // Mathématiques : On projette la gravité (-Y) sur la pente pour trouver la direction de descente.
+                    // --- MODE 1 : ASPIRATION PAR LA PENTE ---
                     Vector3 gravite = new Vector3(0, -1f, 0);
                     float dot = Vector3.Dot(gravite, normale);
                     Vector3 directionDescente = gravite - (normale * dot);
@@ -713,30 +733,36 @@ static void InitBarrels()
                     if (directionDescente.LengthSquared() > 0)
                     {
                         directionDescente = Vector3.Normalize(directionDescente);
-                        // On injecte de la vitesse en continu vers le bas de la pente !
-                        espionCube.Velocity.Linear += directionDescente * 40f * deltaTime;
+                        // On ajoute constamment de la vitesse selon l'inclinaison
+                        espionCube.Velocity.Linear += directionDescente * 45f * deltaTime;
                     }
-
-                    // On permet d'aller très vite (vMax élevée) et on garde un petit contrôle
-                    vMax = 18f; 
-                    fAcceleration = 0.05f; 
+                    
+                    // Friction quasi-nulle : On est sur de la glace !
+                    fAcceleration = 0.005f; 
                 }
                 else
                 {
-                    // --- MODE 2 : GLISSADE SUR LE PLAT (Freinage) ---
+                    // --- MODE 2 : GLISSADE SUR LE PLAT (Steering) ---
                     if (vitesseHorizontale > 3f)
                     {
-                        // On est en train de glisser vite sur du plat
-                        deplacementVoulu = Vector3.Zero; // On coupe les moteurs (ZQSD ne fait plus avancer)
-                        vMax = 0f; // Vitesse cible = Zéro (on veut s'arrêter à terme)
+                        // LE SECRET DU SNOWBOARD : On ne bloque plus tes touches !
+                        // On fixe la vitesse Max à ta vitesse ACTUELLE. 
+                        // Résultat : Tu ne gagnes pas de vitesse, mais ton ZQSD permet de rediriger ton corps !
+                        vMax = vitesseHorizontale; 
                         
-                        // C'EST ICI QU'ON RÈGLE LA LONGUEUR DE LA GLISSADE :
-                        // 0.035f = Glisse moyenne. 0.05f = S'arrête vite. 0.01f = Glisse super loin.
-                        fAcceleration = 0.005f; 
+                        // Force du virage (Plus tu vas vite, plus le virage est large)
+                        if (vitesseHorizontale > 25f) fAcceleration = 0.02f; 
+                        else if (vitesseHorizontale > 15f) fAcceleration = 0.03f;
+                        else if (vitesseHorizontale > 8f) fAcceleration = 0.04f;  
+                        else fAcceleration = 0.05f;                                
+                        
+                        // Freinage naturel de la glissade au sol (réduit la vitesse de 1.5% par frame)
+                        espionCube.Velocity.Linear.X *= 0.985f;
+                        espionCube.Velocity.Linear.Z *= 0.985f;
                     }
                     else
                     {
-                        // On va trop lentement, on repasse en simple "marche accroupie"
+                        // Fin de la glissade, on rampe
                         vMax = 3f;
                         fAcceleration = 0.2f;
                     }
@@ -749,14 +775,32 @@ static void InitBarrels()
             espionCube.SetShape(PlayerTicket);
             hauteurVoulue = 0.8f; 
             vMax = 8f; 
-            fAcceleration = 0.2f; 
+            
+            // NOUVEAU : Air Control quand on est debout en l'air
+            // Si on touche le sol, on a une friction normale (0.2f). Si on est en l'air, friction ultra faible (0.02f) !
+            fAcceleration = capteurSol.toucheSol ? 0.2f : 0.02f; 
             vitesseDescente = 0;
         }
 
 
+        // ==========================================
+        // LA RÈGLE D'OR DE LA CONSERVATION DE VITESSE (Air Strafing)
+        // ==========================================
+        // Si tu vas plus vite que ta limite (ex: grâce à une pente ou un dash)
+        // ET que tu es en l'air OU en train de glisser...
+        if (vitesseHorizontale > vMax && (!capteurSol.toucheSol || KeyBinds.IsCrouchingPressed()))
+        {
+            // On empêche le jeu de te freiner en élevant la limite temporairement !
+            // Tes touches ZQSD vont "tirer" ta trajectoire vers la caméra sans perdre l'élan.
+            vMax = vitesseHorizontale; 
+        }
+
+        // --- CALCUL FINAL (Ton code existant) ---
         Vector3 targetVelocity = deplacementVoulu * vMax * SpeedCoef;
         espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
         espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
+
+
 
         if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyBinds.Jump))
         {
