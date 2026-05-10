@@ -756,23 +756,25 @@ static void InitBarrels()
                 }
                 else
                 {
-                    // --- MODE 2 : GLISSADE SUR LE PLAT (Steering) ---
+                    // --- MODE 2 : GLISSADE SUR LE PLAT (Steering & Coasting) ---
                     if (vitesseHorizontale > 3f)
                     {
-                        // LE SECRET DU SNOWBOARD : On ne bloque plus tes touches !
-                        // On fixe la vitesse Max à ta vitesse ACTUELLE. 
-                        // Résultat : Tu ne gagnes pas de vitesse, mais ton ZQSD permet de rediriger ton corps !
+                        // On autorise le ZQSD à diriger la glissade sans gagner de vitesse
                         vMax = vitesseHorizontale; 
                         
-                        // Force du virage (Plus tu vas vite, plus le virage est large)
-                        if (vitesseHorizontale > 25f) fAcceleration = 0.02f; 
-                        else if (vitesseHorizontale > 15f) fAcceleration = 0.03f;
-                        else if (vitesseHorizontale > 8f) fAcceleration = 0.04f;  
-                        else fAcceleration = 0.05f;                                
+                        // ==========================================
+                        // CORRECTION : DES FRICTIONS MINUSCULES
+                        // ==========================================
+                        // Si tu arrives d'un dash (vitesse > 20), la friction est quasi nulle (0.002f) !
+                        if (vitesseHorizontale > 20f) fAcceleration = 0.002f; 
+                        else if (vitesseHorizontale > 12f) fAcceleration = 0.008f;
+                        else if (vitesseHorizontale > 8f) fAcceleration = 0.015f;  
+                        else fAcceleration = 0.03f;                                
                         
-                        // Freinage naturel de la glissade au sol (réduit la vitesse de 1.5% par frame)
-                        espionCube.Velocity.Linear.X *= 0.985f;
-                        espionCube.Velocity.Linear.Z *= 0.985f;
+                        // Freinage naturel (Perte de seulement 0.2% par frame au lieu de 1.5%)
+                        // Ça te permet de conserver ton élan sur plusieurs dizaines de mètres !
+                        espionCube.Velocity.Linear.X *= 0.999f;
+                        espionCube.Velocity.Linear.Z *= 0.999f;
                     }
                     else
                     {

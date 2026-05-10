@@ -251,14 +251,71 @@ partial class Program
         SetActiveMusic(ActiveMusic.Menu);
         UpdateActiveMusicStream();
 
-        simulation.Statics.Clear();
+        // 1. NETTOYAGE DES LISTES DU JEU PRÉCÉDENT
+        // 1. NETTOYAGE DES LISTES DU JEU PRÉCÉDENT
+        
+        // A. On supprime proprement chaque mur
+        foreach (MurPose mur in listeMur) simulation.Statics.Remove(mur.handlePhysique);
+        listeMur.Clear();
+
+        // B. On supprime proprement chaque baril
+        foreach (BarrelSpot spot in barrelSpots)
+        {
+            if (spot.estSolide)
+            {
+                simulation.Statics.Remove(spot.handlePhysique);
+                spot.estSolide = false;
+            }
+        }
+
+        activeExplosions.Clear();
+        activeDamageTexts.Clear();
+
+        // C. On supprime proprement les ennemis
+        foreach (Enemy enemy in enemiesList)
+        {
+            if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId);
+        }
+        enemiesList.Clear();
+
+        // ==========================================
+        // 2. LE CORRECTIF DU CRASH : PURGE DE LA MÉMOIRE
+        // ==========================================
+        if (mapDejaChargee)
+        {
+            // CORRECTION CRUCIALE : On retire la map de la simulation AVANT de la détruire !
+            // Cela détruit automatiquement les "liens fantômes" avec le joueur.
+            simulation.Statics.Remove(mapStaticHandle);
+            
+            // Libère la VRAM et la RAM
+            Raylib.UnloadModel(mapModel);
+            bepuMapMesh.Dispose(pool);
+            mapDejaChargee = false;
+        }
+
+
+        listeMur.Clear(); // Très important sinon les murs fantômes restent !
+        activeExplosions.Clear();
+        activeDamageTexts.Clear();
 
         foreach (Enemy enemy in enemiesList)
         {
             if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId);
         }
-        // On vide la liste mémoire
         enemiesList.Clear();
+
+        // ==========================================
+        // 2. LE CORRECTIF DU CRASH : PURGE DE LA MÉMOIRE
+        // ==========================================
+        if (mapDejaChargee)
+        {
+            // Libère la carte graphique (VRAM de Raylib)
+            Raylib.UnloadModel(mapModel); 
+            
+            // Libère la RAM physique (Le BufferPool de BEPU)
+            bepuMapMesh.Dispose(pool); 
+            mapDejaChargee = false;
+        }
 
         Raylib.BeginDrawing();
 
@@ -395,9 +452,15 @@ partial class Program
                             }
                         }
 
-                        var cartePhysiqueBEPU = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
-                        TypedIndex ticketCarte = simulation.Shapes.Add(cartePhysiqueBEPU);
-                        simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+                        // On utilise notre variable globale au lieu de "var"
+                        bepuMapMesh = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
+                        TypedIndex ticketCarte = simulation.Shapes.Add(bepuMapMesh);
+                        
+                        // CORRECTION : On SAUVEGARDE le handle dans notre variable globale
+                        mapStaticHandle = simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+                        
+                        // On valide qu'une map est en mémoire pour le prochain nettoyage !
+                        mapDejaChargee = true;
 
                         Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
                     }

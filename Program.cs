@@ -54,6 +54,16 @@ public partial class Program
 
     // Modèles 3D et Sons
     static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
+
+    
+    // Variables pour gérer la mémoire de la map et éviter les crashs
+    public static BepuPhysics.Collidables.Mesh bepuMapMesh;
+    public static bool mapDejaChargee = false;
+    // NOUVEAU : Pour mémoriser et supprimer proprement la map !
+    public static StaticHandle mapStaticHandle;
+
+
+
     public static Sound[] deathSounds = new Sound[4]; // Pool de 4 sons de death pour éviter les conflits
     public static int deathSoundIndex = 0;
     static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion, wallSound;

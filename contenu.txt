@@ -1192,23 +1192,25 @@ static void InitBarrels()
                 }
                 else
                 {
-                    // --- MODE 2 : GLISSADE SUR LE PLAT (Steering) ---
+                    // --- MODE 2 : GLISSADE SUR LE PLAT (Steering & Coasting) ---
                     if (vitesseHorizontale > 3f)
                     {
-                        // LE SECRET DU SNOWBOARD : On ne bloque plus tes touches !
-                        // On fixe la vitesse Max à ta vitesse ACTUELLE. 
-                        // Résultat : Tu ne gagnes pas de vitesse, mais ton ZQSD permet de rediriger ton corps !
+                        // On autorise le ZQSD à diriger la glissade sans gagner de vitesse
                         vMax = vitesseHorizontale; 
                         
-                        // Force du virage (Plus tu vas vite, plus le virage est large)
-                        if (vitesseHorizontale > 25f) fAcceleration = 0.02f; 
-                        else if (vitesseHorizontale > 15f) fAcceleration = 0.03f;
-                        else if (vitesseHorizontale > 8f) fAcceleration = 0.04f;  
-                        else fAcceleration = 0.05f;                                
+                        // ==========================================
+                        // CORRECTION : DES FRICTIONS MINUSCULES
+                        // ==========================================
+                        // Si tu arrives d'un dash (vitesse > 20), la friction est quasi nulle (0.002f) !
+                        if (vitesseHorizontale > 20f) fAcceleration = 0.002f; 
+                        else if (vitesseHorizontale > 12f) fAcceleration = 0.008f;
+                        else if (vitesseHorizontale > 8f) fAcceleration = 0.015f;  
+                        else fAcceleration = 0.03f;                                
                         
-                        // Freinage naturel de la glissade au sol (réduit la vitesse de 1.5% par frame)
-                        espionCube.Velocity.Linear.X *= 0.985f;
-                        espionCube.Velocity.Linear.Z *= 0.985f;
+                        // Freinage naturel (Perte de seulement 0.2% par frame au lieu de 1.5%)
+                        // Ça te permet de conserver ton élan sur plusieurs dizaines de mètres !
+                        espionCube.Velocity.Linear.X *= 0.999f;
+                        espionCube.Velocity.Linear.Z *= 0.999f;
                     }
                     else
                     {
@@ -1611,7 +1613,7 @@ static void InitBarrels()
             float excesVitesse = vitesseHorizontale - 8f;
             
             // On ajoute 1.2 degré de FOV pour chaque m/s de vitesse supplémentaire
-            float bonusFov = excesVitesse * 1.2f; 
+            float bonusFov = excesVitesse; 
             
             // SÉCURITÉ : On bloque le bonus à +35° maximum pour éviter de casser l'image
             if (bonusFov > 35f) bonusFov = 35f; 
@@ -2324,14 +2326,30 @@ partial class Program
         SetActiveMusic(ActiveMusic.Menu);
         UpdateActiveMusicStream();
 
+        // 1. NETTOYAGE DES LISTES DU JEU PRÉCÉDENT
         simulation.Statics.Clear();
+        listeMur.Clear(); // Très important sinon les murs fantômes restent !
+        activeExplosions.Clear();
+        activeDamageTexts.Clear();
 
         foreach (Enemy enemy in enemiesList)
         {
             if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId);
         }
-        // On vide la liste mémoire
         enemiesList.Clear();
+
+        // ==========================================
+        // 2. LE CORRECTIF DU CRASH : PURGE DE LA MÉMOIRE
+        // ==========================================
+        if (mapDejaChargee)
+        {
+            // Libère la carte graphique (VRAM de Raylib)
+            Raylib.UnloadModel(mapModel); 
+            
+            // Libère la RAM physique (Le BufferPool de BEPU)
+            bepuMapMesh.Dispose(pool); 
+            mapDejaChargee = false;
+        }
 
         Raylib.BeginDrawing();
 
@@ -2468,9 +2486,13 @@ partial class Program
                             }
                         }
 
-                        var cartePhysiqueBEPU = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
-                        TypedIndex ticketCarte = simulation.Shapes.Add(cartePhysiqueBEPU);
+                        // On utilise notre variable globale au lieu de "var"
+                        bepuMapMesh = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
+                        TypedIndex ticketCarte = simulation.Shapes.Add(bepuMapMesh);
                         simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+                        
+                        // On valide qu'une map est en mémoire pour le prochain nettoyage !
+                        mapDejaChargee = true;
 
                         Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
                     }
@@ -3414,6 +3436,9 @@ public partial class Program
 
     // Modèles 3D et Sons
     static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
+    // Variables pour gérer la mémoire de la map et éviter les crashs
+    public static BepuPhysics.Collidables.Mesh bepuMapMesh;
+    public static bool mapDejaChargee = false;
     public static Sound[] deathSounds = new Sound[4]; // Pool de 4 sons de death pour éviter les conflits
     public static int deathSoundIndex = 0;
     static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion, wallSound;
