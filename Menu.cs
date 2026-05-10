@@ -303,7 +303,7 @@ partial class Program
         Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2 }; 
         string[] nomsMap = { "Tutoriel", "La Ville", "Arène de tir" };
         string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
-        string[] ModelMapPath = {"test.glb","map.glb","map.glb"};
+        string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb"};
 
         // Paramètres de taille et d'espacement
         int largeurMap = 350;

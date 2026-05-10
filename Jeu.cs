@@ -661,7 +661,7 @@ static void InitBarrels()
 
         bool IsSprinting = KeyBinds.IsSprintingPressed();
         float SpeedCoef = IsSprinting ? 1.7f : 1f;
-        float vMax = 8f; 
+        float vMax = 8f * SpeedCoef; 
         float fAcceleration = 0.2f; 
         float rollActuel = 0f;
 
@@ -774,10 +774,11 @@ static void InitBarrels()
             // Le joueur est debout
             espionCube.SetShape(PlayerTicket);
             hauteurVoulue = 0.8f; 
-            vMax = 8f; 
             
-            // NOUVEAU : Air Control quand on est debout en l'air
-            // Si on touche le sol, on a une friction normale (0.2f). Si on est en l'air, friction ultra faible (0.02f) !
+            // CORRECTION : On réapplique le multiplicateur de sprint ici !
+            vMax = 8f * SpeedCoef; 
+            
+            // Air Control quand on est debout en l'air
             fAcceleration = capteurSol.toucheSol ? 0.2f : 0.02f; 
             vitesseDescente = 0;
         }
@@ -795,11 +796,11 @@ static void InitBarrels()
             vMax = vitesseHorizontale; 
         }
 
-        // --- CALCUL FINAL (Ton code existant) ---
-        Vector3 targetVelocity = deplacementVoulu * vMax * SpeedCoef;
+        // --- CALCUL FINAL ---
+        // CORRECTION 2 : On retire "* SpeedCoef" ici, car il est déjà dans le vMax de base !
+        Vector3 targetVelocity = deplacementVoulu * vMax;
         espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
         espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
-
 
 
         if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyBinds.Jump))
@@ -812,6 +813,9 @@ static void InitBarrels()
         }
 
         // Dash
+        int dashSpeed = 40;
+        if (!capteurSol.toucheSol) dashSpeed = 18; // SI ON EST EN L AIR
+
         if (KeyBinds.IsDashingPressed() && CanDash && dashChrono >= 90){
             Raylib.PlaySound(swoosh);
             Vector3 directionDash = GroundForward; 
@@ -820,7 +824,7 @@ static void InitBarrels()
             {
                 directionDash = deplacementVoulu; 
             }
-            espionCube.Velocity.Linear += directionDash * 30;
+            espionCube.Velocity.Linear += directionDash * dashSpeed; //puissance du dash
 
             CanDash = false ;
             dashChrono = 0;
