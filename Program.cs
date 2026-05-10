@@ -56,7 +56,7 @@ public partial class Program
     static Model mapModel, sniper, karambit, bazooka, sword, shotgun, pistol, revolver, barrelModel;
     public static Sound[] deathSounds = new Sound[4]; // Pool de 4 sons de death pour éviter les conflits
     public static int deathSoundIndex = 0;
-    static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion;
+    static Sound snipershot, karambitshot, bazookashot, shotgunshot, pistolshot, revolvershot, swordslash, select, unselect, survole, swoosh, explosion, wallSound;
     static Music menuMusic, gameMusic;
     static float musicVolume = 0.4f;
     static ActiveMusic currentMusicState = ActiveMusic.None;
@@ -188,6 +188,8 @@ public partial class Program
     public static TypedIndex formeMurIndex;
     public static Model visuelMur;
 
+    public static int wallChrono;
+
 
 
 
@@ -277,6 +279,7 @@ public partial class Program
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
         groundImpactSound = Raylib.LoadSound("assets\\sounds\\ground-impact.mp3");
+        wallSound = Raylib.LoadSound("assets\\sounds\\wall.mp3");
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -581,6 +584,7 @@ public partial class Program
         Raylib.SetSoundVolume(noAmmoSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(groundImpactSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(swoosh, Settings.SFXVolume); // Même les swoosh sont pris en compte !
+        Raylib.SetSoundVolume(wallSound, Settings.SFXVolume);
 
         // -> Les sons du Joueur
         Raylib.SetSoundVolume(Player.gameover, Settings.SFXVolume);

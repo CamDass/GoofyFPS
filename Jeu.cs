@@ -466,6 +466,7 @@ static void InitBarrels()
 
         //90 frame = 1.5s 
         if (dashChrono < 90)dashChrono ++;
+        if (wallChrono <10*FPS)wallChrono ++;
         
 
 
@@ -518,6 +519,7 @@ static void InitBarrels()
         // ==========================================
         // MODE CONSTRUCTION (Touche F)
         // ==========================================
+        couleurMurTransparent = new Color(255, 130, 50, 150);
         modeConstruction = false;
         if (Raylib.IsKeyDown(KeyboardKey.F))
         {
@@ -546,12 +548,24 @@ static void InitBarrels()
             rotationPrevueMur = Quaternion.CreateFromYawPitchRoll(yaw, -pitch, 0);
 
             // 4. Poser le mur au Clic Gauche
+            
             if (Raylib.IsMouseButtonPressed(MouseButton.Left))
             {
-                StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
-                StaticHandle handle = simulation.Statics.Add(description);
+                if (wallChrono >= FPS * 10)
+                {
+                    Raylib.PlaySound(wallSound);
+                    wallChrono = 0;
+                    StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
+                    StaticHandle handle = simulation.Statics.Add(description);
                 
-                listeMur.Add(new MurPose(positionPrevueMur, rotationPrevueMur, handle));
+                    listeMur.Add(new MurPose(positionPrevueMur, rotationPrevueMur, handle));
+                }
+                else
+                {
+                    couleurMurTransparent = new Color(255, 255, 255, 140);
+                    Raylib.PlaySound(noAmmoSound);
+                }
+                
             }
         }
 
@@ -1150,26 +1164,44 @@ static void InitBarrels()
 
 
 
-        // --- GESTION DU ZOOM (FOV) ---
-        float targetFov = Settings.BaseFOV; // FOV de base depuis les paramètres
+        // --- GESTION DU ZOOM ET FOV DYNAMIQUE ---
+        float targetFov = Settings.BaseFOV; // FOV de base depuis les paramètres [cite: 333]
 
+        // 1. LA FOV DYNAMIQUE (Vitesse)
+        // Si le joueur va plus vite que la marche normale (8m/s)
+        if (vitesseHorizontale > 8f)
+        {
+            // On calcule l'excès de vitesse
+            float excesVitesse = vitesseHorizontale - 8f;
+            
+            // On ajoute 1.2 degré de FOV pour chaque m/s de vitesse supplémentaire
+            float bonusFov = excesVitesse; 
+            
+            // SÉCURITÉ : On bloque le bonus à +35° maximum pour éviter de casser l'image
+            if (bonusFov > 35f) bonusFov = 35f; 
+            
+            targetFov += bonusFov;
+        }
+
+        // 2. L'ÉCRASEMENT PAR LA VISÉE (Aiming)
+        // La visée doit avoir la priorité absolue sur la vitesse ! 
+        // (Tu veux pouvoir sniper précisément même en glissant à 30km/h)
         if (isAiming)
         {
             if (isScopedWeapon)
             {
-                targetFov = 20.0f; // Gros zoom
-                showweapon = false; // On cache l'arme 3D
-                Raylib.DrawTextureEx(sniperaim, new Vector2(0,0), 0, 1, Color.White); // Image lunette
-            
+                targetFov = 20.0f; // Gros zoom [cite: 334]
+                showweapon = false; // On cache l'arme 3D [cite: 335]
+                Raylib.DrawTextureEx(sniperaim, new Vector2(0,0), 0, 1, Color.White); // Image lunette [cite: 336]
             }
             else
             {
-                
-                targetFov = 40.0f; // Petit zoom pour les armes normales centrées
+                targetFov = 40.0f; // Petit zoom pour les armes normales centrées [cite: 337]
             }
         }
 
-        // Interpolation fluide du zoom de la caméra principale !
+        // 3. L'INTERPOLATION FLUIDE
+        // La caméra glisse doucement vers le targetFov (Lissage) 
         camera.FovY = camera.FovY + (targetFov - camera.FovY) * 15f * deltaTime;
 
 
@@ -1428,7 +1460,20 @@ static void InitBarrels()
                 Raylib.DrawRectangle(100, HauteurFenetre - 200, dashPixel,40,Color.LightGray);
             }
 
+            
 
+            Color missingWall = new Color(150, 150, 150, 50);
+            Color WallColor = new Color(255, 140, 60, 255);
+            int WallPixel = 100*wallChrono/(FPS*10);
+
+            Raylib.DrawRectangle(100, HauteurFenetre - 250, 100,40,missingWall); //arriere plan pour si on enleve la vie on voit encore la barre
+            if (wallChrono >= 10*FPS)// = 10s
+            {
+                Raylib.DrawRectangle(100, HauteurFenetre - 250, WallPixel,40,WallColor);
+            } else
+            {
+                Raylib.DrawRectangle(100, HauteurFenetre - 250, WallPixel,40,Color.LightGray);
+            }
             
 
 
