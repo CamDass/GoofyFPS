@@ -55,7 +55,7 @@ partial class Program
 
             if (Raylib.IsMouseButtonReleased(MouseButton.Left))
             {
-                isMenuGameOpen = false; // Fermer le menu
+                //isMenuGameOpen = false; // Fermer le menu
                 Raylib.DisableCursor();
                 Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                 return;

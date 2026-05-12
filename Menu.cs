@@ -551,8 +551,15 @@ partial class Program
         int ecranHauteur = Raylib.GetScreenHeight();
         Vector2 souris = Raylib.GetMousePosition();
 
-        Raylib.BeginDrawing();
-        Raylib.ClearBackground(new Color(30, 30, 30, 255));
+        if (!isPaused)
+        {
+            Raylib.BeginDrawing();
+            Raylib.ClearBackground(new Color(30, 30, 30, 255));
+        }
+        else
+        {
+            Raylib.DrawRectangle(0, 0, ecranLargeur, ecranHauteur, new Color(30, 30, 30, 240));
+        }
 
         // ==========================================
         // 1. LE TITRE
@@ -655,11 +662,18 @@ partial class Program
 
         if (retourHover && Raylib.IsMouseButtonPressed(MouseButton.Left))
         {
-            etatJeu = "menu";
+            // CORRECTION : Si on est en jeu, on ferme juste l'overlay. Sinon, on va à l'accueil.
+            if (isPaused) isOptionsMenuOpen = false;
+            else etatJeu = "menu"; 
+            
             isRebindingKey = false;
         }
 
-        Raylib.EndDrawing();
+        // On ne clôture le dessin QUE si on est dans le menu d'accueil
+        if (!isPaused) 
+        {
+            Raylib.EndDrawing();
+        }
     }
 
     private static void DrawVolumeSlider(int x, int y, int width, ref float volume, string label)
@@ -721,6 +735,7 @@ partial class Program
             ("Dash", new[] { Settings.KEY_Dash }),
             ("Recharger", new[] { Settings.KEY_Reload }),
             ("Menu Jeu", new[] { Settings.KEY_ToggleGameMenu }),
+            ("Construire Mur", new[] { Settings.KEY_BuildWall })
         };
 
         int y = startY;
@@ -794,7 +809,8 @@ partial class Program
             Settings.KEY_MoveLeft, Settings.KEY_MoveLeftAlt,
             Settings.KEY_MoveRight, Settings.KEY_MoveRightAlt,
             Settings.KEY_Jump, Settings.KEY_Crouch, Settings.KEY_Sprint,
-            Settings.KEY_Dash, Settings.KEY_Reload, Settings.KEY_ToggleGameMenu
+            Settings.KEY_Dash, Settings.KEY_Reload, Settings.KEY_ToggleGameMenu,
+            Settings.KEY_BuildWall
         };
         
         // Remove the current key being changed (to allow reassigning the same key)
@@ -810,6 +826,7 @@ partial class Program
             case 7: allKeys.Remove(Settings.KEY_Dash); break;
             case 8: allKeys.Remove(Settings.KEY_Reload); break;
             case 9: allKeys.Remove(Settings.KEY_ToggleGameMenu); break;
+            case 10: allKeys.Remove(Settings.KEY_BuildWall); break;
         }
         
         // If the new key is already used, don't assign
@@ -828,7 +845,204 @@ partial class Program
             case 7: Settings.KEY_Dash = newKey; break;
             case 8: Settings.KEY_Reload = newKey; break;
             case 9: Settings.KEY_ToggleGameMenu = newKey; break;
+            case 10: Settings.KEY_BuildWall = newKey; break;
         }
+    }
+
+
+
+    // ==========================================
+    // MENU PAUSE HORS LIGNE (Jeu figé, centré)
+    // ==========================================
+    public static void MenugameOffline()
+    {
+        Vector2 souris = Raylib.GetMousePosition();
+
+        // 1. Fond semi-transparent pour assombrir le jeu derrière (Effet Pause)
+        Raylib.DrawRectangle(0, 0, LargeurFenetre, HauteurFenetre, new Color(0, 0, 0, 150));
+
+        // 2. Paramètres des boutons (Calqués sur ta maquette)
+        int largeurBouton = 300;
+        int hauteurBouton = 80;
+        int ecart = 20;
+
+        // On calcule les positions pour que ce soit parfaitement centré
+        int posX = (LargeurFenetre - largeurBouton) / 2;
+        int posY_resume = (HauteurFenetre / 2) - hauteurBouton - ecart;
+        int posY_options = (HauteurFenetre / 2);
+        int posY_menu = (HauteurFenetre / 2) + hauteurBouton + ecart;
+
+        // 3. Création des zones de collision
+        Rectangle boxResume = new Rectangle(posX, posY_resume, largeurBouton, hauteurBouton);
+        Rectangle boxOptions = new Rectangle(posX, posY_options, largeurBouton, hauteurBouton);
+        Rectangle boxMenu = new Rectangle(posX, posY_menu, largeurBouton, hauteurBouton);
+
+        // --- DESSIN ET LOGIQUE DES BOUTONS ---
+
+        // A. BOUTON RESUME
+        bool hoverResume = Raylib.CheckCollisionPointRec(souris, boxResume);
+        Raylib.DrawRectangleRec(boxResume, new Color(60, 60, 60, 255)); // Fond gris
+        Raylib.DrawRectangleLinesEx(boxResume, 4, hoverResume ? Color.Red : Color.Black); // Bordure rouge si survolé
+        
+        int widthResume = Raylib.MeasureText("RESUME", 40);
+        Raylib.DrawText("RESUME", posX + (largeurBouton - widthResume) / 2, posY_resume + 20, 40, Color.White);
+
+        if (hoverResume && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            isPaused = false;
+            Raylib.DisableCursor(); // On redonne le contrôle de la caméra
+        }
+
+        // B. BOUTON OPTIONS
+        bool hoverOptions = Raylib.CheckCollisionPointRec(souris, boxOptions);
+        Raylib.DrawRectangleRec(boxOptions, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxOptions, 4, hoverOptions ? Color.Red : Color.Black);
+        
+        int widthOptions = Raylib.MeasureText("OPTIONS", 40);
+        Raylib.DrawText("OPTIONS", posX + (largeurBouton - widthOptions) / 2, posY_options + 20, 40, Color.White);
+
+        if (hoverOptions && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            isOptionsMenuOpen = true; // On ouvre l'overlay au lieu de changer d'endroit !
+        }
+
+        // C. BOUTON MENU
+        bool hoverMenu = Raylib.CheckCollisionPointRec(souris, boxMenu);
+        Raylib.DrawRectangleRec(boxMenu, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxMenu, 4, hoverMenu ? Color.Red : Color.Black);
+        
+        int widthMenu = Raylib.MeasureText("MENU", 40);
+        Raylib.DrawText("MENU", posX + (largeurBouton - widthMenu) / 2, posY_menu + 20, 40, Color.White);
+
+        if (hoverMenu && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+            
+            // Grand nettoyage avant de retourner au menu principal
+            isPaused = false;
+            Raylib.EnableCursor();
+
+            foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
+            enemiesList.Clear();
+            activeExplosions.Clear();
+            activeDamageTexts.Clear();
+            
+            endroit = "menu";
+        }
+    }
+
+    // ==========================================
+    // MENU PAUSE EN LIGNE (Jeu actif, décalé à gauche)
+    // ==========================================
+    public static void MenugameOnline()
+    {
+        Vector2 souris = Raylib.GetMousePosition();
+
+        // 1. Fond TRÈS léger (Pour bien voir le jeu tourner en fond sans être aveuglé)
+        Raylib.DrawRectangle(0, 0, LargeurFenetre, HauteurFenetre, new Color(0, 0, 0, 80));
+
+        // 2. Paramètres des boutons (Décalés à gauche)
+        int largeurBouton = 300;
+        int hauteurBouton = 80;
+        int ecart = 20;
+
+        // Position X à 25% de l'écran (sur la gauche) au lieu du centre
+        int posX_boutons = (LargeurFenetre / 4) - (largeurBouton / 2); 
+        int posY_resume = (HauteurFenetre / 2) - hauteurBouton - ecart;
+        int posY_options = (HauteurFenetre / 2);
+        int posY_menu = (HauteurFenetre / 2) + hauteurBouton + ecart;
+
+        Rectangle boxResume = new Rectangle(posX_boutons, posY_resume, largeurBouton, hauteurBouton);
+        Rectangle boxOptions = new Rectangle(posX_boutons, posY_options, largeurBouton, hauteurBouton);
+        Rectangle boxMenu = new Rectangle(posX_boutons, posY_menu, largeurBouton, hauteurBouton);
+
+        // --- BOUTON RESUME ---
+        bool hoverResume = Raylib.CheckCollisionPointRec(souris, boxResume);
+        Raylib.DrawRectangleRec(boxResume, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxResume, 4, hoverResume ? Color.Red : Color.Black);
+        int widthResume = Raylib.MeasureText("RESUME", 40);
+        Raylib.DrawText("RESUME", posX_boutons + (largeurBouton - widthResume) / 2, posY_resume + 20, 40, Color.White);
+
+        if (hoverResume && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            isPaused = false;
+            Raylib.DisableCursor();
+        }
+
+        // --- BOUTON OPTIONS ---
+        bool hoverOptions = Raylib.CheckCollisionPointRec(souris, boxOptions);
+        Raylib.DrawRectangleRec(boxOptions, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxOptions, 4, hoverOptions ? Color.Red : Color.Black);
+        int widthOptions = Raylib.MeasureText("OPTIONS", 40);
+        Raylib.DrawText("OPTIONS", posX_boutons + (largeurBouton - widthOptions) / 2, posY_options + 20, 40, Color.White);
+
+        if (hoverOptions && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            isOptionsMenuOpen = true; // On ouvre l'overlay au lieu de changer d'endroit !
+        }
+
+        // --- BOUTON MENU ---
+        bool hoverMenu = Raylib.CheckCollisionPointRec(souris, boxMenu);
+        Raylib.DrawRectangleRec(boxMenu, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxMenu, 4, hoverMenu ? Color.Red : Color.Black);
+        int widthMenu = Raylib.MeasureText("MENU", 40);
+        Raylib.DrawText("MENU", posX_boutons + (largeurBouton - widthMenu) / 2, posY_menu + 20, 40, Color.White);
+
+        if (hoverMenu && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+            isPaused = false;
+            Raylib.EnableCursor();
+            
+            // Grand nettoyage avant de retourner au menu principal
+            foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
+            enemiesList.Clear();
+            activeExplosions.Clear();
+            activeDamageTexts.Clear();
+            
+            endroit = "menu";
+        }
+
+        // ==========================================
+        // 3. LE TABLEAU DES SCORES (À droite)
+        // ==========================================
+        int scoreWidth = 600;
+        int scoreHeight = 400;
+        
+        // Position X à 50% de l'écran (sur la droite)
+        int scoreX = (LargeurFenetre / 2); 
+        int scoreY = posY_resume; // Aligné sur le haut du bouton RESUME pour faire propre
+
+        // Fond du tableau (Gris très foncé transparent)
+        Raylib.DrawRectangle(scoreX, scoreY, scoreWidth, scoreHeight, new Color(30, 30, 30, 200));
+
+        // En-tête (Gris moyen opaque)
+        Raylib.DrawRectangle(scoreX, scoreY, scoreWidth, 50, new Color(80, 80, 80, 255));
+        
+        // --- Titres des colonnes ---
+        int textY = scoreY + 15;
+        Raylib.DrawText("name", scoreX + 20, textY, 25, Color.White);
+        Raylib.DrawText("kill", scoreX + 300, textY, 25, Color.White);
+        Raylib.DrawText("death", scoreX + 420, textY, 25, Color.White);
+        Raylib.DrawText("ping", scoreX + 520, textY, 25, Color.White);
+
+        // --- FAUSSE LIGNE 1 : TOI (Mockup) ---
+        int row1Y = scoreY + 70;
+        Raylib.DrawText("CamPitaine", scoreX + 20, row1Y, 30, Color.White);
+        Raylib.DrawText("20", scoreX + 300, row1Y, 30, Color.White);
+        Raylib.DrawText("3", scoreX + 420, row1Y, 30, Color.White);
+        Raylib.DrawText("10", scoreX + 520, row1Y, 30, Color.Green); // Ping excellent = Vert
+
+        // --- FAUSSE LIGNE 2 : L'ENNEMI (Mockup) ---
+        int row2Y = scoreY + 120;
+        Raylib.DrawText("NoobSlayer99", scoreX + 20, row2Y, 30, Color.LightGray);
+        Raylib.DrawText("5", scoreX + 300, row2Y, 30, Color.LightGray);
+        Raylib.DrawText("12", scoreX + 420, row2Y, 30, Color.LightGray);
+        Raylib.DrawText("150", scoreX + 520, row2Y, 30, Color.Red); // Ping mauvais = Rouge
     }
 
 }

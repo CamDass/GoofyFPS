@@ -15,11 +15,11 @@ partial class Program
     // ========================================================
     static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
     static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f, false);
-    static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 200, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
+    static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 1000, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
     static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
-    static Weapon pistolWeapon = new Weapon("Pistol", 5, 500, 0.08f, 80, 2, pistol, pistolshot, 0f);
-    static Weapon revolverWeapon = new Weapon("Revolver", 35, 100, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
-    static Weapon swordWeapon = new Weapon("Sword", 10, 100, 0.15f, 30, 4, sword, swordslash, 3f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 5, 1000, 0.08f, 80, 2, pistol, pistolshot, 0f);
+    static Weapon revolverWeapon = new Weapon("Revolver", 35, 1000, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
+    static Weapon swordWeapon = new Weapon("Sword", 10, 1000, 0.15f, 30, 4, sword, swordslash, 3f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
     static Weapon currentWeapon = pistolWeapon;
@@ -312,36 +312,68 @@ static void InitBarrels()
         // ========================================================
         if (Raylib.IsKeyPressed(KeyBinds.ToggleGameMenu))
         {
-            isMenuGameOpen = !isMenuGameOpen; 
-            if (isMenuGameOpen) { Raylib.EnableCursor(); Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low); }
-            else { Raylib.DisableCursor(); Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); }
+            isPaused = !isPaused; // On bascule le mode pause (Vrai/Faux)
+            
+            if (isPaused) 
+            { 
+                Raylib.EnableCursor(); 
+                Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low); 
+            }
+            else 
+            { 
+                Raylib.DisableCursor();
+                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); 
+            }
         }
-
-        if (isMenuGameOpen) { Menugame(); return; }
 
         if (!localPlayer.IsAlive)
         {
-            Raylib.BeginDrawing();
-            Raylib.ClearBackground(Color.Black);
-            Raylib.DrawText("VOUS ÊTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
-            Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
-            Raylib.DrawText("Appuyez sur ENTREE pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
-            Raylib.EndDrawing();
-
-            if (Raylib.IsKeyPressed(KeyboardKey.Enter))
+            if (!isOnline)
             {
+                Raylib.BeginDrawing();
+                Raylib.ClearBackground(Color.Black);
+                Raylib.DrawText("VOUS ÊTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
+                Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
+                Raylib.DrawText("Appuyez sur ENTREE pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
+                Raylib.EndDrawing();
+
+                if (Raylib.IsKeyPressed(KeyboardKey.Enter))
+                {
+                    localPlayer.Respawn(); 
+
+                    BodyReference joueurMort = simulation.Bodies.GetBodyReference(PlayerId);
+                    joueurMort.Pose.Position = new Vector3(0, 50, 0); 
+                    joueurMort.Velocity.Linear = Vector3.Zero;
+                    
+                    endroit = "menu"; 
+                    Raylib.EnableCursor();
+                }
+                
+                // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
+                return;
+            }
+            else
+            {
+                // 1. On réinitialise la vie du joueur
                 localPlayer.Respawn(); 
 
-                BodyReference joueurMort = simulation.Bodies.GetBodyReference(PlayerId);
-                joueurMort.Pose.Position = new Vector3(0, 50, 0); 
-                joueurMort.Velocity.Linear = Vector3.Zero;
+                // 2. On choisit un index au hasard dans ta liste de spawns existante
+                int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+                Vector3 nouveauSpawn = listeSpawns[indexAleatoire];
+
+                // 3. On récupère le corps physique de ton joueur dans BEPU
+                BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
                 
-                endroit = "menu"; 
-                Raylib.EnableCursor();
+                // 4. On le téléporte aux nouvelles coordonnées
+                joueurVivant.Pose.Position = nouveauSpawn;
+                
+                // 5. TRÈS IMPORTANT : On remet sa vitesse à zéro ! 
+                // S'il est mort en tombant dans le vide, il faut annuler sa vitesse de chute 
+                // sinon il va s'écraser au sol dès son apparition.
+                joueurVivant.Velocity.Linear = Vector3.Zero;
+                joueurVivant.Velocity.Angular = Vector3.Zero;
             }
-            
-            // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
-            return; 
+                
         }
 
         // Le changement d'arme se fait désormais uniquement via les barrils touchés
@@ -433,25 +465,29 @@ static void InitBarrels()
         enemiesList.RemoveAll(e => !e.isAlive);
 
         // ACTIVATION DES CERVEAUX (IA)
-        foreach (Enemy enemy in enemiesList)
+        if (!isPaused || isOnline)
         {
-            // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
-            enemy.Maj(posCube, ref espionCube);
-                        
-            // Vérifier si l'ennemi tombe dans le vide (limite de void)
-            try
+            foreach (Enemy enemy in enemiesList)
             {
-                BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(enemy.bodyId);
-                if (enemyBody.Pose.Position.Y < -30f)
+                // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
+                enemy.Maj(posCube, ref espionCube);
+                            
+                // Vérifier si l'ennemi tombe dans le vide (limite de void)
+                try
                 {
-                    enemy.TakeDamage(1);
+                    BodyReference enemyBody = Program.simulation.Bodies.GetBodyReference(enemy.bodyId);
+                    if (enemyBody.Pose.Position.Y < -30f)
+                    {
+                        enemy.TakeDamage(1);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[WARN] Void damage check failed for enemy {enemy.bodyId}: {ex.Message}");
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[WARN] Void damage check failed for enemy {enemy.bodyId}: {ex.Message}");
-            }
         }
+        
 
 
 
@@ -470,20 +506,29 @@ static void InitBarrels()
         
 
 
-        if (Raylib.IsKeyDown(KeyBinds.ExitToMenu))
-        {
-            espionCube.Pose.Position = new Vector3(0,50,0);
-            NbJump = NbJumpMax + 1;
+        // LE CERVEAU DE LA CAMÉRA FPS
+        bool hasWeapon = true; 
+        // Si pause, la sensi = 0   
+        float sensi = isPaused ? 0f : Settings.MouseSensitivity;
 
-            Raylib.EnableCursor();
-            Raylib.PlaySound(unselect);
-            endroit = "menu";
+        // 1. On anticipe la vérification de l'arme pour savoir si on vise
+        bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon); 
+        bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee; 
+
+        // 2. LA REDUCTION DE SENSIBILITÉ (Le secret professionnel)
+        if (isAiming)
+        {
+            if (isScopedWeapon) 
+                sensi *= 0.2f; // Le Sniper divise la sensi par 5 (20%) pour être ultra précis !
+            else 
+                sensi *= 0.5f; // Les armes normales divisent la sensi par 2 (50%)
         }
 
-        // LE CERVEAU DE LA CAMÉRA FPS
+        // 3. On tourne la caméra avec la bonne sensibilité
         Vector2 mouseDelta = Raylib.GetMouseDelta();
-        CameraYaw -= mouseDelta.X * Settings.MouseSensitivity;
-        CameraPitch -= mouseDelta.Y * Settings.MouseSensitivity;
+        CameraYaw -= mouseDelta.X * sensi; 
+        CameraPitch -= mouseDelta.Y * sensi; 
 
         float PitchLimit = 1.55f;
         if (CameraPitch > PitchLimit) CameraPitch = PitchLimit;
@@ -521,7 +566,7 @@ static void InitBarrels()
         // ==========================================
         couleurMurTransparent = new Color(255, 130, 50, 150);
         modeConstruction = false;
-        if (Raylib.IsKeyDown(KeyboardKey.F))
+        if (KeyBinds.IsBuildWallPressed())
         {
             modeConstruction = true;
             // On active/désactive
@@ -606,251 +651,258 @@ static void InitBarrels()
         if (Raylib.IsKeyPressed(KeyBinds.DebugPrintPosition)) Console.WriteLine($"{espionCube.Pose.Position}");
 
 
-
-        // Saut
-
         float vitesseHorizontale = new Vector2(espionCube.Velocity.Linear.X, espionCube.Velocity.Linear.Z).Length();
         float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
         float vitesseDescente = 0f;
+        bool IsSprinting = KeyBinds.IsSprintingPressed();
+        
         //la plus part des variables ici servent pour la glissade dynamique
 
-
-        if (Raylib.IsKeyPressed(KeyBinds.Jump))
+        if (!isPaused || isOnline)
         {
-            if (NbJump > NbJumpMax)
-            {
-                NbJump--;
-                if (espionCube.Velocity.Linear.Y > 0) { espionCube.Velocity.Linear.Y += 5f; } else { espionCube.Velocity.Linear.Y = 5f; }
-                
-                // ==========================================
-                // NOUVEAU : LE SLIDE-JUMP (Bunny Hop) !
-                // ==========================================
-                // Si on saute PENDANT une glissade rapide, on gagne un boost massif vers l'avant !
-                if (KeyBinds.IsCrouchingPressed() && vitesseHorizontale > 5f)
-                {
-                    Vector3 boostDir = GroundForward;
-                    if (deplacementVoulu.LengthSquared() > 0) boostDir = Vector3.Normalize(deplacementVoulu);
-                    
-                    // L'impulsion du saut (ajoute +4m/s instantanément à ta vitesse)
-                    espionCube.Velocity.Linear += boostDir * 4f; 
-                    //Raylib.PlaySound(swoosh);
-                }
-            }
-        }
+            // Saut
 
-        // Déplacements & WallRun
-        if (!capteurSol.toucheSol)
-        {
-            if ((capteurMurDroit.toucheMur && KeyBinds.IsMoveRightPressed()) || (capteurMurGauche.toucheMur && KeyBinds.IsMoveLeftPressed()) || (capteurMurAvant.toucheMur && KeyBinds.IsMoveForwardPressed()) || (capteurMurArriere.toucheMur && KeyBinds.IsMoveBackwardPressed()))
-            {
-                IsWallRunning = true;
-            }
-        }
-
-        if (KeyBinds.IsMoveForwardPressed() && !capteurMurAvant.toucheMur) deplacementVoulu += GroundForward;
-        if (KeyBinds.IsMoveBackwardPressed() && !capteurMurArriere.toucheMur) deplacementVoulu -= GroundForward;
-        if (KeyBinds.IsMoveLeftPressed() && !capteurMurGauche.toucheMur) deplacementVoulu -= GroundRight; 
-        if (KeyBinds.IsMoveRightPressed() && !capteurMurDroit.toucheMur) deplacementVoulu += GroundRight;
-
-        if (deplacementVoulu.LengthSquared() > 0)
-        {
-            deplacementVoulu = Vector3.Normalize(deplacementVoulu);
-
-            // NOUVEAU : INCLINAISON SUR LA PENTE
-            // Si on est sur le sol et que ce sol n'est pas parfaitement plat
-            if (capteurSol.toucheSol && capteurSol.normaleDuSol != new Vector3(0, 1f, 0))
-            {
-                // 1. On projette notre déplacement horizontal sur le plan incliné du sol
-                // Formule mathématique : Vecteur = Vecteur - (Vecteur . Normale) * Normale
-                float dotProduct = Vector3.Dot(deplacementVoulu, capteurSol.normaleDuSol);
-                deplacementVoulu = deplacementVoulu - (capteurSol.normaleDuSol * dotProduct);
-                
-                // 2. On renormalise pour ne pas perdre de vitesse dans la pente
-                if (deplacementVoulu.LengthSquared() > 0)
-                {
-                    deplacementVoulu = Vector3.Normalize(deplacementVoulu);
-                }
-            }
-        }
-
-        bool IsSprinting = KeyBinds.IsSprintingPressed();
-        float SpeedCoef = IsSprinting ? 1.7f : 1f;
-        float vMax = 8f * SpeedCoef; 
-        float fAcceleration = 0.2f; 
-        float rollActuel = 0f;
-
-        if (IsWallRunning)
-        {
             if (Raylib.IsKeyPressed(KeyBinds.Jump))
             {
-                espionCube.Velocity.Linear.Y += 2f;
-                if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
-                if (capteurMurGauche.toucheMur) deplacementVoulu += GroundRight*20;
-                if (capteurMurAvant.toucheMur) deplacementVoulu -= GroundForward*20;
-                if (capteurMurArriere.toucheMur) deplacementVoulu += GroundForward*20;
-                Console.WriteLine("wall jump");
-            }
-
-            NbJump = NbJumpMax + 1;
-            CanDash = true;
-
-            fAcceleration = 0.1f;
-            if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
-            if (KeyBinds.IsMoveLeftPressed()) rollActuel = 0.25f;
-            else if (KeyBinds.IsMoveRightPressed()) rollActuel = -0.25f;
-        } 
-        else { rollActuel = 0f; fAcceleration = 0.2f; }
-
-        // Accroupir & Glissade
-
-        if (KeyBinds.IsCrouchingPressed() && !Raylib.IsKeyDown(KeyBinds.Jump))
-        {
-            espionCube.SetShape(PlayerTicketAccroupi);
-            hauteurVoulue = 0.5f;
-
-            if (!capteurGlissade.toucheSol) 
-            {
-                // On est en l'air et accroupi (Prêt à atterrir)
-                vitesseDescente--;
-                if (vitesseDescente < -20) vitesseDescente = -20; 
-                espionCube.Velocity.Linear.Y += vitesseDescente;
-                
-                // AIR CONTROL : Permet de tourner en l'air sans perdre de vitesse !
-                fAcceleration = 0.02f; 
-            } 
-            else 
-            {
-                // ==========================================
-                // LA GLISSADE ULTRA DYNAMIQUE
-                // ==========================================
-                
-                // Boost d'entrée (Uniquement si on lance la glissade depuis un sprint)
-                if (Raylib.IsKeyPressed(KeyBinds.Crouch) && vitesseHorizontale > 6f) 
+                if (NbJump > NbJumpMax)
                 {
-                    espionCube.Velocity.Linear += GroundForward * 3f; 
-                    //Raylib.PlaySound(swoosh); 
-                }
-
-                Vector3 normale = capteurSol.normaleDuSol;
-                bool surPente = normale.Y < 0.98f; 
-
-                // On enlève la bride de vitesse : Le joueur peut dépasser la limite !
-                vMax = 30f; 
-
-                if (surPente)
-                {
-                    // --- MODE 1 : ASPIRATION PAR LA PENTE ---
-                    Vector3 gravite = new Vector3(0, -1f, 0);
-                    float dot = Vector3.Dot(gravite, normale);
-                    Vector3 directionDescente = gravite - (normale * dot);
-
-                    if (directionDescente.LengthSquared() > 0)
-                    {
-                        directionDescente = Vector3.Normalize(directionDescente);
-                        // On ajoute constamment de la vitesse selon l'inclinaison
-                        espionCube.Velocity.Linear += directionDescente * 45f * deltaTime;
-                    }
+                    NbJump--;
+                    if (espionCube.Velocity.Linear.Y > 0) { espionCube.Velocity.Linear.Y += 5f; } else { espionCube.Velocity.Linear.Y = 5f; }
                     
-                    // Friction quasi-nulle : On est sur de la glace !
-                    fAcceleration = 0.005f; 
-                }
-                else
-                {
-                    // --- MODE 2 : GLISSADE SUR LE PLAT (Steering & Coasting) ---
-                    if (vitesseHorizontale > 3f)
+                    // ==========================================
+                    // NOUVEAU : LE SLIDE-JUMP (Bunny Hop) !
+                    // ==========================================
+                    // Si on saute PENDANT une glissade rapide, on gagne un boost massif vers l'avant !
+                    if (KeyBinds.IsCrouchingPressed() && vitesseHorizontale > 5f)
                     {
-                        // On autorise le ZQSD à diriger la glissade sans gagner de vitesse
-                        vMax = vitesseHorizontale; 
+                        Vector3 boostDir = GroundForward;
+                        if (deplacementVoulu.LengthSquared() > 0) boostDir = Vector3.Normalize(deplacementVoulu);
                         
-                        // ==========================================
-                        // CORRECTION : DES FRICTIONS MINUSCULES
-                        // ==========================================
-                        // Si tu arrives d'un dash (vitesse > 20), la friction est quasi nulle (0.002f) !
-                        if (vitesseHorizontale > 20f) fAcceleration = 0.002f; 
-                        else if (vitesseHorizontale > 12f) fAcceleration = 0.008f;
-                        else if (vitesseHorizontale > 8f) fAcceleration = 0.015f;  
-                        else fAcceleration = 0.03f;                                
-                        
-                        // Freinage naturel (Perte de seulement 0.2% par frame au lieu de 1.5%)
-                        // Ça te permet de conserver ton élan sur plusieurs dizaines de mètres !
-                        espionCube.Velocity.Linear.X *= 0.999f;
-                        espionCube.Velocity.Linear.Z *= 0.999f;
-                    }
-                    else
-                    {
-                        // Fin de la glissade, on rampe
-                        vMax = 3f;
-                        fAcceleration = 0.2f;
+                        // L'impulsion du saut (ajoute +4m/s instantanément à ta vitesse)
+                        espionCube.Velocity.Linear += boostDir * 4f; 
+                        //Raylib.PlaySound(swoosh);
                     }
                 }
             }
-        } 
-        else 
-        {
-            // Le joueur est debout
-            espionCube.SetShape(PlayerTicket);
-            hauteurVoulue = 0.8f; 
-            
-            // CORRECTION : On réapplique le multiplicateur de sprint ici !
-            vMax = 8f * SpeedCoef; 
-            
-            // Air Control quand on est debout en l'air
-            fAcceleration = capteurSol.toucheSol ? 0.2f : 0.02f; 
-            vitesseDescente = 0;
-        }
 
-
-        // ==========================================
-        // LA RÈGLE D'OR DE LA CONSERVATION DE VITESSE (Air Strafing)
-        // ==========================================
-        // Si tu vas plus vite que ta limite (ex: grâce à une pente ou un dash)
-        // ET que tu es en l'air OU en train de glisser...
-        if (vitesseHorizontale > vMax && (!capteurSol.toucheSol || KeyBinds.IsCrouchingPressed()))
-        {
-            // On empêche le jeu de te freiner en élevant la limite temporairement !
-            // Tes touches ZQSD vont "tirer" ta trajectoire vers la caméra sans perdre l'élan.
-            vMax = vitesseHorizontale; 
-        }
-
-        // --- CALCUL FINAL ---
-        // CORRECTION 2 : On retire "* SpeedCoef" ici, car il est déjà dans le vMax de base !
-        Vector3 targetVelocity = deplacementVoulu * vMax;
-        espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
-        espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
-
-
-        if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyBinds.Jump))
-        {
-            if (targetVelocity.Y > 0) 
+            // Déplacements & WallRun
+            if (!capteurSol.toucheSol)
             {
-                // On aide activement la capsule à monter la pente en appliquant la vitesse Y voulue !
-                espionCube.Velocity.Linear.Y = targetVelocity.Y;
+                if ((capteurMurDroit.toucheMur && KeyBinds.IsMoveRightPressed()) || (capteurMurGauche.toucheMur && KeyBinds.IsMoveLeftPressed()) || (capteurMurAvant.toucheMur && KeyBinds.IsMoveForwardPressed()) || (capteurMurArriere.toucheMur && KeyBinds.IsMoveBackwardPressed()))
+                {
+                    IsWallRunning = true;
+                }
             }
-        }
 
-        // Dash
-        int dashSpeed = 40;
-        if (!capteurSol.toucheSol) dashSpeed = 18; // SI ON EST EN L AIR
-
-        if (KeyBinds.IsDashingPressed() && CanDash && dashChrono >= 90){
-            Raylib.PlaySound(swoosh);
-            Vector3 directionDash = GroundForward; 
+            if (KeyBinds.IsMoveForwardPressed() && !capteurMurAvant.toucheMur) deplacementVoulu += GroundForward;
+            if (KeyBinds.IsMoveBackwardPressed() && !capteurMurArriere.toucheMur) deplacementVoulu -= GroundForward;
+            if (KeyBinds.IsMoveLeftPressed() && !capteurMurGauche.toucheMur) deplacementVoulu -= GroundRight; 
+            if (KeyBinds.IsMoveRightPressed() && !capteurMurDroit.toucheMur) deplacementVoulu += GroundRight;
 
             if (deplacementVoulu.LengthSquared() > 0)
             {
-                directionDash = deplacementVoulu; 
-            }
-            espionCube.Velocity.Linear += directionDash * dashSpeed; //puissance du dash
+                deplacementVoulu = Vector3.Normalize(deplacementVoulu);
 
-            CanDash = false ;
-            dashChrono = 0;
+                // NOUVEAU : INCLINAISON SUR LA PENTE
+                // Si on est sur le sol et que ce sol n'est pas parfaitement plat
+                if (capteurSol.toucheSol && capteurSol.normaleDuSol != new Vector3(0, 1f, 0))
+                {
+                    // 1. On projette notre déplacement horizontal sur le plan incliné du sol
+                    // Formule mathématique : Vecteur = Vecteur - (Vecteur . Normale) * Normale
+                    float dotProduct = Vector3.Dot(deplacementVoulu, capteurSol.normaleDuSol);
+                    deplacementVoulu = deplacementVoulu - (capteurSol.normaleDuSol * dotProduct);
+                    
+                    // 2. On renormalise pour ne pas perdre de vitesse dans la pente
+                    if (deplacementVoulu.LengthSquared() > 0)
+                    {
+                        deplacementVoulu = Vector3.Normalize(deplacementVoulu);
+                    }
+                }
+            }
+
+            IsSprinting = KeyBinds.IsSprintingPressed();
+            float SpeedCoef = IsSprinting ? 1.7f : 1f;
+            float vMax = 8f * SpeedCoef; 
+            float fAcceleration = 0.2f; 
+            float rollActuel = 0f;
+
+            if (IsWallRunning)
+            {
+                if (Raylib.IsKeyPressed(KeyBinds.Jump))
+                {
+                    espionCube.Velocity.Linear.Y += 2f;
+                    if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
+                    if (capteurMurGauche.toucheMur) deplacementVoulu += GroundRight*20;
+                    if (capteurMurAvant.toucheMur) deplacementVoulu -= GroundForward*20;
+                    if (capteurMurArriere.toucheMur) deplacementVoulu += GroundForward*20;
+                    Console.WriteLine("wall jump");
+                }
+
+                NbJump = NbJumpMax + 1;
+                CanDash = true;
+
+                fAcceleration = 0.1f;
+                if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
+                if (KeyBinds.IsMoveLeftPressed()) rollActuel = 0.25f;
+                else if (KeyBinds.IsMoveRightPressed()) rollActuel = -0.25f;
+            } 
+            else { rollActuel = 0f; fAcceleration = 0.2f; }
+
+            // Accroupir & Glissade
+
+            if (KeyBinds.IsCrouchingPressed() && !Raylib.IsKeyDown(KeyBinds.Jump))
+            {
+                espionCube.SetShape(PlayerTicketAccroupi);
+                hauteurVoulue = 0.5f;
+
+                if (!capteurGlissade.toucheSol) 
+                {
+                    // On est en l'air et accroupi (Prêt à atterrir)
+                    vitesseDescente--;
+                    if (vitesseDescente < -20) vitesseDescente = -20; 
+                    espionCube.Velocity.Linear.Y += vitesseDescente;
+                    
+                    // AIR CONTROL : Permet de tourner en l'air sans perdre de vitesse !
+                    fAcceleration = 0.02f; 
+                } 
+                else 
+                {
+                    // ==========================================
+                    // LA GLISSADE ULTRA DYNAMIQUE
+                    // ==========================================
+                    
+                    // Boost d'entrée (Uniquement si on lance la glissade depuis un sprint)
+                    if (Raylib.IsKeyPressed(KeyBinds.Crouch) && vitesseHorizontale > 6f) 
+                    {
+                        espionCube.Velocity.Linear += GroundForward * 3f; 
+                        //Raylib.PlaySound(swoosh); 
+                    }
+
+                    Vector3 normale = capteurSol.normaleDuSol;
+                    bool surPente = normale.Y < 0.98f; 
+
+                    // On enlève la bride de vitesse : Le joueur peut dépasser la limite !
+                    vMax = 30f; 
+
+                    if (surPente)
+                    {
+                        // --- MODE 1 : ASPIRATION PAR LA PENTE ---
+                        Vector3 gravite = new Vector3(0, -1f, 0);
+                        float dot = Vector3.Dot(gravite, normale);
+                        Vector3 directionDescente = gravite - (normale * dot);
+
+                        if (directionDescente.LengthSquared() > 0)
+                        {
+                            directionDescente = Vector3.Normalize(directionDescente);
+                            // On ajoute constamment de la vitesse selon l'inclinaison
+                            espionCube.Velocity.Linear += directionDescente * 45f * deltaTime;
+                        }
+                        
+                        // Friction quasi-nulle : On est sur de la glace !
+                        fAcceleration = 0.005f; 
+                    }
+                    else
+                    {
+                        // --- MODE 2 : GLISSADE SUR LE PLAT (Steering & Coasting) ---
+                        if (vitesseHorizontale > 3f)
+                        {
+                            // On autorise le ZQSD à diriger la glissade sans gagner de vitesse
+                            vMax = vitesseHorizontale; 
+                            
+                            // ==========================================
+                            // CORRECTION : DES FRICTIONS MINUSCULES
+                            // ==========================================
+                            // Si tu arrives d'un dash (vitesse > 20), la friction est quasi nulle (0.002f) !
+                            if (vitesseHorizontale > 20f) fAcceleration = 0.002f; 
+                            else if (vitesseHorizontale > 12f) fAcceleration = 0.008f;
+                            else if (vitesseHorizontale > 8f) fAcceleration = 0.015f;  
+                            else fAcceleration = 0.03f;                                
+                            
+                            // Freinage naturel (Perte de seulement 0.2% par frame au lieu de 1.5%)
+                            // Ça te permet de conserver ton élan sur plusieurs dizaines de mètres !
+                            espionCube.Velocity.Linear.X *= 0.999f;
+                            espionCube.Velocity.Linear.Z *= 0.999f;
+                        }
+                        else
+                        {
+                            // Fin de la glissade, on rampe
+                            vMax = 3f;
+                            fAcceleration = 0.2f;
+                        }
+                    }
+                }
+            } 
+            else 
+            {
+                // Le joueur est debout
+                espionCube.SetShape(PlayerTicket);
+                hauteurVoulue = 0.8f; 
+                
+                // CORRECTION : On réapplique le multiplicateur de sprint ici !
+                vMax = 8f * SpeedCoef; 
+                
+                // Air Control quand on est debout en l'air
+                fAcceleration = capteurSol.toucheSol ? 0.2f : 0.02f; 
+                vitesseDescente = 0;
+            }
+
+
+            // ==========================================
+            // LA RÈGLE D'OR DE LA CONSERVATION DE VITESSE (Air Strafing)
+            // ==========================================
+            // Si tu vas plus vite que ta limite (ex: grâce à une pente ou un dash)
+            // ET que tu es en l'air OU en train de glisser...
+            if (vitesseHorizontale > vMax && (!capteurSol.toucheSol || KeyBinds.IsCrouchingPressed()))
+            {
+                // On empêche le jeu de te freiner en élevant la limite temporairement !
+                // Tes touches ZQSD vont "tirer" ta trajectoire vers la caméra sans perdre l'élan.
+                vMax = vitesseHorizontale; 
+            }
+
+            // --- CALCUL FINAL ---
+            // CORRECTION 2 : On retire "* SpeedCoef" ici, car il est déjà dans le vMax de base !
+            Vector3 targetVelocity = deplacementVoulu * vMax;
+            espionCube.Velocity.Linear.X += (targetVelocity.X - espionCube.Velocity.Linear.X) * fAcceleration;        
+            espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
+
+
+            if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyBinds.Jump))
+            {
+                if (targetVelocity.Y > 0) 
+                {
+                    // On aide activement la capsule à monter la pente en appliquant la vitesse Y voulue !
+                    espionCube.Velocity.Linear.Y = targetVelocity.Y;
+                }
+            }
+
+            // Dash
+            int dashSpeed = 40;
+            if (!capteurSol.toucheSol) dashSpeed = 18; // SI ON EST EN L AIR
+
+            if (KeyBinds.IsDashingPressed() && CanDash && dashChrono >= 90){
+                Raylib.PlaySound(swoosh);
+                Vector3 directionDash = GroundForward; 
+
+                if (deplacementVoulu.LengthSquared() > 0)
+                {
+                    directionDash = deplacementVoulu; 
+                }
+                espionCube.Velocity.Linear += directionDash * dashSpeed; //puissance du dash
+
+                CanDash = false ;
+                dashChrono = 0;
+            }
         }
 
         // Jump pad (Sandbox)
         //if (posCube.X > 9 && posCube.X < 11 && posCube.Z > -1 && posCube.Z < 1 && capteurSol.toucheSol) espionCube.Velocity.Linear.Y += 20f;
 
         // On fait passer le temps
-        simulation.Timestep(1f / 60f);
+        // On fait passer le temps physique
+        if (!isPaused || isOnline)
+        {
+            simulation.Timestep(1f / 60f);
+        }
 
         // Application finale de la Caméra
         camera.Position = new Vector3(posCube.X, posCube.Y + hauteurVoulue, posCube.Z);
@@ -873,7 +925,7 @@ static void InitBarrels()
 
 
         // === SYSTÈME DE SURVIE : LE TEMPS PASSE ===
-        if (localPlayer.IsAlive) // Le chrono tourne seulement si on est en vie
+        if (localPlayer.IsAlive && (!isPaused || isOnline)) // Le chrono tourne seulement si on est en vie
         {
             survivalTime += deltaTime;
             enemySpawnTimer -= deltaTime;
@@ -1149,15 +1201,17 @@ static void InitBarrels()
         weaponCamera.FovY = 45.0f;
         weaponCamera.Projection = CameraProjection.Perspective;
 
-        bool hasWeapon = true;   
+        
         bool hasAmmo = currentWeapon.ammo > 0;    
         Model actualWeapon = currentWeapon.modelname;
         
         // --- LOGIQUE DE CATÉGORIES D'ARMES ---
-        bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon);
-        bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
+
+        //defini plus tot avec les parametre de caméra
+        //bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon);
+        //bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
         
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee;
+        //bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee;
         
         showweapon = true;
 
@@ -1290,7 +1344,7 @@ static void InitBarrels()
         // [ZONE ILIAN] 5. LOGIQUE DES TIRS
         // ========================================================
         // Si on a une arme et qu'on clique
-        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left) && !modeConstruction)
+        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left) && !modeConstruction && !isPaused)
         {
             Vector3 direction = CamFroward;
             
@@ -1559,6 +1613,27 @@ static void InitBarrels()
         {
             Color damageColor = new Color(255, 0, 0, (int)(damageOverlayOpacity * 255));
             Raylib.DrawRectangle(0, 0, LargeurFenetre, HauteurFenetre, damageColor);
+        }
+        
+        // ==========================================
+        // AFFICHAGE DU MENU PAUSE ET OPTIONS (PAR-DESSUS LE JEU)
+        // ==========================================
+        if (isPaused)
+        {
+            // Si le joueur a cliqué sur Options, on affiche le calque des paramètres
+            if (isOptionsMenuOpen)
+            {
+                AfficherMenuOptions(ref endroit);
+            }
+            // Sinon, on affiche le menu pause normal (Online ou Offline)
+            else if (isOnline) 
+            {
+                MenugameOnline();
+            }
+            else 
+            {
+                MenugameOffline();
+            }
         }
 
 

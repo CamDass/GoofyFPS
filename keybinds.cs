@@ -26,6 +26,7 @@ public static class KeyBinds
     public static bool IsJumpingPressed() => Raylib.IsKeyPressed(Settings.KEY_Jump);
     public static bool IsDashingPressed() => Raylib.IsKeyPressed(Settings.KEY_Dash);
     public static bool IsReloadingPressed() => Raylib.IsKeyPressed(Settings.KEY_Reload);
+    public static bool IsBuildWallPressed() => Raylib.IsKeyDown(Settings.KEY_BuildWall);
 
     // ===== MOVEMENT KEYS (Direct access to Settings) =====
     public static KeyboardKey MoveForward => Settings.KEY_MoveForward;
@@ -46,7 +47,6 @@ public static class KeyBinds
 
     // ===== MENU KEYS =====
     public static KeyboardKey ToggleGameMenu => Settings.KEY_ToggleGameMenu;
-    public static KeyboardKey ExitToMenu => Settings.KEY_ExitToMenu;
     public static KeyboardKey SelectMenu => Settings.KEY_SelectMenu;
 
     // ===== DEBUG KEYS =====

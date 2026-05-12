@@ -34,7 +34,14 @@ public partial class Program
     static int X_carre;
     static int Y_carre;
     static string endroit = "menu";
-    static bool isMenuGameOpen = false;
+
+    //On remplace "isMenuGameOpen" par un système plus pro
+    public static bool isPaused = false;
+    
+    //fausse variable pour simuler si on est en ligne ou pas !
+    public static bool isOnline = true;
+    public static bool isOptionsMenuOpen = false;
+    
 
     static List<Texture2D> ListeTexture = new List<Texture2D>();
 
@@ -158,6 +165,9 @@ public partial class Program
     static float MouseSensi = 0.003f;
     static float actualFov = 60f;
     static float boostFov = 0f;
+
+    public static float hauteurVoulue = 0.8f;
+    public static float rollActuel = 0f;
 
 
 
@@ -288,7 +298,6 @@ public partial class Program
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
-        groundImpactSound = Raylib.LoadSound("assets\\sounds\\ground-impact.mp3");
         wallSound = Raylib.LoadSound("assets\\sounds\\wall.mp3");
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées

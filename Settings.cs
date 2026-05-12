@@ -34,11 +34,13 @@ public static class Settings
     public static KeyboardKey KEY_Crouch = KeyboardKey.C;
     public static KeyboardKey KEY_Dash = KeyboardKey.LeftControl;
     public static KeyboardKey KEY_Reload = KeyboardKey.R;
+    public static KeyboardKey KEY_BuildWall = KeyboardKey.F;
 
     // Menu
-    public static KeyboardKey KEY_ToggleGameMenu = KeyboardKey.LeftAlt;
+    public static KeyboardKey KEY_ToggleGameMenu = KeyboardKey.Tab;
     public static KeyboardKey KEY_ExitToMenu = KeyboardKey.Tab;
     public static KeyboardKey KEY_SelectMenu = KeyboardKey.Space;
+    
 
     // Debug
     public static KeyboardKey KEY_DebugTeleportCenter = KeyboardKey.P;
