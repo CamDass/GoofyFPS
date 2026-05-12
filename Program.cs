@@ -605,10 +605,6 @@ public partial class Program
         Raylib.SetSoundVolume(swoosh, Settings.SFXVolume); // Même les swoosh sont pris en compte !
         Raylib.SetSoundVolume(wallSound, Settings.SFXVolume);
 
-        // -> Les sons du Joueur
-        Raylib.SetSoundVolume(Player.gameover, Settings.SFXVolume);
-        Raylib.SetSoundVolume(Player.paw, Settings.SFXVolume);
-
         // -> Le pool de sons de mort
         for (int i = 0; i < deathSounds.Length; i++)
         {

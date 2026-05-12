@@ -55,10 +55,10 @@ partial class Program
 
             if (Raylib.IsMouseButtonReleased(MouseButton.Left))
             {
-                //isMenuGameOpen = false; // Fermer le menu
-                Raylib.DisableCursor();
+                isMenuGameOpen = false; // Fermer le menu
                 Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                return;
+                endroit = "option";
+
             }
         }
         else
