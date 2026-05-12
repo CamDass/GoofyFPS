@@ -270,11 +270,6 @@ public class Weapon
             return finalangle;
         }
     }
-
-    public void Switch()
-    {
-        
-    }
 }
 
 
