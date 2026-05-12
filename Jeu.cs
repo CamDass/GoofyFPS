@@ -57,25 +57,115 @@ partial class Program
         }
     }
 
-    static List<BarrelSpot> barrelSpots = new List<BarrelSpot>
+
+
+
+
+
+    // ======== bdd Barils ========
+    static Vector3[][] mapBarrelCoords = new Vector3[][]
     {
-        // Remplace ces coordonnées par tes propres positions XYZ
-        new BarrelSpot(new Vector3(-57f, -0.55f, 31.92f)),
-        new BarrelSpot(new Vector3(-49f, 42.0f, 101f)),
-        new BarrelSpot(new Vector3(-53f, 7.5f, 130f)),
-        new BarrelSpot(new Vector3(-22f, -0.55f, 128f)),
-        new BarrelSpot(new Vector3(3f,-0.55f, 103f)),
-        new BarrelSpot(new Vector3(3f, 4.5f, 54f)),
-        new BarrelSpot(new Vector3(-15f, -0.55f, 22f)),
-        new BarrelSpot(new Vector3(-76.5f, 8f, 10.5f)),
-        new BarrelSpot(new Vector3(-81.5f, 5f, 42f)),
-        new BarrelSpot(new Vector3(-110f, -0.55f, 50.5f)),
-        new BarrelSpot(new Vector3(-72f, 9.0f, 91f)),
-        new BarrelSpot(new Vector3(-76f, -0.55f, 114f)),
-        new BarrelSpot(new Vector3(-46f, -0.55f, 52f)),
-        new BarrelSpot(new Vector3(-35f, 3.7f, 87f)),
-        new BarrelSpot(new Vector3(-18f, -0.55f, 71f)),
+        // Map 0 : Tutoriel
+        [
+            new Vector3(5f, 1f, 5f)
+        ],
+
+
+        // Map 1 : La Ville
+        [ 
+            new Vector3(-57f, -0.55f, 31.92f), 
+            new Vector3(-49f, 42.0f, 101f), 
+            new Vector3(-53f, 7.5f, 130f),
+            new Vector3(-22f, -0.55f, 128f), 
+            new Vector3(3f,-0.55f, 103f), 
+            new Vector3(3f, 4.5f, 54f),
+            new Vector3(-15f, -0.55f, 22f), 
+            new Vector3(-76.5f, 8f, 10.5f), 
+            new Vector3(-81.5f, 5f, 42f),
+            new Vector3(-110f, -0.55f, 50.5f), 
+            new Vector3(-72f, 9.0f, 91f), 
+            new Vector3(-76f, -0.55f, 114f),
+            new Vector3(-46f, -0.55f, 52f), 
+            new Vector3(-35f, 3.7f, 87f), 
+            new Vector3(-18f, -0.55f, 71f)
+        ],
+
+
+        // Map 2 : Sandbox
+        [
+            new Vector3(10f, 1.5f, 10f), 
+            new Vector3(-10f, 1.5f, -10f)
+        ]
     };
+
+    static List<BarrelSpot> barrelSpots = new List<BarrelSpot>();
+
+
+
+
+
+
+
+    // ======== Spawns Ennemis bdd ========
+    static Vector3[][] mapEnemySpawns = new Vector3[][]
+    {
+        // Map 0 : Tutoriel
+        [
+            new Vector3(10f, 2f, 10f), 
+            new Vector3(-10f, 2f, -10f)
+        ],
+
+
+        // Map 1 : La Ville
+        [ 
+            new Vector3(2f, 2f, 2f), 
+            new Vector3(-27f, 2f, 64f), 
+            new Vector3(-100f, 2f, 99f), 
+            new Vector3(-104f, 2f, 149f), 
+            new Vector3(-28f, 2f, 127f), 
+            new Vector3(4f, 2f, 83f),
+            new Vector3(-80f, 2f, 27f), 
+            new Vector3(-94f, 2f, 13f)
+        ],
+
+
+        // Map 2 : Sandbox
+        [
+            new Vector3(20f, 2f, 20f), 
+            new Vector3(-20f, 2f, -20f)
+        ]
+    };
+
+    //======== on load tout ========
+    public static void LoadMapSpawns(int mapIndex)
+    {
+        // 1. Charger les Spawns du Joueur
+        Program.listeSpawns.Clear();
+        foreach (Vector3 pos in mapPlayerSpawns[mapIndex])
+        {
+            Program.listeSpawns.Add(pos);
+        }
+
+        // 2. Charger les Barils
+        barrelSpots.Clear();
+        foreach (Vector3 pos in mapBarrelCoords[mapIndex])
+        {
+            barrelSpots.Add(new BarrelSpot(pos, false));
+        }
+
+        // 3. Charger les Spawns Ennemis
+        enemySpawnPoints.Clear();
+        foreach (Vector3 pos in mapEnemySpawns[mapIndex])
+        {
+            enemySpawnPoints.Add(pos);
+        }
+    }
+
+    
+
+
+
+
 
     public static void SwitchWeaponFromBarrel(bool excludeBazooka = false)
     {
@@ -260,6 +350,7 @@ static void InitBarrels()
 
 
 
+
     // =============== enemis ===============
     public static void InitEnnemis()
     {
@@ -270,25 +361,18 @@ static void InitBarrels()
         }
         enemiesList.Clear();
 
-        // 2. On définit tes points de Spawn (Coordonnées à adapter selon ta map !)
-        enemySpawnPoints.Clear();
-        enemySpawnPoints.Add(new Vector3(2f, 2f, 2f));
-        enemySpawnPoints.Add(new Vector3(-27f, 2f, 64f));
-        enemySpawnPoints.Add(new Vector3(-100f, 2f, 99f));
-        enemySpawnPoints.Add(new Vector3(-104f, 2f, 149f));
-        enemySpawnPoints.Add(new Vector3(-28f, 2f, 127f));
-        enemySpawnPoints.Add(new Vector3(4f, 2f, 83f));
-        enemySpawnPoints.Add(new Vector3(-80f, 2f, 27f));
-        enemySpawnPoints.Add(new Vector3(-94f, 2f, 13f));
+        // NOUVEAU : On ne définit plus enemySpawnPoints ici, c'est LoadMapSpawns qui s'en charge !
 
-
-        // 3. On réinitialise les chronos
+        // 2. On réinitialise les chronos
         survivalTime = 0f;
-        enemySpawnTimer = 10; //premier chrono plus long de 10s
+        enemySpawnTimer = 10;
 
-        // 4. On fait apparaître 2 ennemis de base
-        enemiesList.Add(new Enemy(enemySpawnPoints[0], 100, 4.0f));
-        enemiesList.Add(new Enemy(enemySpawnPoints[1], 100, 4.0f));
+        // 3. On fait apparaître 2 ennemis de base
+        if (enemySpawnPoints.Count >= 2)
+        {
+            enemiesList.Add(new Enemy(enemySpawnPoints[0], 100, 4.0f));
+            enemiesList.Add(new Enemy(enemySpawnPoints[1], 100, 4.0f));
+        }
     }
 
 

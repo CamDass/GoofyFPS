@@ -277,6 +277,8 @@ partial class Program
             if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId);
         }
         enemiesList.Clear();
+        killCount = 0;
+        deathCount = 0;
 
         // ==========================================
         // 2. LE CORRECTIF DU CRASH : PURGE DE LA MÉMOIRE
@@ -361,6 +363,8 @@ partial class Program
         string[] nomsMap = { "Tutoriel", "La Ville", "SandBox" };
         string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
         string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb"};
+        //attention si on ajoute une map ne pas oublier de mettre 
+        //les spawnpoint a jour dans jeu.cs
 
         // Paramètres de taille et d'espacement
         int largeurMap = 350;
@@ -478,8 +482,16 @@ partial class Program
                         }
                     }
 
+                    LoadMapSpawns(n);
                     InitBarrels();
                     InitEnnemis();
+
+                    // Téléportation du joueur vers un spawn de la NOUVELLE map !
+                    int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+                    BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
+                    joueurVivant.Pose.Position = listeSpawns[indexAleatoire];
+                    joueurVivant.Velocity.Linear = Vector3.Zero; // Arrêt net
+                    joueurVivant.Velocity.Angular = Vector3.Zero;
 
                     endroit = destinationsMap[n]; // On lance la bonne map !
 
@@ -1033,8 +1045,8 @@ partial class Program
         // --- FAUSSE LIGNE 1 : TOI (Mockup) ---
         int row1Y = scoreY + 70;
         Raylib.DrawText("CamPitaine", scoreX + 20, row1Y, 30, Color.White);
-        Raylib.DrawText("20", scoreX + 300, row1Y, 30, Color.White);
-        Raylib.DrawText("3", scoreX + 420, row1Y, 30, Color.White);
+        Raylib.DrawText(Program.killCount.ToString(), scoreX + 300, row1Y, 30, Color.White);
+        Raylib.DrawText(Program.deathCount.ToString(), scoreX + 420, row1Y, 30, Color.White);
         Raylib.DrawText("10", scoreX + 520, row1Y, 30, Color.Green); // Ping excellent = Vert
 
         // --- FAUSSE LIGNE 2 : L'ENNEMI (Mockup) ---

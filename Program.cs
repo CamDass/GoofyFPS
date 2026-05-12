@@ -18,14 +18,28 @@ public partial class Program
     public static Player localPlayer = new Player(100);
     public static float hitmarkerTimer = 0f;
 
-    public static List<Vector3> listeSpawns = new List<Vector3>
+
+    // 1. La base de données de tous les spawns de joueur selon la map
+    static Vector3[][] mapPlayerSpawns = new Vector3[][]
     {
-        new Vector3(3, 0, -21),     
-        new Vector3(-104, 21, 45),
-        new Vector3(-107, 0, 155),    
+        // Map 0 : Tutoriel
+        [new Vector3(0, 5, 0)],
+
+
+        // Map 1 : La Ville (Tes anciennes coordonnées)
+        [new Vector3(3, 0, -21),
+        new Vector3(-104, 21, 45), 
+        new Vector3(-107, 0, 155), 
         new Vector3(-8, 10, 96), 
-        new Vector3(-39, 31, 85), 
+        new Vector3(-39, 31, 85)],
+        
+        
+        // Map 2 : Sandbox
+        [new Vector3(0, 5, 0)]
     };
+    
+    // 2. La liste active (qui sera remplie par le jeu)
+    public static List<Vector3> listeSpawns = new List<Vector3> { new Vector3(0, 5, 0) }; // Coordonnée par défaut pour le démarrage
 
 
     static int FPS = 60;
@@ -176,6 +190,7 @@ public partial class Program
     // ========================================================
     public static float survivalTime = 0f;
     public static int killCount = 0;
+    public static int deathCount = 0;
     public static float enemySpawnTimer = 0f;
     public static float timeBetweenSpawns = 3.0f; // 1 ennemi toutes les 3 secondes
     public static List<Vector3> enemySpawnPoints = new List<Vector3>();
