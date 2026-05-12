@@ -1039,7 +1039,7 @@ partial class Program
 
         // --- FAUSSE LIGNE 2 : L'ENNEMI (Mockup) ---
         int row2Y = scoreY + 120;
-        Raylib.DrawText("NoobSlayer99", scoreX + 20, row2Y, 30, Color.LightGray);
+        Raylib.DrawText("NoobSucker99", scoreX + 20, row2Y, 30, Color.LightGray);
         Raylib.DrawText("5", scoreX + 300, row2Y, 30, Color.LightGray);
         Raylib.DrawText("12", scoreX + 420, row2Y, 30, Color.LightGray);
         Raylib.DrawText("150", scoreX + 520, row2Y, 30, Color.Red); // Ping mauvais = Rouge
