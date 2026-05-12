@@ -233,6 +233,7 @@ public partial class Program
     // ========================================================
     static void Main()
     {
+        //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
         Raylib.InitWindow(LargeurFenetre, HauteurFenetre, "GoofyFPS");
 
         Image ico = Raylib.LoadImage("src\\GoofyFPS-small.png");
