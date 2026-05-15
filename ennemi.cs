@@ -172,11 +172,13 @@ public class Enemy
         if (health <= 0)
         {
             isAlive = false;
-            // Utiliser le pool de sounds de death pour permettre plusieurs lectures simultan\u00e9es
+            
+            // 1. LE JOUEUR A TUÉ L'ENNEMI : Son de caisse enregistreuse !
+            Program.PlaySoundWithPriority(Program.killSound, Program.SoundPriority.High);
+            
+            // Le cri de mort du zombie (déjà existant)
             Raylib.PlaySound(Program.deathSounds[Program.deathSoundIndex]);
             Program.deathSoundIndex = (Program.deathSoundIndex + 1) % Program.deathSounds.Length;
-            // On laisse la suppression du corps à la boucle de nettoyage du jeu,
-            // pour éviter de modifier le monde physique pendant un raycast ou un autre traitement.
         }
     }
 

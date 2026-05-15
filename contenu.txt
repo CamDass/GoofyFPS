@@ -45,6 +45,7 @@ C:.
 |   \---sounds
 |       |   awp_02.mp3
 |       |   batteuse.mp3
+|       |   dash-notif.mp3
 |       |   death.mp3
 |       |   fahh-bomb.mp3
 |       |   fouchette-1.mp3
@@ -55,11 +56,20 @@ C:.
 |       |   gameover.mp3
 |       |   ground-impact.mp3
 |       |   gunshots-mixed.mp3
+|       |   Heartbeat.mp3
 |       |   hit.mp3
+|       |   hitmarker.mp3
+|       |   kill-sound.mp3
 |       |   lobotomy.mp3
 |       |   loud-explosion.mp3
 |       |   menuMusic.mp3
 |       |   no-ammo.mp3
+|       |   pas-droit-1.mp3
+|       |   pas-droit-2.mp3
+|       |   pas-droit-3.mp3
+|       |   pas-gauche-1.mp3
+|       |   pas-gauche-2.mp3
+|       |   pas-gauche-3.mp3
 |       |   paw.mp3
 |       |   raaaah.mp3
 |       |   reload.mp3
@@ -69,7 +79,9 @@ C:.
 |       |   survole.mp3
 |       |   swoosh.mp3
 |       |   unselect.mp3
+|       |   wall-notif.mp3
 |       |   wall.mp3
+|       |   Wind-howl-loop.mp3
 |       |   
 |       \---quality-sound-for-later
 |               gun-reload.mp3
@@ -399,11 +411,13 @@ public class Enemy
         if (health <= 0)
         {
             isAlive = false;
-            // Utiliser le pool de sounds de death pour permettre plusieurs lectures simultan\u00e9es
+            
+            // 1. LE JOUEUR A TUÉ L'ENNEMI : Son de caisse enregistreuse !
+            Program.PlaySoundWithPriority(Program.killSound, Program.SoundPriority.High);
+            
+            // Le cri de mort du zombie (déjà existant)
             Raylib.PlaySound(Program.deathSounds[Program.deathSoundIndex]);
             Program.deathSoundIndex = (Program.deathSoundIndex + 1) % Program.deathSounds.Length;
-            // On laisse la suppression du corps à la boucle de nettoyage du jeu,
-            // pour éviter de modifier le monde physique pendant un raycast ou un autre traitement.
         }
     }
 
@@ -451,10 +465,10 @@ partial class Program
     // ========================================================
     static Weapon sniperrifle = new Weapon("Sniper", 100, 1000, 1.0f, 5, 3, sniper, snipershot, 0f);
     static Weapon karambitknife = new Weapon("Karambit", 75, 4, 0.4f, 1, 0, karambit, karambitshot, 0f, false);
-    static Weapon bazookaWeapon = new Weapon("Bazooka", 100, 1000, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
-    static Weapon shotgunWeapon = new Weapon("Shotgun", 90, 10, 1.5f, 5, 2, shotgun, shotgunshot, 15.0f);
-    static Weapon pistolWeapon = new Weapon("Pistol", 5, 1000, 0.08f, 80, 2, pistol, pistolshot, 0f);
-    static Weapon revolverWeapon = new Weapon("Revolver", 35, 1000, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
+    static Weapon bazookaWeapon = new Weapon("Bazooka", 80, 1000, 3.0f, 1, 4, bazooka, bazookashot, 15.0f);
+    static Weapon shotgunWeapon = new Weapon("Shotgun", 75, 10, 1f, 5, 2, shotgun, shotgunshot, 15.0f);
+    static Weapon pistolWeapon = new Weapon("Pistol", 8, 1000, 0.08f, 80, 2, pistol, pistolshot, 0f);
+    static Weapon revolverWeapon = new Weapon("Revolver", 40, 1000, 0.8f, 6, 2, revolver, revolvershot, 15.0f);
     static Weapon swordWeapon = new Weapon("Sword", 10, 1000, 0.15f, 30, 4, sword, swordslash, 3f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
@@ -493,25 +507,115 @@ partial class Program
         }
     }
 
-    static List<BarrelSpot> barrelSpots = new List<BarrelSpot>
+
+
+
+
+
+    // ======== bdd Barils ========
+    static Vector3[][] mapBarrelCoords = new Vector3[][]
     {
-        // Remplace ces coordonnées par tes propres positions XYZ
-        new BarrelSpot(new Vector3(-57f, -0.55f, 31.92f)),
-        new BarrelSpot(new Vector3(-49f, 42.0f, 101f)),
-        new BarrelSpot(new Vector3(-53f, 7.5f, 130f)),
-        new BarrelSpot(new Vector3(-22f, -0.55f, 128f)),
-        new BarrelSpot(new Vector3(3f,-0.55f, 103f)),
-        new BarrelSpot(new Vector3(3f, 4.5f, 54f)),
-        new BarrelSpot(new Vector3(-15f, -0.55f, 22f)),
-        new BarrelSpot(new Vector3(-76.5f, 8f, 10.5f)),
-        new BarrelSpot(new Vector3(-81.5f, 5f, 42f)),
-        new BarrelSpot(new Vector3(-110f, -0.55f, 50.5f)),
-        new BarrelSpot(new Vector3(-72f, 9.0f, 91f)),
-        new BarrelSpot(new Vector3(-76f, -0.55f, 114f)),
-        new BarrelSpot(new Vector3(-46f, -0.55f, 52f)),
-        new BarrelSpot(new Vector3(-35f, 3.7f, 87f)),
-        new BarrelSpot(new Vector3(-18f, -0.55f, 71f)),
+        // Map 0 : Tutoriel
+        [
+            new Vector3(5f, 1f, 5f)
+        ],
+
+
+        // Map 1 : La Ville
+        [ 
+            new Vector3(-57f, -0.55f, 31.92f), 
+            new Vector3(-49f, 42.0f, 101f), 
+            new Vector3(-53f, 7.5f, 130f),
+            new Vector3(-22f, -0.55f, 128f), 
+            new Vector3(3f,-0.55f, 103f), 
+            new Vector3(3f, 4.5f, 54f),
+            new Vector3(-15f, -0.55f, 22f), 
+            new Vector3(-76.5f, 8f, 10.5f), 
+            new Vector3(-81.5f, 5f, 42f),
+            new Vector3(-110f, -0.55f, 50.5f), 
+            new Vector3(-72f, 9.0f, 91f), 
+            new Vector3(-76f, -0.55f, 114f),
+            new Vector3(-46f, -0.55f, 52f), 
+            new Vector3(-35f, 3.7f, 87f), 
+            new Vector3(-18f, -0.55f, 71f)
+        ],
+
+
+        // Map 2 : Sandbox
+        [
+            new Vector3(10f, 1.5f, 10f), 
+            new Vector3(-10f, 1.5f, -10f)
+        ]
     };
+
+    static List<BarrelSpot> barrelSpots = new List<BarrelSpot>();
+
+
+
+
+
+
+
+    // ======== Spawns Ennemis bdd ========
+    static Vector3[][] mapEnemySpawns = new Vector3[][]
+    {
+        // Map 0 : Tutoriel
+        [
+            new Vector3(10f, 2f, 10f), 
+            new Vector3(-10f, 2f, -10f)
+        ],
+
+
+        // Map 1 : La Ville
+        [ 
+            new Vector3(2f, 2f, 2f), 
+            new Vector3(-27f, 2f, 64f), 
+            new Vector3(-100f, 2f, 99f), 
+            new Vector3(-104f, 2f, 149f), 
+            new Vector3(-28f, 2f, 127f), 
+            new Vector3(4f, 2f, 83f),
+            new Vector3(-80f, 2f, 27f), 
+            new Vector3(-94f, 2f, 13f)
+        ],
+
+
+        // Map 2 : Sandbox
+        [
+            new Vector3(20f, 2f, 20f), 
+            new Vector3(-20f, 2f, -20f)
+        ]
+    };
+
+    //======== on load tout ========
+    public static void LoadMapSpawns(int mapIndex)
+    {
+        // 1. Charger les Spawns du Joueur
+        Program.listeSpawns.Clear();
+        foreach (Vector3 pos in mapPlayerSpawns[mapIndex])
+        {
+            Program.listeSpawns.Add(pos);
+        }
+
+        // 2. Charger les Barils
+        barrelSpots.Clear();
+        foreach (Vector3 pos in mapBarrelCoords[mapIndex])
+        {
+            barrelSpots.Add(new BarrelSpot(pos, false));
+        }
+
+        // 3. Charger les Spawns Ennemis
+        enemySpawnPoints.Clear();
+        foreach (Vector3 pos in mapEnemySpawns[mapIndex])
+        {
+            enemySpawnPoints.Add(pos);
+        }
+    }
+
+    
+
+
+
+
 
     public static void SwitchWeaponFromBarrel(bool excludeBazooka = false)
     {
@@ -595,6 +699,9 @@ static void InitBarrels()
             simulation.Statics.Remove(barrelSpots[index].handlePhysique);
             barrelSpots[index].estSolide = false;
         }
+
+        // Déclenche l'effet "Bouchon d'oreille" pendant 1.5 secondes !
+        Program.duckingTimer = 1.5f;
 
         SwitchWeaponFromBarrel();
         Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
@@ -696,6 +803,7 @@ static void InitBarrels()
 
 
 
+
     // =============== enemis ===============
     public static void InitEnnemis()
     {
@@ -706,25 +814,18 @@ static void InitBarrels()
         }
         enemiesList.Clear();
 
-        // 2. On définit tes points de Spawn (Coordonnées à adapter selon ta map !)
-        enemySpawnPoints.Clear();
-        enemySpawnPoints.Add(new Vector3(2f, 2f, 2f));
-        enemySpawnPoints.Add(new Vector3(-27f, 2f, 64f));
-        enemySpawnPoints.Add(new Vector3(-100f, 2f, 99f));
-        enemySpawnPoints.Add(new Vector3(-104f, 2f, 149f));
-        enemySpawnPoints.Add(new Vector3(-28f, 2f, 127f));
-        enemySpawnPoints.Add(new Vector3(4f, 2f, 83f));
-        enemySpawnPoints.Add(new Vector3(-80f, 2f, 27f));
-        enemySpawnPoints.Add(new Vector3(-94f, 2f, 13f));
+        // NOUVEAU : On ne définit plus enemySpawnPoints ici, c'est LoadMapSpawns qui s'en charge !
 
-
-        // 3. On réinitialise les chronos
+        // 2. On réinitialise les chronos
         survivalTime = 0f;
-        enemySpawnTimer = 10; //premier chrono plus long de 10s
+        enemySpawnTimer = 10;
 
-        // 4. On fait apparaître 2 ennemis de base
-        enemiesList.Add(new Enemy(enemySpawnPoints[0], 100, 4.0f));
-        enemiesList.Add(new Enemy(enemySpawnPoints[1], 100, 4.0f));
+        // 3. On fait apparaître 2 ennemis de base
+        if (enemySpawnPoints.Count >= 2)
+        {
+            enemiesList.Add(new Enemy(enemySpawnPoints[0], 100, 4.0f));
+            enemiesList.Add(new Enemy(enemySpawnPoints[1], 100, 4.0f));
+        }
     }
 
 
@@ -742,6 +843,8 @@ static void InitBarrels()
     {
         SetActiveMusic(ActiveMusic.Game);
         UpdateActiveMusicStream();
+
+        //if (Raylib.IsKeyPressed(KeyboardKey.N))Raylib.PlaySound(hitmarkerSound);
         
         // ========================================================
         // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
@@ -764,32 +867,79 @@ static void InitBarrels()
 
         if (!localPlayer.IsAlive)
         {
-            Raylib.BeginDrawing();
-            Raylib.ClearBackground(Color.Black);
-            Raylib.DrawText("VOUS ÊTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
-            Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
-            Raylib.DrawText("Appuyez sur ENTREE pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
-            Raylib.EndDrawing();
-
-            if (Raylib.IsKeyPressed(KeyboardKey.Enter))
+            if (!isOnline)
             {
+                Raylib.BeginDrawing();
+                Raylib.ClearBackground(Color.Black);
+                Raylib.DrawText("VOUS ÊTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
+                Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
+                Raylib.DrawText("Appuyez sur ENTREE pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
+                Raylib.EndDrawing();
+
+                if (Raylib.IsKeyPressed(KeyboardKey.Enter))
+                {
+                    localPlayer.Respawn(); 
+
+                    BodyReference joueurMort = simulation.Bodies.GetBodyReference(PlayerId);
+                    joueurMort.Pose.Position = new Vector3(0, 50, 0); 
+                    joueurMort.Velocity.Linear = Vector3.Zero;
+                    
+                    endroit = "menu"; 
+                    Raylib.EnableCursor();
+                }
+                
+                // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
+                return;
+            }
+            else
+            {
+                // 1. On réinitialise la vie du joueur
                 localPlayer.Respawn(); 
 
-                BodyReference joueurMort = simulation.Bodies.GetBodyReference(PlayerId);
-                joueurMort.Pose.Position = new Vector3(0, 50, 0); 
-                joueurMort.Velocity.Linear = Vector3.Zero;
+                // 2. On choisit un index au hasard dans ta liste de spawns existante
+                int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+                Vector3 nouveauSpawn = listeSpawns[indexAleatoire];
+
+                // 3. On récupère le corps physique de ton joueur dans BEPU
+                BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
                 
-                endroit = "menu"; 
-                Raylib.EnableCursor();
+                // 4. On le téléporte aux nouvelles coordonnées
+                joueurVivant.Pose.Position = nouveauSpawn;
+                
+                // 5. TRÈS IMPORTANT : On remet sa vitesse à zéro ! 
+                // S'il est mort en tombant dans le vide, il faut annuler sa vitesse de chute 
+                // sinon il va s'écraser au sol dès son apparition.
+                joueurVivant.Velocity.Linear = Vector3.Zero;
+                joueurVivant.Velocity.Angular = Vector3.Zero;
             }
-            
-            // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
-            return; 
+                
         }
 
         // Le changement d'arme se fait désormais uniquement via les barrils touchés
 
         float deltaTime = Raylib.GetFrameTime(); 
+
+        // ==========================================
+        // LE MOTEUR AUDIO DUCKING (Effet Bouchon d'oreille)
+        // ==========================================
+        if (duckingTimer > 0)
+        {
+            duckingTimer -= deltaTime;
+            // Retour progressif à la normale. (Commence à 0.2 de force, remonte vers 1.0)
+            duckingStrength = 0.2f + (0.8f * (1f - (duckingTimer / 1.5f))); 
+            if (duckingStrength > 1f) duckingStrength = 1f;
+        }
+        else
+        {
+            duckingStrength = 1f;
+        }
+        
+        // On applique en direct le volume de la musique
+        if (currentMusicState == ActiveMusic.Game) 
+            Raylib.SetMusicVolume(gameMusic, Settings.MasterVolume * Settings.MusicVolume * duckingStrength);
+
+
+
         laserTimer -= deltaTime;
         if (laserTimer < 0) laserTimer = 0;
 
@@ -2027,12 +2177,24 @@ static void InitBarrels()
         }
         
         // ==========================================
-        // AFFICHAGE DU MENU PAUSE (PAR-DESSUS LE JEU)
+        // AFFICHAGE DU MENU PAUSE ET OPTIONS (PAR-DESSUS LE JEU)
         // ==========================================
         if (isPaused)
         {
-            if (isOnline) MenugameOnline();
-            else MenugameOffline();
+            // Si le joueur a cliqué sur Options, on affiche le calque des paramètres
+            if (isOptionsMenuOpen)
+            {
+                AfficherMenuOptions(ref endroit);
+            }
+            // Sinon, on affiche le menu pause normal (Online ou Offline)
+            else if (isOnline) 
+            {
+                MenugameOnline();
+            }
+            else 
+            {
+                MenugameOffline();
+            }
         }
 
 
@@ -2390,6 +2552,8 @@ partial class Program
             if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId);
         }
         enemiesList.Clear();
+        killCount = 0;
+        deathCount = 0;
 
         // ==========================================
         // 2. LE CORRECTIF DU CRASH : PURGE DE LA MÉMOIRE
@@ -2474,6 +2638,8 @@ partial class Program
         string[] nomsMap = { "Tutoriel", "La Ville", "SandBox" };
         string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
         string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb"};
+        //attention si on ajoute une map ne pas oublier de mettre 
+        //les spawnpoint a jour dans jeu.cs
 
         // Paramètres de taille et d'espacement
         int largeurMap = 350;
@@ -2591,8 +2757,16 @@ partial class Program
                         }
                     }
 
+                    LoadMapSpawns(n);
                     InitBarrels();
                     InitEnnemis();
+
+                    // Téléportation du joueur vers un spawn de la NOUVELLE map !
+                    int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+                    BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
+                    joueurVivant.Pose.Position = listeSpawns[indexAleatoire];
+                    joueurVivant.Velocity.Linear = Vector3.Zero; // Arrêt net
+                    joueurVivant.Velocity.Angular = Vector3.Zero;
 
                     endroit = destinationsMap[n]; // On lance la bonne map !
 
@@ -2664,8 +2838,15 @@ partial class Program
         int ecranHauteur = Raylib.GetScreenHeight();
         Vector2 souris = Raylib.GetMousePosition();
 
-        Raylib.BeginDrawing();
-        Raylib.ClearBackground(new Color(30, 30, 30, 255));
+        if (!isPaused)
+        {
+            Raylib.BeginDrawing();
+            Raylib.ClearBackground(new Color(30, 30, 30, 255));
+        }
+        else
+        {
+            Raylib.DrawRectangle(0, 0, ecranLargeur, ecranHauteur, new Color(30, 30, 30, 240));
+        }
 
         // ==========================================
         // 1. LE TITRE
@@ -2768,11 +2949,18 @@ partial class Program
 
         if (retourHover && Raylib.IsMouseButtonPressed(MouseButton.Left))
         {
-            etatJeu = isPaused ? "boucle" : "menu";
+            // CORRECTION : Si on est en jeu, on ferme juste l'overlay. Sinon, on va à l'accueil.
+            if (isPaused) isOptionsMenuOpen = false;
+            else etatJeu = "menu"; 
+            
             isRebindingKey = false;
         }
 
-        Raylib.EndDrawing();
+        // On ne clôture le dessin QUE si on est dans le menu d'accueil
+        if (!isPaused) 
+        {
+            Raylib.EndDrawing();
+        }
     }
 
     private static void DrawVolumeSlider(int x, int y, int width, ref float volume, string label)
@@ -3004,7 +3192,7 @@ partial class Program
         if (hoverOptions && Raylib.IsMouseButtonReleased(MouseButton.Left))
         {
             Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-            endroit = "option"; // On lance ton menu d'options existant !
+            isOptionsMenuOpen = true; // On ouvre l'overlay au lieu de changer d'endroit !
         }
 
         // C. BOUTON MENU
@@ -3022,7 +3210,7 @@ partial class Program
             // Grand nettoyage avant de retourner au menu principal
             isPaused = false;
             Raylib.EnableCursor();
-            
+
             foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
             enemiesList.Clear();
             activeExplosions.Clear();
@@ -3037,8 +3225,111 @@ partial class Program
     // ==========================================
     public static void MenugameOnline()
     {
-        // Coquille vide pour le moment pour que le jeu compile !
-        // On s'en occupera à l'Étape 4.
+        Vector2 souris = Raylib.GetMousePosition();
+
+        // 1. Fond TRÈS léger (Pour bien voir le jeu tourner en fond sans être aveuglé)
+        Raylib.DrawRectangle(0, 0, LargeurFenetre, HauteurFenetre, new Color(0, 0, 0, 80));
+
+        // 2. Paramètres des boutons (Décalés à gauche)
+        int largeurBouton = 300;
+        int hauteurBouton = 80;
+        int ecart = 20;
+
+        // Position X à 25% de l'écran (sur la gauche) au lieu du centre
+        int posX_boutons = (LargeurFenetre / 4) - (largeurBouton / 2); 
+        int posY_resume = (HauteurFenetre / 2) - hauteurBouton - ecart;
+        int posY_options = (HauteurFenetre / 2);
+        int posY_menu = (HauteurFenetre / 2) + hauteurBouton + ecart;
+
+        Rectangle boxResume = new Rectangle(posX_boutons, posY_resume, largeurBouton, hauteurBouton);
+        Rectangle boxOptions = new Rectangle(posX_boutons, posY_options, largeurBouton, hauteurBouton);
+        Rectangle boxMenu = new Rectangle(posX_boutons, posY_menu, largeurBouton, hauteurBouton);
+
+        // --- BOUTON RESUME ---
+        bool hoverResume = Raylib.CheckCollisionPointRec(souris, boxResume);
+        Raylib.DrawRectangleRec(boxResume, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxResume, 4, hoverResume ? Color.Red : Color.Black);
+        int widthResume = Raylib.MeasureText("RESUME", 40);
+        Raylib.DrawText("RESUME", posX_boutons + (largeurBouton - widthResume) / 2, posY_resume + 20, 40, Color.White);
+
+        if (hoverResume && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            isPaused = false;
+            Raylib.DisableCursor();
+        }
+
+        // --- BOUTON OPTIONS ---
+        bool hoverOptions = Raylib.CheckCollisionPointRec(souris, boxOptions);
+        Raylib.DrawRectangleRec(boxOptions, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxOptions, 4, hoverOptions ? Color.Red : Color.Black);
+        int widthOptions = Raylib.MeasureText("OPTIONS", 40);
+        Raylib.DrawText("OPTIONS", posX_boutons + (largeurBouton - widthOptions) / 2, posY_options + 20, 40, Color.White);
+
+        if (hoverOptions && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            isOptionsMenuOpen = true; // On ouvre l'overlay au lieu de changer d'endroit !
+        }
+
+        // --- BOUTON MENU ---
+        bool hoverMenu = Raylib.CheckCollisionPointRec(souris, boxMenu);
+        Raylib.DrawRectangleRec(boxMenu, new Color(60, 60, 60, 255));
+        Raylib.DrawRectangleLinesEx(boxMenu, 4, hoverMenu ? Color.Red : Color.Black);
+        int widthMenu = Raylib.MeasureText("MENU", 40);
+        Raylib.DrawText("MENU", posX_boutons + (largeurBouton - widthMenu) / 2, posY_menu + 20, 40, Color.White);
+
+        if (hoverMenu && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        {
+            Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+            isPaused = false;
+            Raylib.EnableCursor();
+            
+            // Grand nettoyage avant de retourner au menu principal
+            foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
+            enemiesList.Clear();
+            activeExplosions.Clear();
+            activeDamageTexts.Clear();
+            
+            endroit = "menu";
+        }
+
+        // ==========================================
+        // 3. LE TABLEAU DES SCORES (À droite)
+        // ==========================================
+        int scoreWidth = 600;
+        int scoreHeight = 400;
+        
+        // Position X à 50% de l'écran (sur la droite)
+        int scoreX = (LargeurFenetre / 2); 
+        int scoreY = posY_resume; // Aligné sur le haut du bouton RESUME pour faire propre
+
+        // Fond du tableau (Gris très foncé transparent)
+        Raylib.DrawRectangle(scoreX, scoreY, scoreWidth, scoreHeight, new Color(30, 30, 30, 200));
+
+        // En-tête (Gris moyen opaque)
+        Raylib.DrawRectangle(scoreX, scoreY, scoreWidth, 50, new Color(80, 80, 80, 255));
+        
+        // --- Titres des colonnes ---
+        int textY = scoreY + 15;
+        Raylib.DrawText("name", scoreX + 20, textY, 25, Color.White);
+        Raylib.DrawText("kill", scoreX + 300, textY, 25, Color.White);
+        Raylib.DrawText("death", scoreX + 420, textY, 25, Color.White);
+        Raylib.DrawText("ping", scoreX + 520, textY, 25, Color.White);
+
+        // --- FAUSSE LIGNE 1 : TOI (Mockup) ---
+        int row1Y = scoreY + 70;
+        Raylib.DrawText("CamPitaine", scoreX + 20, row1Y, 30, Color.White);
+        Raylib.DrawText(Program.killCount.ToString(), scoreX + 300, row1Y, 30, Color.White);
+        Raylib.DrawText(Program.deathCount.ToString(), scoreX + 420, row1Y, 30, Color.White);
+        Raylib.DrawText("10", scoreX + 520, row1Y, 30, Color.Green); // Ping excellent = Vert
+
+        // --- FAUSSE LIGNE 2 : L'ENNEMI (Mockup) ---
+        int row2Y = scoreY + 120;
+        Raylib.DrawText("NoobSucker99", scoreX + 20, row2Y, 30, Color.LightGray);
+        Raylib.DrawText("5", scoreX + 300, row2Y, 30, Color.LightGray);
+        Raylib.DrawText("12", scoreX + 420, row2Y, 30, Color.LightGray);
+        Raylib.DrawText("150", scoreX + 520, row2Y, 30, Color.Red); // Ping mauvais = Rouge
     }
 
 }
@@ -3105,9 +3396,9 @@ partial class Program
             if (Raylib.IsMouseButtonReleased(MouseButton.Left))
             {
                 //isMenuGameOpen = false; // Fermer le menu
-                Raylib.DisableCursor();
                 Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                return;
+                endroit = "option";
+
             }
         }
         else
@@ -3550,6 +3841,7 @@ public class Player
     {
         IsAlive = false;
         Health = 0;
+        Program.deathCount += 1;
         Console.WriteLine("[INFO] Le joueur est mort !");
     }
 }
@@ -3578,14 +3870,47 @@ public partial class Program
     public static Player localPlayer = new Player(100);
     public static float hitmarkerTimer = 0f;
 
-    public static List<Vector3> listeSpawns = new List<Vector3>
+    // ==========================================
+    // NOUVEAU : DÉCLENCHEUR UI MULTIJOUEUR
+    // ==========================================
+    public static void TriggerHitmarker(bool isKill)
     {
-        new Vector3(3, 0, -21),     
-        new Vector3(-104, 21, 45),
-        new Vector3(-107, 0, 155),    
+        // 1. On déclenche le visuel (l'icône au centre de l'écran)
+        hitmarkerTimer = 0.3f; 
+
+        // 2. On joue le son correspondant exactement à la même frame !
+        if (isKill)
+        {
+            PlaySoundWithPriority(killSound, SoundPriority.Critical);
+        }
+        else
+        {
+            PlaySoundWithPriority(hitmarkerSound, SoundPriority.High);
+        }
+    }
+
+
+    // 1. La base de données de tous les spawns de joueur selon la map
+    static Vector3[][] mapPlayerSpawns = new Vector3[][]
+    {
+        // Map 0 : Tutoriel
+        [new Vector3(0, 5, 0)],
+
+
+        // Map 1 : La Ville (Tes anciennes coordonnées)
+        [new Vector3(3, 0, -21),
+        new Vector3(-104, 21, 45), 
+        new Vector3(-107, 0, 155), 
         new Vector3(-8, 10, 96), 
-        new Vector3(-39, 31, 85), 
+        new Vector3(-39, 31, 85)],
+        
+        
+        // Map 2 : Sandbox
+        [new Vector3(0, 5, 0)]
     };
+    
+    // 2. La liste active (qui sera remplie par le jeu)
+    public static List<Vector3> listeSpawns = new List<Vector3> { new Vector3(0, 5, 0) }; // Coordonnée par défaut pour le démarrage
 
 
     static int FPS = 60;
@@ -3599,7 +3924,9 @@ public partial class Program
     public static bool isPaused = false;
     
     //fausse variable pour simuler si on est en ligne ou pas !
-    public static bool isOnline = false;
+    public static bool isOnline = true;
+    public static bool isOptionsMenuOpen = false;
+    
 
     static List<Texture2D> ListeTexture = new List<Texture2D>();
 
@@ -3644,6 +3971,8 @@ public partial class Program
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
     public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound, groundImpactSound;
+    public static Sound hitmarkerSound, killSound;
+
 
     // Gestion des sons pour éviter les chevauchements
     public enum SoundPriority
@@ -3654,8 +3983,11 @@ public partial class Program
         Critical  // Sons vitaux : mort, game over
     }
 
-    private static float lastSoundTime = 0f;
-    private static SoundPriority lastSoundPriority = SoundPriority.Low;
+
+
+    // NOUVEAU : Le Moteur Audio Avancé
+    public static float duckingTimer = 0f;
+    public static float duckingStrength = 1f; // 1f = Volume normal, 0.2f = Volume assourdi
 
 
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
@@ -3734,6 +4066,7 @@ public partial class Program
     // ========================================================
     public static float survivalTime = 0f;
     public static int killCount = 0;
+    public static int deathCount = 0;
     public static float enemySpawnTimer = 0f;
     public static float timeBetweenSpawns = 3.0f; // 1 ennemi toutes les 3 secondes
     public static List<Vector3> enemySpawnPoints = new List<Vector3>();
@@ -3776,6 +4109,7 @@ public partial class Program
     // ========================================================
     static void Main()
     {
+        //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
         Raylib.InitWindow(LargeurFenetre, HauteurFenetre, "GoofyFPS");
 
         Image ico = Raylib.LoadImage("src\\GoofyFPS-small.png");
@@ -3853,6 +4187,8 @@ public partial class Program
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
         hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
+        hitmarkerSound = Raylib.LoadSound("assets\\sounds\\hitmarker.mp3");
+        killSound = Raylib.LoadSound("assets\\sounds\\kill-sound.mp3");
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
@@ -4112,22 +4448,55 @@ public partial class Program
 
     public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
     {
-        float currentTime = (float)Raylib.GetTime();
-        if (priority == SoundPriority.Critical)
+        // 1. On part du volume choisi par le joueur dans les paramètres
+        float volumeFinal = Settings.SFXVolume;
+
+        // 2. EFFET DUCKING : Si ce n'est PAS un son critique, il est assourdi par les explosions
+        // (Cela permet au "Ding !" du Kill Sound de résonner parfaitement même pendant un tir de Bazooka)
+        if (priority != SoundPriority.Critical)
         {
-            // On a supprimé le SetSoundVolume ici, l'arme connaît déjà son volume
-            Raylib.PlaySound(sound);
-            lastSoundTime = currentTime;
-            lastSoundPriority = priority;
-            return;
+            volumeFinal *= duckingStrength;
         }
+
+        // On baisse un peu les sons de priorité "Low" pour équilibrer le mixage global
+        if (priority == SoundPriority.Low)
+        {
+            volumeFinal *= 0.6f; 
+        }
+
+        // 3. On applique les réglages à ce son précis
+        Raylib.SetSoundVolume(sound, volumeFinal);
+        Raylib.SetSoundPitch(sound, 1f);
+
+        // 4. ON JOUE TOUT INSTANTANÉMENT ! (La carte son gère la superposition toute seule)
+        Raylib.PlaySound(sound);
+    }
+
+
+    
+    // ==========================================
+    // NOUVEAU : LE MOTEUR DE SON 3D SPATIALISÉ
+    // ==========================================
+    public static void PlaySound3D(Sound sound, Vector3 sourcePosition, float maxDistance)
+    {
+        // 1. Calcul de la distance entre la caméra (tes oreilles) et le son
+        float dist = Vector3.Distance(camera.Position, sourcePosition);
         
-        if (priority >= lastSoundPriority || currentTime - lastSoundTime > 0.1f)
-        {
-            Raylib.PlaySound(sound);
-            lastSoundTime = currentTime;
-            lastSoundPriority = priority;
-        }
+        // 2. Si on est trop loin, on n'entend rien du tout !
+        if (dist > maxDistance) return;
+
+        // 3. Calcul du volume (plus on est loin, plus ça tend vers 0)
+        float distanceVolume = 1f - (dist / maxDistance);
+        
+        // On applique le volume (en prenant en compte les paramètres du joueur ET le ducking d'explosion)
+        Raylib.SetSoundVolume(sound, distanceVolume * Settings.SFXVolume * duckingStrength);
+        
+        // 4. L'effet de distance (L'air absorbe les aigus, donc on baisse légèrement le pitch)
+        float pitch = 1f - ((dist / maxDistance) * 0.3f); 
+        Raylib.SetSoundPitch(sound, pitch);
+
+        // 5. On joue le son !
+        Raylib.PlaySound(sound);
     }
 
 
@@ -4156,16 +4525,14 @@ public partial class Program
         Raylib.SetSoundVolume(unselect, Settings.SFXVolume);
         Raylib.SetSoundVolume(survole, Settings.SFXVolume);
         Raylib.SetSoundVolume(hitSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(hitmarkerSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(killSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(weaponSwitchSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(reloadSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(noAmmoSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(groundImpactSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(swoosh, Settings.SFXVolume); // Même les swoosh sont pris en compte !
         Raylib.SetSoundVolume(wallSound, Settings.SFXVolume);
-
-        // -> Les sons du Joueur
-        Raylib.SetSoundVolume(Player.gameover, Settings.SFXVolume);
-        Raylib.SetSoundVolume(Player.paw, Settings.SFXVolume);
 
         // -> Le pool de sons de mort
         for (int i = 0; i < deathSounds.Length; i++)
@@ -4179,6 +4546,31 @@ public partial class Program
         {
             Raylib.SetSoundVolume(enemy.attackSound, Settings.SFXVolume);
         }
+    }
+
+
+    // ==========================================
+    // MATHÉMATIQUES : HITBOX VISUELLE VIRTUELLE 
+    // ==========================================
+    public static bool RayIntersectsSphere(Vector3 rayOrigin, Vector3 rayDir, Vector3 sphereCenter, float sphereRadius, out float hitDistance)
+    {
+        hitDistance = 0f;
+        Vector3 oc = rayOrigin - sphereCenter;
+        float a = Vector3.Dot(rayDir, rayDir); 
+        float b = 2.0f * Vector3.Dot(oc, rayDir);
+        float c = Vector3.Dot(oc, oc) - (sphereRadius * sphereRadius);
+        float discriminant = (b * b) - (4 * a * c);
+
+        if (discriminant < 0) return false; // La balle est passée à côté !
+
+        // On calcule le premier point d'entrée de la balle dans la sphère
+        float numerator = -b - (float)Math.Sqrt(discriminant);
+        if (numerator > 0)
+        {
+            hitDistance = numerator / (2.0f * a);
+            return true;
+        }
+        return false;
     }
 
 
@@ -4366,7 +4758,12 @@ public class Weapon
         }
 
         // 2. Le tir part !
-        Program.PlaySoundWithPriority(soundname, Program.SoundPriority.High);
+        bool isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
+
+        if (isBazooka) 
+            Program.PlaySoundWithPriority(soundname, Program.SoundPriority.Critical);
+        else 
+            Program.PlaySoundWithPriority(soundname, Program.SoundPriority.High);
         lastShotTime = (float)Raylib.GetTime();
         
         // Décrémenter les munitions seulement si l'arme en nécessite
@@ -4392,83 +4789,99 @@ public class Weapon
 
         Program.simulation.RayCast(physiqueStart, direction, range, ref capteurLaser);
 
-        float distanceEffective = range;
-
-        /// --- DÉTECTION BEPU STRICTE (Hitscan pour Fusils) ---
+        // --- A. LE LASER BEPU (Pour les Murs et les Barils) ---
+        float distanceEffectiveMur = range;
         if (capteurLaser.aTouche)
         {
-            distanceEffective = capteurLaser.distanceImpact;
-
-            // 1. EST-CE QU'ON TOUCHE UN ENNEMI ? (Objet Dynamique)
-            if (capteurLaser.ObjetTouche.Mobility == CollidableMobility.Dynamic)
-            {
-                if (range >= 10)
-                {
-                    bool isBazookaWeapon = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
-                    if (!isBazookaWeapon)
-                    {
-                        BodyHandle hitHandle = capteurLaser.ObjetTouche.BodyHandle;
-                        
-                        foreach (Enemy enemy in enemiesList)
-                        {
-                            if (enemy.isAlive && enemy.bodyId == hitHandle)
-                            {
-                                enemy.TakeDamage(damage);
-                                Program.hitmarkerTimer = 0.3f;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            // 2. NOUVEAU : EST-CE QU'ON TOUCHE UN BARIL ? (Objet Statique)
-            else if (capteurLaser.ObjetTouche.Mobility == CollidableMobility.Static)
+            distanceEffectiveMur = capteurLaser.distanceImpact;
+            
+            // EST-CE QU'ON TOUCHE UN BARIL ?
+            if (capteurLaser.ObjetTouche.Mobility == CollidableMobility.Static)
             {
                 StaticHandle hitStaticHandle = capteurLaser.ObjetTouche.StaticHandle;
-                
-                // On vérifie si le mur qu'on vient de toucher est en fait un baril
                 for (int i = 0; i < barrelSpots.Count; i++)
                 {
-                    // Si ce spot a un baril physique ET que son Ticket correspond à ce qu'on a touché
                     if (barrelSpots[i].hasBarrel && barrelSpots[i].estSolide && barrelSpots[i].handlePhysique == hitStaticHandle)
                     {
-                        Program.OnBarrelHit(i); // BOUM !
-                        break; // Le baril a explosé, on arrête de chercher
+                        Program.OnBarrelHit(i);
+                        break; 
                     }
                 }
             }
         }
 
-        // On arrête le visuel du laser au point d'impact
-        endLaser = startLaser + direction * distanceEffective;
+        // --- B. LA HITBOX VIRTUELLE (Pour les Ennemis) ---
+        float distanceEffectiveEnnemi = range;
+        Enemy ennemiTouche = null;
+        isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
 
-        Vector3 impactPoint = physiqueStart + direction * distanceEffective;
-        bool isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
-        if (isBazooka && capteurLaser.aTouche)
+        if (range >= 10) // Uniquement les armes Hitscan et le Bazooka
         {
-            float explosionRadius = 6f;
-            ExplodeAt(impactPoint, explosionRadius, damage, enemiesList);
-            bool brokeAnyBarrel = Program.BreakBarrelsInRadius(impactPoint, explosionRadius);
-            if (brokeAnyBarrel)
+            foreach (Enemy enemy in enemiesList)
             {
-                Program.SwitchWeaponFromBarrel();
+                if (!enemy.isAlive) continue;
+                
+                // ON CRÉE LA SPHÈRE SUR LE FANTÔME !
+                // (On remonte le centre de 1.2m pour cibler le corps visuel flottant)
+                Vector3 centreVisuel = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
+                float rayonHitbox = 0.6f; // La largeur de ta hitbox
+
+                if (Program.RayIntersectsSphere(physiqueStart, direction, centreVisuel, rayonHitbox, out float hitDist))
+                {
+                    // Si on touche l'ennemi ET qu'il n'est pas caché derrière un mur !
+                    if (hitDist < distanceEffectiveMur && hitDist < distanceEffectiveEnnemi)
+                    {
+                        distanceEffectiveEnnemi = hitDist;
+                        ennemiTouche = enemy;
+                    }
+                }
             }
-            Program.SpawnExplosionEffect(impactPoint);
-            Program.hitmarkerTimer = 0.3f;
+            
+            // Si on a validé un tir DIRECT sur un ennemi (Et que ce n'est pas un bazooka)
+            if (ennemiTouche != null && !isBazooka)
+            {
+                bool etatAvant = ennemiTouche.isAlive;
+                ennemiTouche.TakeDamage(damage);
+                
+                if (etatAvant && !ennemiTouche.isAlive) Program.TriggerHitmarker(true); 
+                else if (etatAvant) Program.TriggerHitmarker(false);
+            }
         }
 
-        // ==========================================
-        // 3. LE HACK DE LA MÊLÉE (Cône large pour le couteau)
-        // ==========================================
+        // --- C. ARRÊT DU LASER ET IMPACT ---
+        // Le laser s'arrête au premier obstacle rencontré (le mur ou le fantôme)
+        float distanceVisuelle = Math.Min(distanceEffectiveMur, distanceEffectiveEnnemi);
+        endLaser = startLaser + direction * distanceVisuelle;
+        Vector3 impactPoint = physiqueStart + direction * distanceVisuelle; 
+        
+        // --- D. LOGIQUE DU BAZOOKA ---
+        bool aToucheQuelqueChose = (distanceEffectiveMur < range || distanceEffectiveEnnemi < range);
+        if (isBazooka && aToucheQuelqueChose)
+        {
+            float explosionRadius = 6f;
+            int explosionResult = ExplodeAt(impactPoint, explosionRadius, damage, enemiesList);
+            
+            bool brokeAnyBarrel = Program.BreakBarrelsInRadius(impactPoint, explosionRadius);
+            if (brokeAnyBarrel) Program.SwitchWeaponFromBarrel();
+            
+            Program.SpawnExplosionEffect(impactPoint);
+            
+            if (explosionResult == 2) Program.TriggerHitmarker(true);
+            else if (explosionResult == 1) Program.TriggerHitmarker(false);
+            
+            Program.duckingTimer = 1.5f;
+        }
+
+        // --- E. LE HACK DE LA MÊLÉE (Couteau, Épée) ---
         if (range < 10)
         {
             foreach (Enemy enemy in enemiesList)
             {
                 if (!enemy.isAlive) continue;
                 
-                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.5f, 0); 
+                // CORRECTION MÊLÉE : On centre les dégâts sur le modèle visuel (Y + 1.2f)
+                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0); 
                 float dist = Vector3.Distance(physiqueStart, enemyCenter);
-
                 if (dist <= range)
                 {
                     Vector3 toEnemy = Vector3.Normalize(enemyCenter - physiqueStart);
@@ -4476,8 +4889,10 @@ public class Weapon
 
                     if (dot > 0.5f) 
                     {
+                        bool etatAvant = enemy.isAlive;
                         enemy.TakeDamage(damage);
-                        Program.hitmarkerTimer = 0.3f;
+                        if (etatAvant && !enemy.isAlive) Program.TriggerHitmarker(true);
+                        else if (etatAvant) Program.TriggerHitmarker(false);
                     }
                 }
             }
@@ -4486,18 +4901,28 @@ public class Weapon
         return true;
     }
     
-    private void ExplodeAt(Vector3 center, float radius, int explosionDamage, List<Enemy> enemiesList)
+    // CORRECTION : La fonction renvoie maintenant un "bool" (vrai/faux) au lieu de "void"
+    private int ExplodeAt(Vector3 center, float radius, int explosionDamage, List<Enemy> enemiesList)
     {
+        int resultatExplosion = 0; // 0 = raté, 1 = touché, 2 = tué
+        
         foreach (Enemy enemy in enemiesList)
         {
             if (!enemy.isAlive) continue;
-            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.5f, 0);
+            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
             float distToEnemy = Vector3.Distance(center, enemyCenter);
+            
             if (distToEnemy <= radius)
             {
+                bool etatAvant = enemy.isAlive;
                 enemy.TakeDamage(explosionDamage);
+                
+                // Le Kill prime sur le Hit (Si l'explosion tue un ennemi mais en blesse un autre, on veut le son de Kill)
+                if (etatAvant && !enemy.isAlive) resultatExplosion = 2; 
+                else if (resultatExplosion == 0) resultatExplosion = 1;
             }
         }
+        return resultatExplosion;
     }
 
     public void Reload()
@@ -4567,11 +4992,6 @@ public class Weapon
             if (finalangle >= 0) finalangle = 0;
             return finalangle;
         }
-    }
-
-    public void Switch()
-    {
-        
     }
 }
 

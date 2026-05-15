@@ -18,6 +18,25 @@ public partial class Program
     public static Player localPlayer = new Player(100);
     public static float hitmarkerTimer = 0f;
 
+    // ==========================================
+    // NOUVEAU : DÉCLENCHEUR UI MULTIJOUEUR
+    // ==========================================
+    public static void TriggerHitmarker(bool isKill)
+    {
+        // 1. On déclenche le visuel (l'icône au centre de l'écran)
+        hitmarkerTimer = 0.3f; 
+
+        // 2. On joue le son correspondant exactement à la même frame !
+        if (isKill)
+        {
+            PlaySoundWithPriority(killSound, SoundPriority.Critical);
+        }
+        else
+        {
+            PlaySoundWithPriority(hitmarkerSound, SoundPriority.High);
+        }
+    }
+
 
     // 1. La base de données de tous les spawns de joueur selon la map
     static Vector3[][] mapPlayerSpawns = new Vector3[][]
@@ -100,6 +119,8 @@ public partial class Program
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
     public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound, groundImpactSound;
+    public static Sound hitmarkerSound, killSound;
+
 
     // Gestion des sons pour éviter les chevauchements
     public enum SoundPriority
@@ -110,8 +131,11 @@ public partial class Program
         Critical  // Sons vitaux : mort, game over
     }
 
-    private static float lastSoundTime = 0f;
-    private static SoundPriority lastSoundPriority = SoundPriority.Low;
+
+
+    // NOUVEAU : Le Moteur Audio Avancé
+    public static float duckingTimer = 0f;
+    public static float duckingStrength = 1f; // 1f = Volume normal, 0.2f = Volume assourdi
 
 
     static Vector3 lightPosition = new Vector3(0.0f, 10.0f, 0.0f);
@@ -311,6 +335,8 @@ public partial class Program
         unselect = Raylib.LoadSound("assets\\sounds\\unselect.mp3");
         survole = Raylib.LoadSound("assets\\sounds\\survole.mp3");
         hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
+        hitmarkerSound = Raylib.LoadSound("assets\\sounds\\hitmarker.mp3");
+        killSound = Raylib.LoadSound("assets\\sounds\\kill-sound.mp3");
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
@@ -570,22 +596,55 @@ public partial class Program
 
     public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
     {
-        float currentTime = (float)Raylib.GetTime();
-        if (priority == SoundPriority.Critical)
+        // 1. On part du volume choisi par le joueur dans les paramètres
+        float volumeFinal = Settings.SFXVolume;
+
+        // 2. EFFET DUCKING : Si ce n'est PAS un son critique, il est assourdi par les explosions
+        // (Cela permet au "Ding !" du Kill Sound de résonner parfaitement même pendant un tir de Bazooka)
+        if (priority != SoundPriority.Critical)
         {
-            // On a supprimé le SetSoundVolume ici, l'arme connaît déjà son volume
-            Raylib.PlaySound(sound);
-            lastSoundTime = currentTime;
-            lastSoundPriority = priority;
-            return;
+            volumeFinal *= duckingStrength;
         }
+
+        // On baisse un peu les sons de priorité "Low" pour équilibrer le mixage global
+        if (priority == SoundPriority.Low)
+        {
+            volumeFinal *= 0.6f; 
+        }
+
+        // 3. On applique les réglages à ce son précis
+        Raylib.SetSoundVolume(sound, volumeFinal);
+        Raylib.SetSoundPitch(sound, 1f);
+
+        // 4. ON JOUE TOUT INSTANTANÉMENT ! (La carte son gère la superposition toute seule)
+        Raylib.PlaySound(sound);
+    }
+
+
+    
+    // ==========================================
+    // NOUVEAU : LE MOTEUR DE SON 3D SPATIALISÉ
+    // ==========================================
+    public static void PlaySound3D(Sound sound, Vector3 sourcePosition, float maxDistance)
+    {
+        // 1. Calcul de la distance entre la caméra (tes oreilles) et le son
+        float dist = Vector3.Distance(camera.Position, sourcePosition);
         
-        if (priority >= lastSoundPriority || currentTime - lastSoundTime > 0.1f)
-        {
-            Raylib.PlaySound(sound);
-            lastSoundTime = currentTime;
-            lastSoundPriority = priority;
-        }
+        // 2. Si on est trop loin, on n'entend rien du tout !
+        if (dist > maxDistance) return;
+
+        // 3. Calcul du volume (plus on est loin, plus ça tend vers 0)
+        float distanceVolume = 1f - (dist / maxDistance);
+        
+        // On applique le volume (en prenant en compte les paramètres du joueur ET le ducking d'explosion)
+        Raylib.SetSoundVolume(sound, distanceVolume * Settings.SFXVolume * duckingStrength);
+        
+        // 4. L'effet de distance (L'air absorbe les aigus, donc on baisse légèrement le pitch)
+        float pitch = 1f - ((dist / maxDistance) * 0.3f); 
+        Raylib.SetSoundPitch(sound, pitch);
+
+        // 5. On joue le son !
+        Raylib.PlaySound(sound);
     }
 
 
@@ -614,6 +673,8 @@ public partial class Program
         Raylib.SetSoundVolume(unselect, Settings.SFXVolume);
         Raylib.SetSoundVolume(survole, Settings.SFXVolume);
         Raylib.SetSoundVolume(hitSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(hitmarkerSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(killSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(weaponSwitchSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(reloadSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(noAmmoSound, Settings.SFXVolume);
@@ -633,6 +694,31 @@ public partial class Program
         {
             Raylib.SetSoundVolume(enemy.attackSound, Settings.SFXVolume);
         }
+    }
+
+
+    // ==========================================
+    // MATHÉMATIQUES : HITBOX VISUELLE VIRTUELLE 
+    // ==========================================
+    public static bool RayIntersectsSphere(Vector3 rayOrigin, Vector3 rayDir, Vector3 sphereCenter, float sphereRadius, out float hitDistance)
+    {
+        hitDistance = 0f;
+        Vector3 oc = rayOrigin - sphereCenter;
+        float a = Vector3.Dot(rayDir, rayDir); 
+        float b = 2.0f * Vector3.Dot(oc, rayDir);
+        float c = Vector3.Dot(oc, oc) - (sphereRadius * sphereRadius);
+        float discriminant = (b * b) - (4 * a * c);
+
+        if (discriminant < 0) return false; // La balle est passée à côté !
+
+        // On calcule le premier point d'entrée de la balle dans la sphère
+        float numerator = -b - (float)Math.Sqrt(discriminant);
+        if (numerator > 0)
+        {
+            hitDistance = numerator / (2.0f * a);
+            return true;
+        }
+        return false;
     }
 
 

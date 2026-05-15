@@ -250,6 +250,9 @@ static void InitBarrels()
             barrelSpots[index].estSolide = false;
         }
 
+        // Déclenche l'effet "Bouchon d'oreille" pendant 1.5 secondes !
+        Program.duckingTimer = 1.5f;
+
         SwitchWeaponFromBarrel();
         Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
         activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
@@ -390,6 +393,8 @@ static void InitBarrels()
     {
         SetActiveMusic(ActiveMusic.Game);
         UpdateActiveMusicStream();
+
+        //if (Raylib.IsKeyPressed(KeyboardKey.N))Raylib.PlaySound(hitmarkerSound);
         
         // ========================================================
         // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
@@ -463,6 +468,28 @@ static void InitBarrels()
         // Le changement d'arme se fait désormais uniquement via les barrils touchés
 
         float deltaTime = Raylib.GetFrameTime(); 
+
+        // ==========================================
+        // LE MOTEUR AUDIO DUCKING (Effet Bouchon d'oreille)
+        // ==========================================
+        if (duckingTimer > 0)
+        {
+            duckingTimer -= deltaTime;
+            // Retour progressif à la normale. (Commence à 0.2 de force, remonte vers 1.0)
+            duckingStrength = 0.2f + (0.8f * (1f - (duckingTimer / 1.5f))); 
+            if (duckingStrength > 1f) duckingStrength = 1f;
+        }
+        else
+        {
+            duckingStrength = 1f;
+        }
+        
+        // On applique en direct le volume de la musique
+        if (currentMusicState == ActiveMusic.Game) 
+            Raylib.SetMusicVolume(gameMusic, Settings.MasterVolume * Settings.MusicVolume * duckingStrength);
+
+
+
         laserTimer -= deltaTime;
         if (laserTimer < 0) laserTimer = 0;
 

@@ -68,7 +68,12 @@ public class Weapon
         }
 
         // 2. Le tir part !
-        Program.PlaySoundWithPriority(soundname, Program.SoundPriority.High);
+        bool isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
+
+        if (isBazooka) 
+            Program.PlaySoundWithPriority(soundname, Program.SoundPriority.Critical);
+        else 
+            Program.PlaySoundWithPriority(soundname, Program.SoundPriority.High);
         lastShotTime = (float)Raylib.GetTime();
         
         // Décrémenter les munitions seulement si l'arme en nécessite
@@ -94,83 +99,99 @@ public class Weapon
 
         Program.simulation.RayCast(physiqueStart, direction, range, ref capteurLaser);
 
-        float distanceEffective = range;
-
-        /// --- DÉTECTION BEPU STRICTE (Hitscan pour Fusils) ---
+        // --- A. LE LASER BEPU (Pour les Murs et les Barils) ---
+        float distanceEffectiveMur = range;
         if (capteurLaser.aTouche)
         {
-            distanceEffective = capteurLaser.distanceImpact;
-
-            // 1. EST-CE QU'ON TOUCHE UN ENNEMI ? (Objet Dynamique)
-            if (capteurLaser.ObjetTouche.Mobility == CollidableMobility.Dynamic)
-            {
-                if (range >= 10)
-                {
-                    bool isBazookaWeapon = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
-                    if (!isBazookaWeapon)
-                    {
-                        BodyHandle hitHandle = capteurLaser.ObjetTouche.BodyHandle;
-                        
-                        foreach (Enemy enemy in enemiesList)
-                        {
-                            if (enemy.isAlive && enemy.bodyId == hitHandle)
-                            {
-                                enemy.TakeDamage(damage);
-                                Program.hitmarkerTimer = 0.3f;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            // 2. NOUVEAU : EST-CE QU'ON TOUCHE UN BARIL ? (Objet Statique)
-            else if (capteurLaser.ObjetTouche.Mobility == CollidableMobility.Static)
+            distanceEffectiveMur = capteurLaser.distanceImpact;
+            
+            // EST-CE QU'ON TOUCHE UN BARIL ?
+            if (capteurLaser.ObjetTouche.Mobility == CollidableMobility.Static)
             {
                 StaticHandle hitStaticHandle = capteurLaser.ObjetTouche.StaticHandle;
-                
-                // On vérifie si le mur qu'on vient de toucher est en fait un baril
                 for (int i = 0; i < barrelSpots.Count; i++)
                 {
-                    // Si ce spot a un baril physique ET que son Ticket correspond à ce qu'on a touché
                     if (barrelSpots[i].hasBarrel && barrelSpots[i].estSolide && barrelSpots[i].handlePhysique == hitStaticHandle)
                     {
-                        Program.OnBarrelHit(i); // BOUM !
-                        break; // Le baril a explosé, on arrête de chercher
+                        Program.OnBarrelHit(i);
+                        break; 
                     }
                 }
             }
         }
 
-        // On arrête le visuel du laser au point d'impact
-        endLaser = startLaser + direction * distanceEffective;
+        // --- B. LA HITBOX VIRTUELLE (Pour les Ennemis) ---
+        float distanceEffectiveEnnemi = range;
+        Enemy ennemiTouche = null;
+        isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
 
-        Vector3 impactPoint = physiqueStart + direction * distanceEffective;
-        bool isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
-        if (isBazooka && capteurLaser.aTouche)
+        if (range >= 10) // Uniquement les armes Hitscan et le Bazooka
         {
-            float explosionRadius = 6f;
-            ExplodeAt(impactPoint, explosionRadius, damage, enemiesList);
-            bool brokeAnyBarrel = Program.BreakBarrelsInRadius(impactPoint, explosionRadius);
-            if (brokeAnyBarrel)
+            foreach (Enemy enemy in enemiesList)
             {
-                Program.SwitchWeaponFromBarrel();
+                if (!enemy.isAlive) continue;
+                
+                // ON CRÉE LA SPHÈRE SUR LE FANTÔME !
+                // (On remonte le centre de 1.2m pour cibler le corps visuel flottant)
+                Vector3 centreVisuel = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
+                float rayonHitbox = 0.6f; // La largeur de ta hitbox
+
+                if (Program.RayIntersectsSphere(physiqueStart, direction, centreVisuel, rayonHitbox, out float hitDist))
+                {
+                    // Si on touche l'ennemi ET qu'il n'est pas caché derrière un mur !
+                    if (hitDist < distanceEffectiveMur && hitDist < distanceEffectiveEnnemi)
+                    {
+                        distanceEffectiveEnnemi = hitDist;
+                        ennemiTouche = enemy;
+                    }
+                }
             }
-            Program.SpawnExplosionEffect(impactPoint);
-            Program.hitmarkerTimer = 0.3f;
+            
+            // Si on a validé un tir DIRECT sur un ennemi (Et que ce n'est pas un bazooka)
+            if (ennemiTouche != null && !isBazooka)
+            {
+                bool etatAvant = ennemiTouche.isAlive;
+                ennemiTouche.TakeDamage(damage);
+                
+                if (etatAvant && !ennemiTouche.isAlive) Program.TriggerHitmarker(true); 
+                else if (etatAvant) Program.TriggerHitmarker(false);
+            }
         }
 
-        // ==========================================
-        // 3. LE HACK DE LA MÊLÉE (Cône large pour le couteau)
-        // ==========================================
+        // --- C. ARRÊT DU LASER ET IMPACT ---
+        // Le laser s'arrête au premier obstacle rencontré (le mur ou le fantôme)
+        float distanceVisuelle = Math.Min(distanceEffectiveMur, distanceEffectiveEnnemi);
+        endLaser = startLaser + direction * distanceVisuelle;
+        Vector3 impactPoint = physiqueStart + direction * distanceVisuelle; 
+        
+        // --- D. LOGIQUE DU BAZOOKA ---
+        bool aToucheQuelqueChose = (distanceEffectiveMur < range || distanceEffectiveEnnemi < range);
+        if (isBazooka && aToucheQuelqueChose)
+        {
+            float explosionRadius = 6f;
+            int explosionResult = ExplodeAt(impactPoint, explosionRadius, damage, enemiesList);
+            
+            bool brokeAnyBarrel = Program.BreakBarrelsInRadius(impactPoint, explosionRadius);
+            if (brokeAnyBarrel) Program.SwitchWeaponFromBarrel();
+            
+            Program.SpawnExplosionEffect(impactPoint);
+            
+            if (explosionResult == 2) Program.TriggerHitmarker(true);
+            else if (explosionResult == 1) Program.TriggerHitmarker(false);
+            
+            Program.duckingTimer = 1.5f;
+        }
+
+        // --- E. LE HACK DE LA MÊLÉE (Couteau, Épée) ---
         if (range < 10)
         {
             foreach (Enemy enemy in enemiesList)
             {
                 if (!enemy.isAlive) continue;
                 
-                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.5f, 0); 
+                // CORRECTION MÊLÉE : On centre les dégâts sur le modèle visuel (Y + 1.2f)
+                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0); 
                 float dist = Vector3.Distance(physiqueStart, enemyCenter);
-
                 if (dist <= range)
                 {
                     Vector3 toEnemy = Vector3.Normalize(enemyCenter - physiqueStart);
@@ -178,8 +199,10 @@ public class Weapon
 
                     if (dot > 0.5f) 
                     {
+                        bool etatAvant = enemy.isAlive;
                         enemy.TakeDamage(damage);
-                        Program.hitmarkerTimer = 0.3f;
+                        if (etatAvant && !enemy.isAlive) Program.TriggerHitmarker(true);
+                        else if (etatAvant) Program.TriggerHitmarker(false);
                     }
                 }
             }
@@ -188,18 +211,28 @@ public class Weapon
         return true;
     }
     
-    private void ExplodeAt(Vector3 center, float radius, int explosionDamage, List<Enemy> enemiesList)
+    // CORRECTION : La fonction renvoie maintenant un "bool" (vrai/faux) au lieu de "void"
+    private int ExplodeAt(Vector3 center, float radius, int explosionDamage, List<Enemy> enemiesList)
     {
+        int resultatExplosion = 0; // 0 = raté, 1 = touché, 2 = tué
+        
         foreach (Enemy enemy in enemiesList)
         {
             if (!enemy.isAlive) continue;
-            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.5f, 0);
+            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
             float distToEnemy = Vector3.Distance(center, enemyCenter);
+            
             if (distToEnemy <= radius)
             {
+                bool etatAvant = enemy.isAlive;
                 enemy.TakeDamage(explosionDamage);
+                
+                // Le Kill prime sur le Hit (Si l'explosion tue un ennemi mais en blesse un autre, on veut le son de Kill)
+                if (etatAvant && !enemy.isAlive) resultatExplosion = 2; 
+                else if (resultatExplosion == 0) resultatExplosion = 1;
             }
         }
+        return resultatExplosion;
     }
 
     public void Reload()
