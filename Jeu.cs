@@ -611,9 +611,21 @@ static void InitBarrels()
             CanDash = true;
         }
 
-        //90 frame = 1.5s 
-        if (dashChrono < 90)dashChrono ++;
-        if (wallChrono <10*FPS)wallChrono ++;
+        // ==========================================
+        // CHRONOMÈTRES ET SONS D'INTERFACE (UX)
+        // ==========================================
+        // 1. On mémorise l'état AVANT de faire passer le temps
+        bool dashEtaitPret = dashChrono >= 90;
+        bool murEtaitPret = wallChrono >= 10 * FPS;
+
+        // 2. On fait avancer le temps (1 frame)
+        if (dashChrono < 90) dashChrono++;
+        if (wallChrono < 10 * FPS) wallChrono++;
+        
+        if (!murEtaitPret && wallChrono >= 10 * FPS)
+        {
+            Program.PlaySoundWithPriority(wallNotifSound, Program.SoundPriority.Low);
+        }
         
 
 
@@ -671,6 +683,7 @@ static void InitBarrels()
 
 
 
+       
 
         // ==========================================
         // MODE CONSTRUCTION (Touche F)
@@ -766,6 +779,41 @@ static void InitBarrels()
         float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
         float vitesseDescente = 0f;
         bool IsSprinting = KeyBinds.IsSprintingPressed();
+
+
+        // ==========================================
+            // SYSTÈME DE BRUITS DE PAS
+            // ==========================================
+            // Conditions : Toucher le sol, avancer, et ne pas être accroupi/en glissade
+            if (capteurSol.toucheSol && vitesseHorizontale > 1f && !KeyBinds.IsCrouchingPressed())
+            {
+                footstepTimer -= deltaTime;
+                
+                if (footstepTimer <= 0f)
+                {
+                    // 1. Piocher un son au hasard entre 1, 2 et 3
+                    int randomStep = Raylib.GetRandomValue(0, 2);
+                    Sound stepSound = isLeftStep ? Program.footstepLeft[randomStep] : Program.footstepRight[randomStep];
+                    
+                    // 2. Jouer le son
+                    Program.PlaySoundWithPriority(stepSound, Program.SoundPriority.Low, 0.7f);
+                    
+                    // 3. Inverser le pied pour la prochaine fois
+                    isLeftStep = !isLeftStep;
+                    
+                    // 4. Définir le délai avant le prochain pas (plus court si on sprinte)
+                    footstepTimer = IsSprinting ? 0.3f : 0.45f; 
+                }
+            }
+            else
+            {
+                // Si on s'arrête ou qu'on saute, on remet le timer à zéro 
+                // pour que le premier pas soit instantané quand on repart !
+                footstepTimer = 0f; 
+            }
+
+
+
         
         //la plus part des variables ici servent pour la glissade dynamique
 
@@ -1003,6 +1051,69 @@ static void InitBarrels()
                 CanDash = false ;
                 dashChrono = 0;
             }
+
+            // ==========================================
+            // SYSTÈMES AUDIO CONTINUS (Vent & Coeur)
+            // ==========================================
+            // --- 1. LE VENT DE VITESSE (Avec Lerp) ---
+            float vitesseTotale = espionCube.Velocity.Linear.Length();
+            
+            // 1. On définit la CIBLE (Target)
+            if (vitesseTotale > 12f && localPlayer.IsAlive)
+            {
+                Program.targetWindVolume = Math.Clamp((vitesseTotale - 12f) / 23f, 0f, 1f);
+            }
+            else
+            {
+                Program.targetWindVolume = 0f; // Silence voulu
+            }
+
+            // 2. LE LERP MAGIQUE ! 
+            // La valeur actuelle se rapproche de la cible de "X" % par seconde.
+            // Le "5f" est la vitesse de transition (plus c'est bas, plus c'est doux)
+            Program.currentWindVolume += (Program.targetWindVolume - Program.currentWindVolume) * 5f * deltaTime;
+
+            // 3. Application du son lissé
+            if (Program.currentWindVolume > 0.01f) // Si on entend un minimum d'air
+            {
+                if (!Raylib.IsSoundPlaying(Program.windSound)) Raylib.PlaySound(Program.windSound);
+                
+                Raylib.SetSoundVolume(Program.windSound, Program.currentWindVolume * Settings.SFXVolume * duckingStrength * 0.7f);
+                
+                // Le Pitch est aussi lissé puisqu'il se base sur le volume actuel !
+                float windPitch = 1f + (Program.currentWindVolume * 0.4f); 
+                Raylib.SetSoundPitch(Program.windSound, windPitch);
+            }
+            else
+            {
+                // Si le volume est vraiment retombé à zéro, on coupe le fichier audio
+                if (Raylib.IsSoundPlaying(Program.windSound)) Raylib.StopSound(Program.windSound);
+            }
+
+            // --- 2. LE BATTEMENT DE CŒUR (Santé critique) ---
+            if (localPlayer.Health <= 25 && localPlayer.Health > 0)
+            {
+                if (!Raylib.IsSoundPlaying(Program.heartbeatSound)) Raylib.PlaySound(Program.heartbeatSound);
+                
+                // Plus on est proche de 0 HP, plus le cœur tape fort dans les oreilles !
+                float dangerLevel = 1f - ((float)localPlayer.Health / 25f);
+                float heartVolume = 0.5f + (dangerLevel * 3f);
+                
+                Raylib.SetSoundVolume(Program.heartbeatSound, heartVolume * Settings.SFXVolume * duckingStrength);
+            }
+            else
+            {
+                // On s'est soigné ou on est mort : le cœur s'arrête
+                if (Raylib.IsSoundPlaying(Program.heartbeatSound)) Raylib.StopSound(Program.heartbeatSound);
+            }
+
+
+        }
+
+        if (isPaused && !isOnline)
+        {
+            if (Raylib.IsSoundPlaying(Program.windSound)) Raylib.StopSound(Program.windSound);
+            if (Raylib.IsSoundPlaying(Program.heartbeatSound)) Raylib.StopSound(Program.heartbeatSound);
         }
 
         // Jump pad (Sandbox)

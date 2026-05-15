@@ -125,23 +125,31 @@ public class Weapon
         Enemy ennemiTouche = null;
         isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
 
+        // On convertit notre tir en "Ray" officiel de Raylib
+        Ray rayonTir = new Ray(physiqueStart, direction);
+
         if (range >= 10) // Uniquement les armes Hitscan et le Bazooka
         {
             foreach (Enemy enemy in enemiesList)
             {
                 if (!enemy.isAlive) continue;
                 
-                // ON CRÉE LA SPHÈRE SUR LE FANTÔME !
-                // (On remonte le centre de 1.2m pour cibler le corps visuel flottant)
-                Vector3 centreVisuel = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
-                float rayonHitbox = 0.6f; // La largeur de ta hitbox
+                // ON CRÉE LA BOÎTE VIRTUELLE !
+                // La forme rouge allait de Y-1 à Y+1. On garde la base, mais on monte le sommet à Y+1.5 !
+                Vector3 posPhysique = enemy.GetPosition();
+                Vector3 minBox = posPhysique - new Vector3(0.5f, 1f, 0.5f);
+                Vector3 maxBox = posPhysique + new Vector3(0.5f, 1.5f, 0.5f); 
+                BoundingBox virtualHitbox = new BoundingBox(minBox, maxBox);
 
-                if (Program.RayIntersectsSphere(physiqueStart, direction, centreVisuel, rayonHitbox, out float hitDist))
+                // Raylib fait les maths complexes pour nous !
+                RayCollision collision = Raylib.GetRayCollisionBox(rayonTir, virtualHitbox);
+
+                if (collision.Hit)
                 {
                     // Si on touche l'ennemi ET qu'il n'est pas caché derrière un mur !
-                    if (hitDist < distanceEffectiveMur && hitDist < distanceEffectiveEnnemi)
+                    if (collision.Distance < distanceEffectiveMur && collision.Distance < distanceEffectiveEnnemi)
                     {
-                        distanceEffectiveEnnemi = hitDist;
+                        distanceEffectiveEnnemi = collision.Distance;
                         ennemiTouche = enemy;
                     }
                 }
@@ -189,8 +197,8 @@ public class Weapon
             {
                 if (!enemy.isAlive) continue;
                 
-                // CORRECTION MÊLÉE : On centre les dégâts sur le modèle visuel (Y + 1.2f)
-                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0); 
+                // CORRECTION MÊLÉE : On centre sur la nouvelle hitbox (Le milieu de la boîte est à Y + 0.25f)
+                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.25f, 0);
                 float dist = Vector3.Distance(physiqueStart, enemyCenter);
                 if (dist <= range)
                 {
@@ -219,7 +227,8 @@ public class Weapon
         foreach (Enemy enemy in enemiesList)
         {
             if (!enemy.isAlive) continue;
-            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
+            // Le centre de la nouvelle hitbox virtuelle
+            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.25f, 0);
             float distToEnemy = Vector3.Distance(center, enemyCenter);
             
             if (distToEnemy <= radius)

@@ -1061,9 +1061,27 @@ static void InitBarrels()
             CanDash = true;
         }
 
-        //90 frame = 1.5s 
-        if (dashChrono < 90)dashChrono ++;
-        if (wallChrono <10*FPS)wallChrono ++;
+        // ==========================================
+        // CHRONOMÈTRES ET SONS D'INTERFACE (UX)
+        // ==========================================
+        // 1. On mémorise l'état AVANT de faire passer le temps
+        bool dashEtaitPret = dashChrono >= 90;
+        bool murEtaitPret = wallChrono >= 10 * FPS;
+
+        // 2. On fait avancer le temps (1 frame)
+        if (dashChrono < 90) dashChrono++;
+        if (wallChrono < 10 * FPS) wallChrono++;
+
+        // 3. On vérifie si on vient TOUT JUSTE de finir le chargement à cette frame !
+        if (!dashEtaitPret && dashChrono >= 90)
+        {
+            Program.PlaySoundWithPriority(dashNotifSound, Program.SoundPriority.Low);
+        }
+        
+        if (!murEtaitPret && wallChrono >= 10 * FPS)
+        {
+            Program.PlaySoundWithPriority(wallNotifSound, Program.SoundPriority.Low);
+        }
         
 
 
@@ -3972,6 +3990,7 @@ public partial class Program
     public static float damageOverlayOpacity = 0f;
     public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound, groundImpactSound;
     public static Sound hitmarkerSound, killSound;
+    public static Sound dashNotifSound, wallNotifSound;
 
 
     // Gestion des sons pour éviter les chevauchements
@@ -4189,6 +4208,8 @@ public partial class Program
         hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
         hitmarkerSound = Raylib.LoadSound("assets\\sounds\\hitmarker.mp3");
         killSound = Raylib.LoadSound("assets\\sounds\\kill-sound.mp3");
+        dashNotifSound = Raylib.LoadSound("assets\\sounds\\dash-notif.mp3");
+        wallNotifSound = Raylib.LoadSound("assets\\sounds\\wall-notif.mp3");
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
@@ -4473,7 +4494,7 @@ public partial class Program
     }
 
 
-    
+
     // ==========================================
     // NOUVEAU : LE MOTEUR DE SON 3D SPATIALISÉ
     // ==========================================
@@ -4527,6 +4548,8 @@ public partial class Program
         Raylib.SetSoundVolume(hitSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(hitmarkerSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(killSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(dashNotifSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(wallNotifSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(weaponSwitchSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(reloadSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(noAmmoSound, Settings.SFXVolume);

@@ -120,6 +120,18 @@ public partial class Program
     public static float damageOverlayOpacity = 0f;
     public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound, groundImpactSound;
     public static Sound hitmarkerSound, killSound;
+    public static Sound dashNotifSound, wallNotifSound;
+
+    //Le système de pas
+    public static Sound[] footstepLeft = new Sound[3];
+    public static Sound[] footstepRight = new Sound[3];
+    public static float footstepTimer = 0f;
+    public static bool isLeftStep = true;
+
+    public static Sound windSound, heartbeatSound;
+
+    public static float targetWindVolume = 0f;
+    public static float currentWindVolume = 0f;
 
 
     // Gestion des sons pour éviter les chevauchements
@@ -337,10 +349,19 @@ public partial class Program
         hitSound = Raylib.LoadSound("assets\\sounds\\hit.mp3");
         hitmarkerSound = Raylib.LoadSound("assets\\sounds\\hitmarker.mp3");
         killSound = Raylib.LoadSound("assets\\sounds\\kill-sound.mp3");
+        dashNotifSound = Raylib.LoadSound("assets\\sounds\\dash-notif.mp3");
+        wallNotifSound = Raylib.LoadSound("assets\\sounds\\wall-notif.mp3");
+        windSound = Raylib.LoadSound("assets\\sounds\\Wind-howl-loop.mp3");
+        heartbeatSound = Raylib.LoadSound("assets\\sounds\\Heartbeat.mp3");
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
         wallSound = Raylib.LoadSound("assets\\sounds\\wall.mp3");
+        for (int i = 0; i < 3; i++)
+        {
+            footstepLeft[i] = Raylib.LoadSound($"assets\\sounds\\pas-gauche-{i + 1}.mp3");
+            footstepRight[i] = Raylib.LoadSound($"assets\\sounds\\pas-droit-{i + 1}.mp3");
+        }
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -534,6 +555,9 @@ public partial class Program
         Raylib.UnloadSound(reloadSound);
         Raylib.UnloadSound(noAmmoSound);
         Raylib.UnloadSound(groundImpactSound);
+
+        Raylib.UnloadSound(windSound);
+        Raylib.UnloadSound(heartbeatSound);
         
         Raylib.UnloadMusicStream(menuMusic);
         Raylib.UnloadMusicStream(gameMusic);
@@ -594,13 +618,13 @@ public partial class Program
             else if (currentMusicState == ActiveMusic.Game) Raylib.SetMusicVolume(gameMusic, Settings.MusicVolume);
         }
 
-    public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
+    // NOUVEAU : On ajoute 'float volumeMultiplier = 1f' (par défaut, il vaut 1, donc il ne change rien pour les autres sons)
+    public static void PlaySoundWithPriority(Sound sound, SoundPriority priority, float volumeMultiplier = 1f)
     {
-        // 1. On part du volume choisi par le joueur dans les paramètres
-        float volumeFinal = Settings.SFXVolume;
+        // 1. On part du volume choisi par le joueur, et on le multiplie par ton coefficient "brut" !
+        float volumeFinal = Settings.SFXVolume * volumeMultiplier;
 
         // 2. EFFET DUCKING : Si ce n'est PAS un son critique, il est assourdi par les explosions
-        // (Cela permet au "Ding !" du Kill Sound de résonner parfaitement même pendant un tir de Bazooka)
         if (priority != SoundPriority.Critical)
         {
             volumeFinal *= duckingStrength;
@@ -616,12 +640,12 @@ public partial class Program
         Raylib.SetSoundVolume(sound, volumeFinal);
         Raylib.SetSoundPitch(sound, 1f);
 
-        // 4. ON JOUE TOUT INSTANTANÉMENT ! (La carte son gère la superposition toute seule)
+        // 4. ON JOUE TOUT INSTANTANÉMENT !
         Raylib.PlaySound(sound);
     }
 
 
-    
+
     // ==========================================
     // NOUVEAU : LE MOTEUR DE SON 3D SPATIALISÉ
     // ==========================================
@@ -675,12 +699,19 @@ public partial class Program
         Raylib.SetSoundVolume(hitSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(hitmarkerSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(killSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(dashNotifSound, Settings.SFXVolume);
+        Raylib.SetSoundVolume(wallNotifSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(weaponSwitchSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(reloadSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(noAmmoSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(groundImpactSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(swoosh, Settings.SFXVolume); // Même les swoosh sont pris en compte !
         Raylib.SetSoundVolume(wallSound, Settings.SFXVolume);
+        for (int i = 0; i < 3; i++)
+        {
+            Raylib.SetSoundVolume(footstepLeft[i], Settings.SFXVolume * 0.5f);
+            Raylib.SetSoundVolume(footstepRight[i], Settings.SFXVolume * 0.5f);
+        }
 
         // -> Le pool de sons de mort
         for (int i = 0; i < deathSounds.Length; i++)
