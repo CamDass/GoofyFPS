@@ -72,7 +72,7 @@ public class Enemy
         
         if (distanceHorizontale < 1.7f && differenceHauteur < 3.5f && attackCooldown <= 0)
         {
-            Program.PlaySoundWithPriority(attackSound, Program.SoundPriority.Medium);
+            Program.PlaySound3D(attackSound, enemyBody.Pose.Position, 15f);
             // Il te met une claque !
             Program.localPlayer.TakeDamage(10); 
             attackCooldown = 0.5f; 
@@ -176,8 +176,8 @@ public class Enemy
             // 1. LE JOUEUR A TUÉ L'ENNEMI : Son de caisse enregistreuse !
             Program.PlaySoundWithPriority(Program.killSound, Program.SoundPriority.High);
             
-            // Le cri de mort du zombie (déjà existant)
-            Raylib.PlaySound(Program.deathSounds[Program.deathSoundIndex]);
+            // Le cri de mort vient du zombie, on l'entend jusqu'à 30 mètres !
+            Program.PlaySound3D(Program.deathSounds[Program.deathSoundIndex], GetPosition(), 30f);
             Program.deathSoundIndex = (Program.deathSoundIndex + 1) % Program.deathSounds.Length;
         }
     }

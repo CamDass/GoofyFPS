@@ -254,7 +254,7 @@ static void InitBarrels()
         Program.duckingTimer = 1.5f;
 
         SwitchWeaponFromBarrel();
-        Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
+        Program.PlaySound3D(explosion, barrelPos, 120f);
         activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
     }
 
@@ -722,7 +722,7 @@ static void InitBarrels()
             {
                 if (wallChrono >= FPS * 10)
                 {
-                    Raylib.PlaySound(wallSound);
+                    Program.PlaySound3D(wallSound, positionPrevueMur, 20f);
                     wallChrono = 0;
                     StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
                     StaticHandle handle = simulation.Statics.Add(description);
