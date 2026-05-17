@@ -311,7 +311,7 @@ public class Enemy
         
         if (distanceHorizontale < 1.7f && differenceHauteur < 3.5f && attackCooldown <= 0)
         {
-            Program.PlaySoundWithPriority(attackSound, Program.SoundPriority.Medium);
+            Program.PlaySound3D(attackSound, enemyBody.Pose.Position, 15f);
             // Il te met une claque !
             Program.localPlayer.TakeDamage(10); 
             attackCooldown = 0.5f; 
@@ -415,8 +415,8 @@ public class Enemy
             // 1. LE JOUEUR A TUÉ L'ENNEMI : Son de caisse enregistreuse !
             Program.PlaySoundWithPriority(Program.killSound, Program.SoundPriority.High);
             
-            // Le cri de mort du zombie (déjà existant)
-            Raylib.PlaySound(Program.deathSounds[Program.deathSoundIndex]);
+            // Le cri de mort vient du zombie, on l'entend jusqu'à 30 mètres !
+            Program.PlaySound3D(Program.deathSounds[Program.deathSoundIndex], GetPosition(), 30f);
             Program.deathSoundIndex = (Program.deathSoundIndex + 1) % Program.deathSounds.Length;
         }
     }
@@ -704,7 +704,7 @@ static void InitBarrels()
         Program.duckingTimer = 1.5f;
 
         SwitchWeaponFromBarrel();
-        Program.PlaySoundWithPriority(explosion, Program.SoundPriority.High);
+        Program.PlaySound3D(explosion, barrelPos, 120f);
         activeExplosions.Add(new ExplosionEffect(barrelPos, 0.5f, barrelScale * 0.8f, barrelScale * 3.5f));
     }
 
@@ -1071,12 +1071,6 @@ static void InitBarrels()
         // 2. On fait avancer le temps (1 frame)
         if (dashChrono < 90) dashChrono++;
         if (wallChrono < 10 * FPS) wallChrono++;
-
-        // 3. On vérifie si on vient TOUT JUSTE de finir le chargement à cette frame !
-        if (!dashEtaitPret && dashChrono >= 90)
-        {
-            Program.PlaySoundWithPriority(dashNotifSound, Program.SoundPriority.Low);
-        }
         
         if (!murEtaitPret && wallChrono >= 10 * FPS)
         {
@@ -1139,6 +1133,7 @@ static void InitBarrels()
 
 
 
+       
 
         // ==========================================
         // MODE CONSTRUCTION (Touche F)
@@ -1177,7 +1172,7 @@ static void InitBarrels()
             {
                 if (wallChrono >= FPS * 10)
                 {
-                    Raylib.PlaySound(wallSound);
+                    Program.PlaySound3D(wallSound, positionPrevueMur, 20f);
                     wallChrono = 0;
                     StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
                     StaticHandle handle = simulation.Statics.Add(description);
@@ -1234,6 +1229,41 @@ static void InitBarrels()
         float vitesseVerticale = MathF.Abs(espionCube.Velocity.Linear.Y);
         float vitesseDescente = 0f;
         bool IsSprinting = KeyBinds.IsSprintingPressed();
+
+
+        // ==========================================
+            // SYSTÈME DE BRUITS DE PAS
+            // ==========================================
+            // Conditions : Toucher le sol, avancer, et ne pas être accroupi/en glissade
+            if (capteurSol.toucheSol && vitesseHorizontale > 1f && !KeyBinds.IsCrouchingPressed())
+            {
+                footstepTimer -= deltaTime;
+                
+                if (footstepTimer <= 0f)
+                {
+                    // 1. Piocher un son au hasard entre 1, 2 et 3
+                    int randomStep = Raylib.GetRandomValue(0, 2);
+                    Sound stepSound = isLeftStep ? Program.footstepLeft[randomStep] : Program.footstepRight[randomStep];
+                    
+                    // 2. Jouer le son
+                    Program.PlaySoundWithPriority(stepSound, Program.SoundPriority.Low, 0.7f);
+                    
+                    // 3. Inverser le pied pour la prochaine fois
+                    isLeftStep = !isLeftStep;
+                    
+                    // 4. Définir le délai avant le prochain pas (plus court si on sprinte)
+                    footstepTimer = IsSprinting ? 0.3f : 0.45f; 
+                }
+            }
+            else
+            {
+                // Si on s'arrête ou qu'on saute, on remet le timer à zéro 
+                // pour que le premier pas soit instantané quand on repart !
+                footstepTimer = 0f; 
+            }
+
+
+
         
         //la plus part des variables ici servent pour la glissade dynamique
 
@@ -1471,6 +1501,69 @@ static void InitBarrels()
                 CanDash = false ;
                 dashChrono = 0;
             }
+
+            // ==========================================
+            // SYSTÈMES AUDIO CONTINUS (Vent & Coeur)
+            // ==========================================
+            // --- 1. LE VENT DE VITESSE (Avec Lerp) ---
+            float vitesseTotale = espionCube.Velocity.Linear.Length();
+            
+            // 1. On définit la CIBLE (Target)
+            if (vitesseTotale > 12f && localPlayer.IsAlive)
+            {
+                Program.targetWindVolume = Math.Clamp((vitesseTotale - 12f) / 23f, 0f, 1f);
+            }
+            else
+            {
+                Program.targetWindVolume = 0f; // Silence voulu
+            }
+
+            // 2. LE LERP MAGIQUE ! 
+            // La valeur actuelle se rapproche de la cible de "X" % par seconde.
+            // Le "5f" est la vitesse de transition (plus c'est bas, plus c'est doux)
+            Program.currentWindVolume += (Program.targetWindVolume - Program.currentWindVolume) * 5f * deltaTime;
+
+            // 3. Application du son lissé
+            if (Program.currentWindVolume > 0.01f) // Si on entend un minimum d'air
+            {
+                if (!Raylib.IsSoundPlaying(Program.windSound)) Raylib.PlaySound(Program.windSound);
+                
+                Raylib.SetSoundVolume(Program.windSound, Program.currentWindVolume * Settings.SFXVolume * duckingStrength * 0.7f);
+                
+                // Le Pitch est aussi lissé puisqu'il se base sur le volume actuel !
+                float windPitch = 1f + (Program.currentWindVolume * 0.4f); 
+                Raylib.SetSoundPitch(Program.windSound, windPitch);
+            }
+            else
+            {
+                // Si le volume est vraiment retombé à zéro, on coupe le fichier audio
+                if (Raylib.IsSoundPlaying(Program.windSound)) Raylib.StopSound(Program.windSound);
+            }
+
+            // --- 2. LE BATTEMENT DE CŒUR (Santé critique) ---
+            if (localPlayer.Health <= 25 && localPlayer.Health > 0)
+            {
+                if (!Raylib.IsSoundPlaying(Program.heartbeatSound)) Raylib.PlaySound(Program.heartbeatSound);
+                
+                // Plus on est proche de 0 HP, plus le cœur tape fort dans les oreilles !
+                float dangerLevel = 1f - ((float)localPlayer.Health / 25f);
+                float heartVolume = 0.5f + (dangerLevel * 3f);
+                
+                Raylib.SetSoundVolume(Program.heartbeatSound, heartVolume * Settings.SFXVolume * duckingStrength);
+            }
+            else
+            {
+                // On s'est soigné ou on est mort : le cœur s'arrête
+                if (Raylib.IsSoundPlaying(Program.heartbeatSound)) Raylib.StopSound(Program.heartbeatSound);
+            }
+
+
+        }
+
+        if (isPaused && !isOnline)
+        {
+            if (Raylib.IsSoundPlaying(Program.windSound)) Raylib.StopSound(Program.windSound);
+            if (Raylib.IsSoundPlaying(Program.heartbeatSound)) Raylib.StopSound(Program.heartbeatSound);
         }
 
         // Jump pad (Sandbox)
@@ -3992,6 +4085,17 @@ public partial class Program
     public static Sound hitmarkerSound, killSound;
     public static Sound dashNotifSound, wallNotifSound;
 
+    //Le système de pas
+    public static Sound[] footstepLeft = new Sound[3];
+    public static Sound[] footstepRight = new Sound[3];
+    public static float footstepTimer = 0f;
+    public static bool isLeftStep = true;
+
+    public static Sound windSound, heartbeatSound;
+
+    public static float targetWindVolume = 0f;
+    public static float currentWindVolume = 0f;
+
 
     // Gestion des sons pour éviter les chevauchements
     public enum SoundPriority
@@ -4210,10 +4314,17 @@ public partial class Program
         killSound = Raylib.LoadSound("assets\\sounds\\kill-sound.mp3");
         dashNotifSound = Raylib.LoadSound("assets\\sounds\\dash-notif.mp3");
         wallNotifSound = Raylib.LoadSound("assets\\sounds\\wall-notif.mp3");
+        windSound = Raylib.LoadSound("assets\\sounds\\Wind-howl-loop.mp3");
+        heartbeatSound = Raylib.LoadSound("assets\\sounds\\Heartbeat.mp3");
         weaponSwitchSound = Raylib.LoadSound("assets\\sounds\\swoosh.mp3");
         reloadSound = Raylib.LoadSound("assets\\sounds\\reload.mp3");
         noAmmoSound = Raylib.LoadSound("assets\\sounds\\no-ammo.mp3");
         wallSound = Raylib.LoadSound("assets\\sounds\\wall.mp3");
+        for (int i = 0; i < 3; i++)
+        {
+            footstepLeft[i] = Raylib.LoadSound($"assets\\sounds\\pas-gauche-{i + 1}.mp3");
+            footstepRight[i] = Raylib.LoadSound($"assets\\sounds\\pas-droit-{i + 1}.mp3");
+        }
         
         // Charger 4 instances du son de death pour permettre plusieurs lectures simultanées
         for (int i = 0; i < deathSounds.Length; i++)
@@ -4407,6 +4518,9 @@ public partial class Program
         Raylib.UnloadSound(reloadSound);
         Raylib.UnloadSound(noAmmoSound);
         Raylib.UnloadSound(groundImpactSound);
+
+        Raylib.UnloadSound(windSound);
+        Raylib.UnloadSound(heartbeatSound);
         
         Raylib.UnloadMusicStream(menuMusic);
         Raylib.UnloadMusicStream(gameMusic);
@@ -4467,13 +4581,13 @@ public partial class Program
             else if (currentMusicState == ActiveMusic.Game) Raylib.SetMusicVolume(gameMusic, Settings.MusicVolume);
         }
 
-    public static void PlaySoundWithPriority(Sound sound, SoundPriority priority)
+    // NOUVEAU : On ajoute 'float volumeMultiplier = 1f' (par défaut, il vaut 1, donc il ne change rien pour les autres sons)
+    public static void PlaySoundWithPriority(Sound sound, SoundPriority priority, float volumeMultiplier = 1f)
     {
-        // 1. On part du volume choisi par le joueur dans les paramètres
-        float volumeFinal = Settings.SFXVolume;
+        // 1. On part du volume choisi par le joueur, et on le multiplie par ton coefficient "brut" !
+        float volumeFinal = Settings.SFXVolume * volumeMultiplier;
 
         // 2. EFFET DUCKING : Si ce n'est PAS un son critique, il est assourdi par les explosions
-        // (Cela permet au "Ding !" du Kill Sound de résonner parfaitement même pendant un tir de Bazooka)
         if (priority != SoundPriority.Critical)
         {
             volumeFinal *= duckingStrength;
@@ -4489,7 +4603,7 @@ public partial class Program
         Raylib.SetSoundVolume(sound, volumeFinal);
         Raylib.SetSoundPitch(sound, 1f);
 
-        // 4. ON JOUE TOUT INSTANTANÉMENT ! (La carte son gère la superposition toute seule)
+        // 4. ON JOUE TOUT INSTANTANÉMENT !
         Raylib.PlaySound(sound);
     }
 
@@ -4556,6 +4670,11 @@ public partial class Program
         Raylib.SetSoundVolume(groundImpactSound, Settings.SFXVolume);
         Raylib.SetSoundVolume(swoosh, Settings.SFXVolume); // Même les swoosh sont pris en compte !
         Raylib.SetSoundVolume(wallSound, Settings.SFXVolume);
+        for (int i = 0; i < 3; i++)
+        {
+            Raylib.SetSoundVolume(footstepLeft[i], Settings.SFXVolume * 0.5f);
+            Raylib.SetSoundVolume(footstepRight[i], Settings.SFXVolume * 0.5f);
+        }
 
         // -> Le pool de sons de mort
         for (int i = 0; i < deathSounds.Length; i++)
@@ -4838,23 +4957,31 @@ public class Weapon
         Enemy ennemiTouche = null;
         isBazooka = string.Equals(name, "Bazooka", StringComparison.OrdinalIgnoreCase);
 
+        // On convertit notre tir en "Ray" officiel de Raylib
+        Ray rayonTir = new Ray(physiqueStart, direction);
+
         if (range >= 10) // Uniquement les armes Hitscan et le Bazooka
         {
             foreach (Enemy enemy in enemiesList)
             {
                 if (!enemy.isAlive) continue;
                 
-                // ON CRÉE LA SPHÈRE SUR LE FANTÔME !
-                // (On remonte le centre de 1.2m pour cibler le corps visuel flottant)
-                Vector3 centreVisuel = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
-                float rayonHitbox = 0.6f; // La largeur de ta hitbox
+                // ON CRÉE LA BOÎTE VIRTUELLE !
+                // La forme rouge allait de Y-1 à Y+1. On garde la base, mais on monte le sommet à Y+1.5 !
+                Vector3 posPhysique = enemy.GetPosition();
+                Vector3 minBox = posPhysique - new Vector3(0.5f, 1f, 0.5f);
+                Vector3 maxBox = posPhysique + new Vector3(0.5f, 1.5f, 0.5f); 
+                BoundingBox virtualHitbox = new BoundingBox(minBox, maxBox);
 
-                if (Program.RayIntersectsSphere(physiqueStart, direction, centreVisuel, rayonHitbox, out float hitDist))
+                // Raylib fait les maths complexes pour nous !
+                RayCollision collision = Raylib.GetRayCollisionBox(rayonTir, virtualHitbox);
+
+                if (collision.Hit)
                 {
                     // Si on touche l'ennemi ET qu'il n'est pas caché derrière un mur !
-                    if (hitDist < distanceEffectiveMur && hitDist < distanceEffectiveEnnemi)
+                    if (collision.Distance < distanceEffectiveMur && collision.Distance < distanceEffectiveEnnemi)
                     {
-                        distanceEffectiveEnnemi = hitDist;
+                        distanceEffectiveEnnemi = collision.Distance;
                         ennemiTouche = enemy;
                     }
                 }
@@ -4902,8 +5029,8 @@ public class Weapon
             {
                 if (!enemy.isAlive) continue;
                 
-                // CORRECTION MÊLÉE : On centre les dégâts sur le modèle visuel (Y + 1.2f)
-                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0); 
+                // CORRECTION MÊLÉE : On centre sur la nouvelle hitbox (Le milieu de la boîte est à Y + 0.25f)
+                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.25f, 0);
                 float dist = Vector3.Distance(physiqueStart, enemyCenter);
                 if (dist <= range)
                 {
@@ -4932,7 +5059,8 @@ public class Weapon
         foreach (Enemy enemy in enemiesList)
         {
             if (!enemy.isAlive) continue;
-            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 1.2f, 0);
+            // Le centre de la nouvelle hitbox virtuelle
+            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.25f, 0);
             float distToEnemy = Vector3.Distance(center, enemyCenter);
             
             if (distToEnemy <= radius)
