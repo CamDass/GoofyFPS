@@ -9,6 +9,10 @@ using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuUtilities.Memory;
 
+//reseau 
+using LiteNetLib;
+using LiteNetLib.Utils;
+
 public partial class Program
 {
     // ========================================================
@@ -71,8 +75,6 @@ public partial class Program
     //On remplace "isMenuGameOpen" par un système plus pro
     public static bool isPaused = false;
     
-    //fausse variable pour simuler si on est en ligne ou pas !
-    public static bool isOnline = true;
     public static bool isOptionsMenuOpen = false;
     
 
@@ -260,6 +262,21 @@ public partial class Program
     public static Model visuelMur;
 
     public static int wallChrono;
+
+
+
+
+    // ==========================================
+    // VARIABLES RÉSEAU (MULTIJOUEUR)
+    // ==========================================
+    public static bool isOnline = false; // Vrai si on joue en LAN
+    public static bool isServer = false; // Vrai si C'EST NOUS l'Hôte (Le Dieu de la physique)
+    
+    public static NetManager netManager;           // Le gestionnaire de la carte réseau
+    public static EventBasedNetListener netListener; // Celui qui "écoute" les messages arriver
+
+
+
 
 
 
