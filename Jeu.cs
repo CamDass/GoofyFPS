@@ -434,8 +434,9 @@ static void InitBarrels()
                     joueurMort.Pose.Position = new Vector3(0, 50, 0); 
                     joueurMort.Velocity.Linear = Vector3.Zero;
                     
-                    endroit = "menu"; 
+                    Program.currentState = Program.GameState.MainMenu; 
                     Raylib.EnableCursor();
+                    Raylib.StopSound(Program.windSound);
                 }
                 
                 // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
@@ -1845,7 +1846,9 @@ static void InitBarrels()
             // Si le joueur a cliqué sur Options, on affiche le calque des paramètres
             if (isOptionsMenuOpen)
             {
-                AfficherMenuOptions(ref endroit);
+                string dummy = "";
+                AfficherMenuOptions(ref dummy);
+                
             }
             // Sinon, on affiche le menu pause normal (Online ou Offline)
             else if (isOnline) 

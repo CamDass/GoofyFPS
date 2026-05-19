@@ -1,4 +1,7 @@
-﻿using System;
+﻿global using System.Net;
+global using LiteNetLib;
+
+using System;
 using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
@@ -12,6 +15,7 @@ using BepuUtilities.Memory;
 //reseau 
 using LiteNetLib;
 using LiteNetLib.Utils;
+
 
 public partial class Program
 {
@@ -70,7 +74,6 @@ public partial class Program
     static int LargeurFenetre = 1920;
     static int X_carre;
     static int Y_carre;
-    static string endroit = "menu";
 
     //On remplace "isMenuGameOpen" par un système plus pro
     public static bool isPaused = false;
@@ -274,6 +277,180 @@ public partial class Program
     
     public static NetManager netManager;           // Le gestionnaire de la carte réseau
     public static EventBasedNetListener netListener; // Celui qui "écoute" les messages arriver
+
+    public static NetPacketProcessor netProcessor = new NetPacketProcessor();
+
+
+    // ==========================================
+    // LA MACHINE À ÉTATS DU JEU
+    // ==========================================
+    public enum GameState 
+    {
+        MainMenu,           // L'écran titre avec tes textures
+        Options,            // Ton menu d'options avec les sliders
+        ModeSelection,      // Choix Solo / Multi (Sur fond flou)
+        ChoiceMap,          // TA page de sélection (Tuto, Ville, Sandbox)
+        NetworkHub,         // Choix Héberger / Rejoindre
+        Lobby,              // La salle d'attente
+        Playing,             // En jeu
+        ServerBrowser,
+
+    }
+    public static GameState currentState = GameState.MainMenu;
+
+
+
+    // ==========================================
+    // MÉMOIRE DU RADAR RÉSEAU
+    // ==========================================
+    public class InfoServeur 
+    {
+        public string NomDuSalon;
+        public int JoueursActuels;
+        public int JoueursMax;
+        public float TempsDepuisDerniereReponse; // Pour supprimer les serveurs morts
+        public IPEndPoint EndPoint; // L'adresse IP + Port (La cible exacte)
+    }
+
+    // Le dictionnaire stocke l'IP comme "Clé", et les infos comme "Valeur"
+    public static Dictionary<IPEndPoint, InfoServeur> serveursDisponibles = new Dictionary<IPEndPoint, InfoServeur>();
+    public static float chronoRecherche = 0f;
+
+
+    public static void AllumerMoteurReseau(bool host)
+    {
+        netListener = new EventBasedNetListener();
+        netManager = new NetManager(netListener);
+        isServer = host;
+
+        // ==========================================
+        // LES OREILLES DU RADAR (Unconnected Messages)
+        // ==========================================
+        netListener.NetworkReceiveUnconnectedEvent += (endPoint, reader, messageType) =>
+        {
+            // 1. SI ON EST L'HÔTE : On entend quelqu'un chercher une partie
+            if (isServer && messageType == UnconnectedMessageType.Broadcast)
+            {
+                string entete = reader.GetString();
+                if (entete == "GOOFY_REQ") // Sécurité : On vérifie que c'est bien notre jeu qui parle
+                {
+                    // On fabrique notre réponse
+                    NetDataWriter writer = new NetDataWriter();
+                    writer.Put("GOOFY_RES"); // Je suis une réponse GoofyFPS
+                    writer.Put("Le Salon du Chaos"); // Nom du serveur (On le rendra modifiable plus tard)
+                    writer.Put(1); // Joueurs actuels
+                    writer.Put(4); // Joueurs max
+                    
+                    // On renvoie la réponse directement à l'IP qui a posé la question !
+                    netManager.SendUnconnectedMessage(writer, endPoint);
+                }
+            }
+
+            // 2. SI ON EST CLIENT : On reçoit la réponse d'un Hôte !
+            if (!isServer && messageType == UnconnectedMessageType.BasicMessage)
+            {
+                string entete = reader.GetString();
+                if (entete == "GOOFY_RES") 
+                {
+                    // On lit les données dans L'ORDRE EXACT où l'Hôte les a écrites
+                    string nomSalon = reader.GetString();
+                    int jActuels = reader.GetInt();
+                    int jMax = reader.GetInt();
+
+                    // On met à jour notre Dictionnaire
+                    if (!serveursDisponibles.ContainsKey(endPoint))
+                    {
+                        serveursDisponibles[endPoint] = new InfoServeur();
+                    }
+                    
+                    serveursDisponibles[endPoint].NomDuSalon = nomSalon;
+                    serveursDisponibles[endPoint].JoueursActuels = jActuels;
+                    serveursDisponibles[endPoint].JoueursMax = jMax;
+                    serveursDisponibles[endPoint].EndPoint = endPoint;
+                    serveursDisponibles[endPoint].TempsDepuisDerniereReponse = 0f; // On remet le chrono de mort à 0
+                }
+            }
+        };
+
+        // ==========================================
+        // LES PORTES DU SERVEUR (Connexion & Déconnexion)
+        // ==========================================
+        
+        // 1. QUELQU'UN TOQUE À LA PORTE
+        netListener.ConnectionRequestEvent += request =>
+        {
+            if (isServer)
+            {
+                // Le serveur vérifie que la partie n'est pas déjà pleine (ex: max 4 joueurs)
+                if (netManager.ConnectedPeersCount < 4 && currentState == GameState.Lobby)
+                {
+                    // On accepte le joueur !
+                    request.AcceptIfKey("GoofyFPS_SecretKey");
+                }
+                else
+                {
+                    request.Reject(); // Salon plein ou partie déjà lancée
+                }
+            }
+        };
+
+        // 2. QUELQU'UN EST BIEN ENTRÉ (Ou Toi tu as réussi à entrer chez l'hôte)
+        // 2. QUELQU'UN EST BIEN ENTRÉ (Ou Toi tu as réussi à entrer chez l'hôte)
+        netListener.PeerConnectedEvent += peer =>
+        {
+            // CORRECTION 1 : On utilise Address et Port au lieu de EndPoint
+            Console.WriteLine($"[RÉSEAU] Connexion réussie avec {peer.Address}:{peer.Port}");
+            
+            if (!isServer)
+            {
+                // Si on est le Client, ça veut dire qu'on vient d'entrer dans le salon de l'Hôte !
+                // On prépare notre Passeport (JoinPacket) pour lui donner notre Pseudo
+                Packets.JoinPacket passeport = new Packets.JoinPacket();
+                passeport.PlayerName = "Joueur_" + Raylib.GetRandomValue(1000, 9999); // Pseudo provisoire
+
+                // CORRECTION 2 : La nouvelle méthode LiteNetLib pour envoyer un paquet via le processeur
+                NetDataWriter writer = new NetDataWriter();
+                netProcessor.Write(writer, passeport); // On emballe le passeport
+                peer.Send(writer, DeliveryMethod.ReliableOrdered); // On l'envoie !
+                
+                // On passe visuellement dans la salle d'attente
+                currentState = GameState.Lobby;
+            }
+        };
+
+        // ==========================================
+        // LA DOUANE (Traitement des paquets connectés)
+        // ==========================================
+        
+        // 1. Dès qu'un paquet officiel arrive, on le donne au traducteur automatique (NetProcessor)
+        netListener.NetworkReceiveEvent += (peer, reader, deliveryMethod, channel) =>
+        {
+            netProcessor.ReadAllPackets(reader, peer);
+        };
+
+        // 2. On abonne le traducteur à notre "Passeport" (JoinPacket)
+        // Ça veut dire : "Si tu lis un JoinPacket, déclenche la fonction OnJoinPacketReceived"
+        netProcessor.SubscribeReusable<Packets.JoinPacket, NetPeer>(OnJoinPacketReceived);
+
+        // Lancement effectif de la carte réseau
+        if (host) netManager.Start(7777); // Le serveur ouvre la porte 7777 fixement
+        else netManager.Start();          // Le client prend un port au hasard
+    }
+
+
+    // Fonction déclenchée automatiquement par le NetProcessor (ou par notre simulateur)
+    public static void OnJoinPacketReceived(Packets.JoinPacket passeport, NetPeer peer)
+    {
+        if (isServer)
+        {
+            // Sécurité : Si c'est un faux paquet, peer sera null. On met une fausse IP.
+            string adresseIP = (peer != null) ? peer.Address.ToString() : "127.0.0.1 (SIMULATION)";
+            
+            Console.WriteLine($"[SERVEUR - LOBBY] Le joueur '{passeport.PlayerName}' vient d'entrer dans la salle d'attente ! (IP: {adresseIP})");
+            
+            // Plus tard ici : On ajoutera ce joueur à une liste officielle pour l'afficher sur l'écran du Lobby !
+        }
+    }
 
 
 
@@ -543,14 +720,57 @@ public partial class Program
 
         // --- BOUCLE DE JEU ---
         while (!Raylib.WindowShouldClose())
+    {
+
+        // 1. LE COEUR DU RÉSEAU : On lit les paquets en attente !
+        if (netManager != null)
         {
-            if (endroit == "menu") Menu();
-            else if (endroit == "boucle") BouclePrincipale();
-            else if (endroit == "option") {
-                AfficherMenuOptions(ref endroit);
-            }
-            else if (endroit == "choice map") ChoiceMap();
+            netManager.PollEvents();
         }
+
+        // 2. LA LOGIQUE DU CLIENT : Crier et Nettoyer
+        if (netManager != null && !isServer && currentState == GameState.ServerBrowser)
+        {
+            float deltaTime = Raylib.GetFrameTime();
+            chronoRecherche -= deltaTime;
+            
+            // A. Envoyer une onde radar toutes les secondes
+            if (chronoRecherche <= 0)
+            {
+                NetDataWriter writer = new NetDataWriter();
+                writer.Put("GOOFY_REQ");
+                netManager.SendBroadcast(writer, 7777); // On hurle sur le port 7777 de la maison
+                chronoRecherche = 1.0f;
+            }
+
+            // B. Nettoyer les serveurs fantômes (Qui ont fermé)
+            List<IPEndPoint> serveursMorts = new List<IPEndPoint>();
+            foreach (var serveur in serveursDisponibles)
+            {
+                serveur.Value.TempsDepuisDerniereReponse += deltaTime;
+                if (serveur.Value.TempsDepuisDerniereReponse > 3.0f) // S'il ne répond plus depuis 3s
+                {
+                    serveursMorts.Add(serveur.Key);
+                }
+            }
+            foreach (var mort in serveursMorts) serveursDisponibles.Remove(mort);
+        }
+
+
+
+
+        // Si on est dans n'importe quel menu...
+        if (currentState != GameState.Playing)
+        {
+            Draw(); // On dessine le menu et ses boutons
+        }
+        else
+        {
+            // C'EST ICI QU'ON JOUE
+            // (Ton code actuel : Raylib.BeginDrawing(), camera, Jeu.BouclePrincipale, etc...)
+            BouclePrincipale();
+        }
+    }
 
         // --- NETTOYAGE ---
         foreach(var texture in ListeTexture) Raylib.UnloadTexture(texture);
