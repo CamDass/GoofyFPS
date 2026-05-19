@@ -1319,7 +1319,7 @@ partial class Program
                 // ==========================================
                 // MODE DÉBUG : SIMULER L'ENTRÉE D'UN JOUEUR
                 // ==========================================
-                if (Raylib.IsKeyPressed(KeyboardKey.M))
+                if (Program.isServer && Raylib.IsKeyPressed(KeyboardKey.Semicolon)) //touche M sur un clavier azerty 
                 {
                     Console.WriteLine("join");
                     // 1. On fabrique un faux passeport

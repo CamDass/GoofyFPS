@@ -1,5 +1,5 @@
 Structure du dossier pour le volume Windows
-Le numéro de série du volume est 000000FD A6CB:64E7
+Le numéro de série du volume est 000000FE A6CB:64E7
 C:.
 |   .gitignore
 |   contenu.txt
@@ -15,7 +15,6 @@ C:.
 |   lighting.vs
 |   map.glb
 |   Menu.cs
-|   Menugame.cs
 |   Packets.cs
 |   Physics.cs
 |   player.cs
@@ -886,8 +885,9 @@ static void InitBarrels()
                     joueurMort.Pose.Position = new Vector3(0, 50, 0); 
                     joueurMort.Velocity.Linear = Vector3.Zero;
                     
-                    endroit = "menu"; 
+                    Program.currentState = Program.GameState.MainMenu; 
                     Raylib.EnableCursor();
+                    Raylib.StopSound(Program.windSound);
                 }
                 
                 // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
@@ -2297,7 +2297,9 @@ static void InitBarrels()
             // Si le joueur a cliqué sur Options, on affiche le calque des paramètres
             if (isOptionsMenuOpen)
             {
-                AfficherMenuOptions(ref endroit);
+                string dummy = "";
+                AfficherMenuOptions(ref dummy);
+                
             }
             // Sinon, on affiche le menu pause normal (Online ou Offline)
             else if (isOnline) 
@@ -2417,13 +2419,13 @@ partial class Program
         UpdateActiveMusicStream();
 
         // --- RENDU (Draw) ---
-            Raylib.BeginDrawing();
+            //Raylib.BeginDrawing();
 
             // pour "quitter"
             if (Raylib.IsKeyDown(KeyBinds.SelectMenu)) 
             {
                 Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                endroit = "choice map";
+                Program.currentState = Program.GameState.ChoiceMap;
             }
 
             // pour gerer les clic 
@@ -2530,7 +2532,7 @@ partial class Program
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                    endroit = "choice map";
+                    Program.currentState = Program.GameState.ChoiceMap;
                 }
             }
             else 
@@ -2549,8 +2551,7 @@ partial class Program
 
                 if (Raylib.IsMouseButtonReleased(MouseButton.Left))
                 {
-                    endroit = "option";
-                    Console.WriteLine("option");
+                    Program.currentState = Program.GameState.Options;
                 }
             }
             else 
@@ -2619,7 +2620,7 @@ partial class Program
             }
 
 
-            Raylib.EndDrawing();
+            //Raylib.EndDrawing();
     }
 
 
@@ -2938,6 +2939,7 @@ partial class Program
             }
         }
 
+
     }
 
     // Variables pour le rebinding des touches sont déclarées plus haut à la ligne 22
@@ -2975,6 +2977,20 @@ partial class Program
         // ==========================================
         Rectangle btnOnglet1 = new Rectangle(ecranLargeur / 2 - 220, 120, 200, 40);
         Rectangle btnOnglet2 = new Rectangle(ecranLargeur / 2 + 20, 120, 200, 40);
+
+        // Onglet 1 — Paramètres Généraux
+        Color couleurOnglet1 = (ongletOptionActif == 0) ? Color.Red : Color.DarkGray;
+        Raylib.DrawRectangleRec(btnOnglet1, couleurOnglet1);
+        Raylib.DrawRectangleLinesEx(btnOnglet1, 2, Color.Black);
+        int w1 = Raylib.MeasureText("GÉNÉRAL", 18);
+        Raylib.DrawText("GÉNÉRAL", (int)btnOnglet1.X + ((int)btnOnglet1.Width - w1) / 2, (int)btnOnglet1.Y + 11, 18, Color.White);
+
+        // Onglet 2 — Modifier les Touches
+        Color couleurOnglet2 = (ongletOptionActif == 1) ? Color.Red : Color.DarkGray;
+        Raylib.DrawRectangleRec(btnOnglet2, couleurOnglet2);
+        Raylib.DrawRectangleLinesEx(btnOnglet2, 2, Color.Black);
+        int w2 = Raylib.MeasureText("RACCOURCIS", 18);
+        Raylib.DrawText("RACCOURCIS", (int)btnOnglet2.X + ((int)btnOnglet2.Width - w2) / 2, (int)btnOnglet2.Y + 11, 18, Color.White);
         
         // CORRECTION : On passe en Released !
         if (Raylib.CheckCollisionPointRec(souris, btnOnglet1) && Raylib.IsMouseButtonReleased(MouseButton.Left)) 
@@ -3065,7 +3081,7 @@ partial class Program
         // On ne clôture le dessin QUE si on est dans le menu d'accueil
         if (!isPaused) 
         {
-            Raylib.EndDrawing();
+            //Raylib.EndDrawing();
         }
     }
 
@@ -3322,7 +3338,7 @@ partial class Program
             activeExplosions.Clear();
             activeDamageTexts.Clear();
             
-            endroit = "menu";
+            Program.currentState = Program.GameState.MainMenu;
         }
     }
 
@@ -3397,7 +3413,7 @@ partial class Program
             activeExplosions.Clear();
             activeDamageTexts.Clear();
             
-            endroit = "menu";
+            Program.currentState = Program.GameState.MainMenu;
         }
 
         // ==========================================
@@ -3591,16 +3607,120 @@ partial class Program
 
                 if (DrawButton(Raylib.GetScreenWidth()/2 - 150, Raylib.GetScreenHeight()/2 - 80, 300, 60, "HÉBERGER")) {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                    // Futur code serveur
+                    // On devient le serveur, et on va dans la salle d'attente
+                    Program.AllumerMoteurReseau(true);
+                    Program.currentState = Program.GameState.Lobby; // (Écran à créer plus tard)
                 }
                 if (DrawButton(Raylib.GetScreenWidth()/2 - 150, Raylib.GetScreenHeight()/2 + 20, 300, 60, "REJOINDRE")) {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                    // Futur code client
+                    // On devient client, et on ouvre le radar !
+                    Program.AllumerMoteurReseau(false);
+                    Program.currentState = Program.GameState.ServerBrowser; 
                 }
+
+
                 if (DrawButton(50, 50, 150, 60, "RETOUR")) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.ModeSelection;
                 }
+                break;
+            
+
+            case Program.GameState.ServerBrowser:
+                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
+                Raylib.DrawText("RECHERCHE DE PARTIES LAN...", Raylib.GetScreenWidth()/2 - 250, 100, 30, Color.Black);
+
+                int listY = 200;
+                
+                // On boucle sur notre dictionnaire réseau en direct !
+                foreach (var serveur in Program.serveursDisponibles.Values)
+                {
+                    string info = $"{serveur.NomDuSalon}  -  Joueurs: {serveur.JoueursActuels}/{serveur.JoueursMax}  -  IP: {serveur.EndPoint.Address}";
+                    
+                    Raylib.DrawRectangle(Raylib.GetScreenWidth()/2 - 400, listY, 800, 60, new Color(50, 50, 50, 200));
+                    Raylib.DrawText(info, Raylib.GetScreenWidth()/2 - 380, listY + 20, 20, Color.White);
+
+                    // Le Bouton pour se connecter
+                    // Le Bouton pour se connecter
+                    if (DrawButton(Raylib.GetScreenWidth()/2 + 250, listY + 10, 130, 40, "REJOINDRE"))
+                    {
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                        // FUTUR CODE : Connexion officielle au serveur ici !
+                        
+                        // NOUVEAU CODE DE CONNEXION :
+                        // On demande au gestionnaire réseau de se connecter à l'IP du serveur trouvé, avec le mot de passe
+                        Program.netManager.Connect(serveur.EndPoint, "GoofyFPS_SecretKey");
+                    }
+                    listY += 70;
+                }
+
+                if (Program.serveursDisponibles.Count == 0)
+                {
+                    // L'animation des 3 petits points
+                    string dots = new string('.', (int)(Raylib.GetTime() * 2 % 4));
+                    Raylib.DrawText("Analyse des fréquences" + dots, Raylib.GetScreenWidth()/2 - 180, 200, 25, Color.DarkGray);
+                }
+
+                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
+                    Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                    // On éteint la carte réseau proprement si on quitte
+                    Program.netManager.Stop(); 
+                    Program.currentState = Program.GameState.NetworkHub;
+                }
+                break;
+
+
+            
+            case Program.GameState.Lobby:
+                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
+                
+                // Titre
+                string titreLobby = Program.isServer ? "VOTRE SALON (HÔTE)" : "SALON MULTIJOUEUR";
+                Raylib.DrawText(titreLobby, Raylib.GetScreenWidth()/2 - 220, 100, 40, Color.Black);
+
+                // Liste des joueurs connectés (Provisoire, on l'améliorera plus tard)
+                Raylib.DrawRectangle(Raylib.GetScreenWidth()/2 - 300, 200, 600, 400, new Color(50, 50, 50, 200));
+                Raylib.DrawText("Joueurs connectés : " + (Program.netManager.ConnectedPeersCount + 1), Raylib.GetScreenWidth()/2 - 280, 220, 30, Color.White);
+                
+                // Les boutons d'action
+                if (Program.isServer)
+                {
+                    // L'Hôte a le pouvoir de lancer la partie
+                    if (DrawButton(Raylib.GetScreenWidth()/2 - 150, 650, 300, 60, "LANCER LA PARTIE"))
+                    {
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
+                        // FUTUR CODE : Le Serveur dit à tout le monde de lancer le jeu !
+                    }
+                }
+                else
+                {
+                    // Le Client subit et attend
+                    Raylib.DrawText("En attente de l'hôte...", Raylib.GetScreenWidth()/2 - 120, 660, 25, Color.DarkGray);
+                }
+
+                // Bouton Quitter
+                if (DrawButton(50, 50, 150, 60, "QUITTER")) {
+                    Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                    // On ferme tout proprement
+                    Program.netManager.Stop();
+                    Program.currentState = Program.GameState.NetworkHub;
+                }
+
+                // ==========================================
+                // MODE DÉBUG : SIMULER L'ENTRÉE D'UN JOUEUR
+                // ==========================================
+                if (Program.isServer && Raylib.IsKeyPressed(KeyboardKey.M))
+                {
+                    Console.WriteLine("join");
+                    // 1. On fabrique un faux passeport
+                    Packets.JoinPacket fauxPasseport = new Packets.JoinPacket();
+                    fauxPasseport.PlayerName = "Fantôme_Hacker_" + Raylib.GetRandomValue(10, 99);
+
+                    // 2. On appelle la fonction directement en sautant la carte réseau !
+                    Program.OnJoinPacketReceived(fauxPasseport, null);
+                }
+
+
                 break;
         }
 
@@ -3625,243 +3745,6 @@ partial class Program
 
 ========
 
-Menugame.cs
-
-using System;
-using System.Collections.Generic;
-using Raylib_cs;
-using System.Numerics;
-
-
-partial class Program
-{
-  
-    public static void Menugame()
-    {
-        // Le menu reste ouvert jusqu'à ce qu'on l'explicite via les boutons ou autre logique
-        // On ne vérifie pas LeftAlt ici pour éviter les conflits avec la logique d'ouverture
-
-        // ===== Vecteurs =====
-        Vector2 souris = Raylib.GetMousePosition();
-
-        float rotation = 0.0f;
-
-        // === BOUTON MENU PAUSE ===
-        float echelleBoutons = 0.2f;
-        float echelleBoutonActif = 0.205f;
-        float echelleQuit = 0.190f;
-        int posX_boutons = Raylib.GetScreenWidth() / 2 - 150; // Centre horizontal
-        
-        int posY_reprendre = 300; // Position verticale pour le bouton reprendre
-        Vector2 positionReprendre = new Vector2(posX_boutons, posY_reprendre);
-
-        int posY_option = 450; // Position verticale pour le bouton option
-        Vector2 positionOption = new Vector2(posX_boutons, posY_option);
-
-        int posY_quit = 600; // Position verticale pour le bouton quit
-        Vector2 positionQuit = new Vector2(posX_boutons, posY_quit);
-
-        Vector2 ajustement = new Vector2(0, 20);
-        Vector2 ajustement_draw = new Vector2(5, 5);
-        Vector2 ajustement_quit = new Vector2(10, 5);
-        
-        // Collisions 
-        Rectangle boxReprendre = new Rectangle(positionReprendre + ajustement, 300, 120);
-        Rectangle boxOption = new Rectangle(positionOption + ajustement, 300, 120);
-        Rectangle boxQuit = new Rectangle(positionQuit + ajustement, 300, 120);
-
-        // Le curseur est déjà activé dans Jeu.cs quand on ouvre le menu
-        
-        Raylib.BeginDrawing();
-
-        
-
-        // === BOUTON OPTION ===
-        if (Raylib.CheckCollisionPointRec(souris, boxOption))
-        {
-            Raylib.DrawTextureEx(option_active, positionOption, rotation, echelleBoutonActif, Color.White);
-            //Raylib.PlaySound(survole);
-
-            if (Raylib.IsMouseButtonReleased(MouseButton.Left))
-            {
-                //isMenuGameOpen = false; // Fermer le menu
-                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                endroit = "option";
-
-            }
-        }
-        else
-        {
-            Raylib.DrawTextureEx(option_button, positionOption, rotation, echelleBoutons, Color.White);
-        }
-
-
-
-        if (Raylib.CheckCollisionPointRec(souris, boxQuit))
-        {
-            //bouton quitter activé
-            Raylib.DrawTextureEx(quit_active, positionQuit, rotation, echelleQuit, Color.White);
-            
-
-            if (Raylib.IsMouseButtonReleased(MouseButton.Left))
-            {
-                //quitter le jeu
-                foreach(var texture in ListeTexture)
-                {
-                    Raylib.UnloadTexture(texture);
-                }
-                
-                Raylib.CloseWindow();
-            }
-        }
-        else 
-        {
-            Raylib.DrawTextureEx(quit_button, positionQuit, rotation, echelleBoutons, Color.White);
-        }
-
-
-
-        
-        Raylib.EndDrawing();
-        
-
-        
-
-
-
-
-
-
-
-    }
-
-    public static void Menumaps()
-    {
-         Raylib.BeginDrawing();
-
-
-
-            // pour "quitter"
-            if (Raylib.IsKeyDown(KeyBinds.SelectMenu)) 
-            {
-                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                Raylib.DisableCursor();
-
-                endroit = "boucle";
-            }
-
-            // pour gerer les clic 
-            // --- ÉTAPE 3 : LA CRÉATION (Quand on clique) ---
-            // On utilise Pressed (1 seule fois) et non Down (en continu)
-            if (Raylib.IsMouseButtonPressed(MouseButton.Left)) 
-            {
-                int randValue = Raylib.GetRandomValue(1, 3);
-                Texture2D textureChoisie = clic1; // Par défaut
-                
-                if (randValue == 2) textureChoisie = clic2;
-                if (randValue == 3) textureChoisie = clic3;
-
-                // calcule position
-                float x_clic = textureChoisie.Width * 0.2f;
-                float y_clic = textureChoisie.Height * 0.2f;
-                Vector2 tailleImage = new Vector2(x_clic, y_clic);
-                Vector2 positionCentree = Raylib.GetMousePosition() - (tailleImage / 2f);
-
-                // ajouter à la liste le nouveau clic
-                ListeEffets.Add(new EffetClic(positionCentree, textureChoisie));
-            }
-
-
-            // ===== Vecteurs =====
-
-            Vector2 souris = Raylib.GetMousePosition();
-            //float echelle_background = 0.2f;
-
-            // background 
-            Vector2 BackgroundPos = new Vector2(0,0);
-
-            float rotation = 0.0f;
-
-            
-
-             // === BOUTON MENU ===
-            float echelleBoutons = 0.2f;
-            float echelleBoutonActif = 0.205f;
-            float echelleQuit = 0.190f;
-            int posX_boutons = Raylib.GetScreenHeight()/2 + 250;
-
-            int posY_quit = 750;
-            Vector2 positionQuit = new Vector2(posX_boutons, posY_quit);
-
-            Vector2 ajustement = new Vector2(0,20);
-            Vector2 ajustement_draw = new Vector2(5,5);
-            Vector2 ajustement_quit = new Vector2(10,5);
-            //collisions 
-
-            Rectangle boxQuit = new Rectangle(positionQuit+ajustement, 300,120);
-
-
-
-            // ==== debut du draw ====
-
-            // On nettoie l'écran à chaque frame avec une couleur de fond
-            Raylib.ClearBackground(Color.DarkGray);
-            Raylib.DrawTextureEx(background, BackgroundPos, rotation, 1f,Color.White);
-
-            //======= vrai boutons =======
-
-
-            //quit
-            if (Raylib.CheckCollisionPointRec(souris, boxQuit))
-            {
-                //bouton quitter activé
-                Raylib.DrawTextureEx(quit_active, positionQuit+ajustement_quit, rotation, echelleQuit, Color.White);
-                //Raylib.PlaySound(survole);
-                //Console.WriteLine("quit");
-
-                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
-                {
-                    //quitter le jeu
-                    foreach(var texture in ListeTexture)
-                    {
-                        Raylib.UnloadTexture(texture);
-                    }
-                    
-                    Raylib.CloseWindow();
-                }
-            }
-            else 
-            {
-                Raylib.DrawTextureEx(quit_button, positionQuit, rotation, echelleBoutons, Color.White);
-            }
-
-            // === AFFICHAGE CLIC ===
-
-            for (int i = ListeEffets.Count - 1; i >= 0; i--)
-            {
-                // effet fondu
-                ListeEffets[i].Opacite -= 5; 
-
-                if (ListeEffets[i].Opacite <= 0)
-                {
-                    ListeEffets.RemoveAt(i);
-                }
-                else 
-                {
-                    //ici la couleur marche comme un masque sur photoshop : de blanc visible à noir invisible, donc on modifie l'alpha pour faire l'effet "opacité"
-                    Color couleurFondu = new Color(255, 255, 255, ListeEffets[i].Opacite);
-                    
-                    Raylib.DrawTextureEx(ListeEffets[i].Texture, ListeEffets[i].Position, 0.0f, 0.2f, couleurFondu);
-                }
-            }
-
-
-            Raylib.EndDrawing();
-    }
-}
-
-========
-
 Packets.cs
 
 using System;
@@ -3870,37 +3753,26 @@ using System;
 public class Packets
 {
     // 1. LE PASSEPORT D'ENTRÉE (Envoyé quand on rejoint le lobby)
-    public struct JoinPacket
+    public class JoinPacket // <-- CORRECTION ICI
     {
         public string PlayerName;
-        // Plus tard, on ajoutera : public int SkinColorId;
     }
 
     // 2. LA POSITION DU JOUEUR (Envoyé 60 fois par seconde !)
-    public struct PlayerStatePacket
+    public class PlayerStatePacket // <-- CORRECTION ICI
     {
-        public int PlayerId; // Qui suis-je ?
-        
-        // Coordonnées 3D (Ton Cube)
-        public float X;
-        public float Y;
-        public float Z;
-        
-        // Rotation de la Caméra FPS (Pour voir où le joueur regarde)
-        public float Pitch;
-        public float Yaw;
+        public int PlayerId; 
+        public float X, Y, Z;
+        public float Pitch, Yaw;
     }
 
     // 3. LES ACTIONS PONCTUELLES (Tirer)
-    public struct ShootPacket
+    public class ShootPacket // <-- CORRECTION ICI
     {
         public int PlayerId;
-        
-        // D'où part le tir et vers où ?
         public float OriginX, OriginY, OriginZ;
         public float DirX, DirY, DirZ;
-        
-        public string WeaponName; // "Sniper", "Bazooka", etc.
+        public string WeaponName; 
     }
 }
 
@@ -4183,7 +4055,10 @@ public class Player
 
 Program.cs
 
-﻿using System;
+﻿global using System.Net;
+global using LiteNetLib;
+
+using System;
 using System.Collections.Generic;
 using Raylib_cs;
 using System.Numerics;
@@ -4197,6 +4072,7 @@ using BepuUtilities.Memory;
 //reseau 
 using LiteNetLib;
 using LiteNetLib.Utils;
+
 
 public partial class Program
 {
@@ -4255,7 +4131,6 @@ public partial class Program
     static int LargeurFenetre = 1920;
     static int X_carre;
     static int Y_carre;
-    static string endroit = "menu";
 
     //On remplace "isMenuGameOpen" par un système plus pro
     public static bool isPaused = false;
@@ -4474,9 +4349,165 @@ public partial class Program
         ChoiceMap,          // TA page de sélection (Tuto, Ville, Sandbox)
         NetworkHub,         // Choix Héberger / Rejoindre
         Lobby,              // La salle d'attente
-        Playing             // En jeu
+        Playing,             // En jeu
+        ServerBrowser,
+
     }
     public static GameState currentState = GameState.MainMenu;
+
+
+
+    // ==========================================
+    // MÉMOIRE DU RADAR RÉSEAU
+    // ==========================================
+    public class InfoServeur 
+    {
+        public string NomDuSalon;
+        public int JoueursActuels;
+        public int JoueursMax;
+        public float TempsDepuisDerniereReponse; // Pour supprimer les serveurs morts
+        public IPEndPoint EndPoint; // L'adresse IP + Port (La cible exacte)
+    }
+
+    // Le dictionnaire stocke l'IP comme "Clé", et les infos comme "Valeur"
+    public static Dictionary<IPEndPoint, InfoServeur> serveursDisponibles = new Dictionary<IPEndPoint, InfoServeur>();
+    public static float chronoRecherche = 0f;
+
+
+    public static void AllumerMoteurReseau(bool host)
+    {
+        netListener = new EventBasedNetListener();
+        netManager = new NetManager(netListener);
+        isServer = host;
+
+        // ==========================================
+        // LES OREILLES DU RADAR (Unconnected Messages)
+        // ==========================================
+        netListener.NetworkReceiveUnconnectedEvent += (endPoint, reader, messageType) =>
+        {
+            // 1. SI ON EST L'HÔTE : On entend quelqu'un chercher une partie
+            if (isServer && messageType == UnconnectedMessageType.Broadcast)
+            {
+                string entete = reader.GetString();
+                if (entete == "GOOFY_REQ") // Sécurité : On vérifie que c'est bien notre jeu qui parle
+                {
+                    // On fabrique notre réponse
+                    NetDataWriter writer = new NetDataWriter();
+                    writer.Put("GOOFY_RES"); // Je suis une réponse GoofyFPS
+                    writer.Put("Le Salon du Chaos"); // Nom du serveur (On le rendra modifiable plus tard)
+                    writer.Put(1); // Joueurs actuels
+                    writer.Put(4); // Joueurs max
+                    
+                    // On renvoie la réponse directement à l'IP qui a posé la question !
+                    netManager.SendUnconnectedMessage(writer, endPoint);
+                }
+            }
+
+            // 2. SI ON EST CLIENT : On reçoit la réponse d'un Hôte !
+            if (!isServer && messageType == UnconnectedMessageType.BasicMessage)
+            {
+                string entete = reader.GetString();
+                if (entete == "GOOFY_RES") 
+                {
+                    // On lit les données dans L'ORDRE EXACT où l'Hôte les a écrites
+                    string nomSalon = reader.GetString();
+                    int jActuels = reader.GetInt();
+                    int jMax = reader.GetInt();
+
+                    // On met à jour notre Dictionnaire
+                    if (!serveursDisponibles.ContainsKey(endPoint))
+                    {
+                        serveursDisponibles[endPoint] = new InfoServeur();
+                    }
+                    
+                    serveursDisponibles[endPoint].NomDuSalon = nomSalon;
+                    serveursDisponibles[endPoint].JoueursActuels = jActuels;
+                    serveursDisponibles[endPoint].JoueursMax = jMax;
+                    serveursDisponibles[endPoint].EndPoint = endPoint;
+                    serveursDisponibles[endPoint].TempsDepuisDerniereReponse = 0f; // On remet le chrono de mort à 0
+                }
+            }
+        };
+
+        // ==========================================
+        // LES PORTES DU SERVEUR (Connexion & Déconnexion)
+        // ==========================================
+        
+        // 1. QUELQU'UN TOQUE À LA PORTE
+        netListener.ConnectionRequestEvent += request =>
+        {
+            if (isServer)
+            {
+                // Le serveur vérifie que la partie n'est pas déjà pleine (ex: max 4 joueurs)
+                if (netManager.ConnectedPeersCount < 4 && currentState == GameState.Lobby)
+                {
+                    // On accepte le joueur !
+                    request.AcceptIfKey("GoofyFPS_SecretKey");
+                }
+                else
+                {
+                    request.Reject(); // Salon plein ou partie déjà lancée
+                }
+            }
+        };
+
+        // 2. QUELQU'UN EST BIEN ENTRÉ (Ou Toi tu as réussi à entrer chez l'hôte)
+        // 2. QUELQU'UN EST BIEN ENTRÉ (Ou Toi tu as réussi à entrer chez l'hôte)
+        netListener.PeerConnectedEvent += peer =>
+        {
+            // CORRECTION 1 : On utilise Address et Port au lieu de EndPoint
+            Console.WriteLine($"[RÉSEAU] Connexion réussie avec {peer.Address}:{peer.Port}");
+            
+            if (!isServer)
+            {
+                // Si on est le Client, ça veut dire qu'on vient d'entrer dans le salon de l'Hôte !
+                // On prépare notre Passeport (JoinPacket) pour lui donner notre Pseudo
+                Packets.JoinPacket passeport = new Packets.JoinPacket();
+                passeport.PlayerName = "Joueur_" + Raylib.GetRandomValue(1000, 9999); // Pseudo provisoire
+
+                // CORRECTION 2 : La nouvelle méthode LiteNetLib pour envoyer un paquet via le processeur
+                NetDataWriter writer = new NetDataWriter();
+                netProcessor.Write(writer, passeport); // On emballe le passeport
+                peer.Send(writer, DeliveryMethod.ReliableOrdered); // On l'envoie !
+                
+                // On passe visuellement dans la salle d'attente
+                currentState = GameState.Lobby;
+            }
+        };
+
+        // ==========================================
+        // LA DOUANE (Traitement des paquets connectés)
+        // ==========================================
+        
+        // 1. Dès qu'un paquet officiel arrive, on le donne au traducteur automatique (NetProcessor)
+        netListener.NetworkReceiveEvent += (peer, reader, deliveryMethod, channel) =>
+        {
+            netProcessor.ReadAllPackets(reader, peer);
+        };
+
+        // 2. On abonne le traducteur à notre "Passeport" (JoinPacket)
+        // Ça veut dire : "Si tu lis un JoinPacket, déclenche la fonction OnJoinPacketReceived"
+        netProcessor.SubscribeReusable<Packets.JoinPacket, NetPeer>(OnJoinPacketReceived);
+
+        // Lancement effectif de la carte réseau
+        if (host) netManager.Start(7777); // Le serveur ouvre la porte 7777 fixement
+        else netManager.Start();          // Le client prend un port au hasard
+    }
+
+
+    // Fonction déclenchée automatiquement par le NetProcessor (ou par notre simulateur)
+    public static void OnJoinPacketReceived(Packets.JoinPacket passeport, NetPeer peer)
+    {
+        if (isServer)
+        {
+            // Sécurité : Si c'est un faux paquet, peer sera null. On met une fausse IP.
+            string adresseIP = (peer != null) ? peer.Address.ToString() : "127.0.0.1 (SIMULATION)";
+            
+            Console.WriteLine($"[SERVEUR - LOBBY] Le joueur '{passeport.PlayerName}' vient d'entrer dans la salle d'attente ! (IP: {adresseIP})");
+            
+            // Plus tard ici : On ajoutera ce joueur à une liste officielle pour l'afficher sur l'écran du Lobby !
+        }
+    }
 
 
 
@@ -4747,6 +4778,44 @@ public partial class Program
         // --- BOUCLE DE JEU ---
         while (!Raylib.WindowShouldClose())
     {
+
+        // 1. LE COEUR DU RÉSEAU : On lit les paquets en attente !
+        if (netManager != null)
+        {
+            netManager.PollEvents();
+        }
+
+        // 2. LA LOGIQUE DU CLIENT : Crier et Nettoyer
+        if (netManager != null && !isServer && currentState == GameState.ServerBrowser)
+        {
+            float deltaTime = Raylib.GetFrameTime();
+            chronoRecherche -= deltaTime;
+            
+            // A. Envoyer une onde radar toutes les secondes
+            if (chronoRecherche <= 0)
+            {
+                NetDataWriter writer = new NetDataWriter();
+                writer.Put("GOOFY_REQ");
+                netManager.SendBroadcast(writer, 7777); // On hurle sur le port 7777 de la maison
+                chronoRecherche = 1.0f;
+            }
+
+            // B. Nettoyer les serveurs fantômes (Qui ont fermé)
+            List<IPEndPoint> serveursMorts = new List<IPEndPoint>();
+            foreach (var serveur in serveursDisponibles)
+            {
+                serveur.Value.TempsDepuisDerniereReponse += deltaTime;
+                if (serveur.Value.TempsDepuisDerniereReponse > 3.0f) // S'il ne répond plus depuis 3s
+                {
+                    serveursMorts.Add(serveur.Key);
+                }
+            }
+            foreach (var mort in serveursMorts) serveursDisponibles.Remove(mort);
+        }
+
+
+
+
         // Si on est dans n'importe quel menu...
         if (currentState != GameState.Playing)
         {
