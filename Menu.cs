@@ -1241,105 +1241,91 @@ partial class Program
             
 
             case Program.GameState.ServerBrowser:
-                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White); 
-                int centerX_screen = Raylib.GetScreenWidth() / 2; 
+                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
                 
-                Raylib.DrawText("RECHERCHE DE PARTIES LAN...", centerX_screen - Raylib.MeasureText("RECHERCHE DE PARTIES LAN...", 30)/2, 60, 30, Color.Black);
-                string dots = new string('.', (int)(Raylib.GetTime() * 2 % 4)); 
-                Raylib.DrawText("Radar actif" + dots, centerX_screen - Raylib.MeasureText("Radar actif...", 20)/2, 105, 20, Color.DarkGray);
+                // On utilise les mêmes centres que pour CreateMatch
+                int centerC = Raylib.GetScreenWidth() / 2;
+                int centerCY = Raylib.GetScreenHeight() / 2;
 
-                // ==========================================
-                // 1. AFFICHAGE DES RÉSULTATS DU RADAR
-                // ==========================================
-                int listY = 160; 
-                foreach (var serveur in Program.serveursDisponibles.Values) 
+                Raylib.DrawText("REJOINDRE UN MATCH", centerC - Raylib.MeasureText("REJOINDRE UN MATCH", 40)/2, centerCY - 200, 40, Color.White);
+
+                // --- LES BOÎTES DE TEXTE (Centrées) ---
+                Rectangle pseudoBoxJoin = new Rectangle(centerC - 300, centerCY - 100, 600, 50);
+                Rectangle ipTextBox = new Rectangle(centerC - 300, centerCY - 10, 600, 50);
+
+                // Gestion du clic pour le Focus
+                if (Raylib.IsMouseButtonPressed(MouseButton.Left))
                 {
-                    Rectangle serverBox = new Rectangle(centerX_screen - 400, listY, 800, 55); 
-                    bool isHover = Raylib.CheckCollisionPointRec(souris, serverBox); 
-                    
-                    Raylib.DrawRectangleRec(serverBox, isHover ? new Color(100, 50, 50, 255) : new Color(60, 60, 60, 255)); 
-                    Raylib.DrawRectangleLinesEx(serverBox, 2, Color.Black);
-
-                    Raylib.DrawText(serveur.NomDuSalon, (int)serverBox.X + 20, listY + 12, 26, Color.White); 
-                    string playerTxt = $"{serveur.JoueursActuels}/{serveur.JoueursMax} P"; 
-                    Raylib.DrawText(playerTxt, (int)serverBox.X + 680, listY + 12, 26, Color.White); 
-
-                    if (isHover && Raylib.IsMouseButtonReleased(MouseButton.Left)) 
-                    {
-                        Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); 
-                        Program.netManager.Connect(serveur.EndPoint, "GoofyFPS_SecretKey"); 
-                        Program.currentLobbyPlayers.Clear(); 
-                        Program.currentState = Program.GameState.Lobby; 
-                    }
-                    listY += 65;
+                    if (Raylib.CheckCollisionPointRec(souris, pseudoBoxJoin)) Program.activeTextBox = 1;
+                    else if (Raylib.CheckCollisionPointRec(souris, ipTextBox)) Program.activeTextBox = 2;
+                    else Program.activeTextBox = 0;
                 }
+                // Tabulation pour passer d'une case à l'autre
+                if (Raylib.IsKeyPressed(KeyboardKey.Tab)) Program.activeTextBox = (Program.activeTextBox == 1) ? 2 : 1;
 
-                if (Program.serveursDisponibles.Count == 0)
-                {
-                    Raylib.DrawText("(Aucun salon détecté automatiquement par le téléphone)", centerX_screen - Raylib.MeasureText("(Aucun salon détecté automatiquement par le téléphone)", 18)/2, 180, 18, Color.Gray);
-                }
+                // --- APPARENCE DES BOÎTES ---
+                // Boîte 1 : Pseudo
+                Raylib.DrawRectangleRec(pseudoBoxJoin, new Color(40, 40, 40, 255));
+                Raylib.DrawRectangleLinesEx(pseudoBoxJoin, 3, Program.activeTextBox == 1 ? Color.Red : Color.Black);
+                if (Program.playerNameInput.Length > 0) Raylib.DrawText(Program.playerNameInput, (int)pseudoBoxJoin.X + 20, (int)pseudoBoxJoin.Y + 12, 26, Color.White);
+                else Raylib.DrawText("Entrez votre Pseudo", (int)pseudoBoxJoin.X + 20, (int)pseudoBoxJoin.Y + 15, 20, Color.Gray);
 
-                // ==========================================
-                // 2. ZONE DE CONNEXION DIRECTE VIA IP (Dépannage Hotspot)
-                // ==========================================
-                int zoneIP_Y = Raylib.GetScreenHeight() - 320;
-                Raylib.DrawLine(centerX_screen - 400, zoneIP_Y - 20, centerX_screen + 400, zoneIP_Y - 20, Color.Black);
-                
-                Raylib.DrawText("CONNEXION DIRECTE (Saisie manuelle IP)", centerX_screen - Raylib.MeasureText("CONNEXION DIRECTE (Saisie manuelle IP)", 22)/2, zoneIP_Y, 22, Color.Black);
-
-                Rectangle ipTextBox = new Rectangle(centerX_screen - 250, zoneIP_Y + 40, 500, 50);
+                // Boîte 2 : IP
                 Raylib.DrawRectangleRec(ipTextBox, new Color(40, 40, 40, 255));
-                Raylib.DrawRectangleLinesEx(ipTextBox, 2, Color.Black);
+                Raylib.DrawRectangleLinesEx(ipTextBox, 3, Program.activeTextBox == 2 ? Color.Red : Color.Black);
+                if (Program.directIPInput.Length > 0) Raylib.DrawText(Program.directIPInput, (int)ipTextBox.X + 20, (int)ipTextBox.Y + 12, 26, Color.White);
+                else Raylib.DrawText("Entrez l'IP du serveur", (int)ipTextBox.X + 20, (int)ipTextBox.Y + 15, 20, Color.Gray);
 
-                // --- Saisie clavier pour l'IP ---
-                int keyChar = Raylib.GetCharPressed(); 
+                // --- SAISIE CLAVIER COMMUNE ---
+                int keyChar = Raylib.GetCharPressed();
                 while (keyChar > 0)
                 {
-                    // On accepte les chiffres (48-57) et le point (46) pour une adresse IP
-                    if (((keyChar >= 48 && keyChar <= 57) || keyChar == 46) && (Program.directIPInput.Length < 15))
-                    {
-                        Program.directIPInput += (char)keyChar; 
-                    }
-                    keyChar = Raylib.GetCharPressed(); 
+                    // Si focus sur Pseudo (lettres et chiffres)
+                    if (Program.activeTextBox == 1 && keyChar >= 32 && keyChar <= 125 && Program.playerNameInput.Length < 15)
+                        Program.playerNameInput += (char)keyChar;
+                    // Si focus sur IP (chiffres et points uniquement)
+                    else if (Program.activeTextBox == 2 && ((keyChar >= 48 && keyChar <= 57) || keyChar == 46) && Program.directIPInput.Length < 15)
+                        Program.directIPInput += (char)keyChar;
+                        
+                    keyChar = Raylib.GetCharPressed();
                 }
 
-                if (Raylib.IsKeyPressed(KeyboardKey.Backspace) && Program.directIPInput.Length > 0) 
+                // Touche Effacer
+                if (Raylib.IsKeyPressed(KeyboardKey.Backspace)) 
                 {
-                    Program.directIPInput = Program.directIPInput.Substring(0, Program.directIPInput.Length - 1); 
+                    if (Program.activeTextBox == 1 && Program.playerNameInput.Length > 0) Program.playerNameInput = Program.playerNameInput.Substring(0, Program.playerNameInput.Length - 1);
+                    else if (Program.activeTextBox == 2 && Program.directIPInput.Length > 0) Program.directIPInput = Program.directIPInput.Substring(0, Program.directIPInput.Length - 1);
                 }
 
-                // Rendu du texte de l'IP et curseur clignotant
-                bool clignote = ((int)(Raylib.GetTime() * 2)) % 2 == 0; 
-                Raylib.DrawText(Program.directIPInput, (int)ipTextBox.X + 15, (int)ipTextBox.Y + 12, 26, Color.White); 
-                if (clignote)
-                {
-                    int txtW = Raylib.MeasureText(Program.directIPInput, 26); 
-                    Raylib.DrawRectangle((int)ipTextBox.X + 15 + txtW + 4, (int)ipTextBox.Y + 12, 3, 26, Color.White);
-                }
+                // --- CURSEUR CLIGNOTANT ---
+                bool clignote = ((int)(Raylib.GetTime() * 2)) % 2 == 0;
+                if (clignote && Program.activeTextBox == 1)
+                    Raylib.DrawRectangle((int)pseudoBoxJoin.X + 20 + (Program.playerNameInput.Length > 0 ? Raylib.MeasureText(Program.playerNameInput, 26) : 0) + 5, (int)pseudoBoxJoin.Y + 10, 3, 30, Color.White);
+                else if (clignote && Program.activeTextBox == 2)
+                    Raylib.DrawRectangle((int)ipTextBox.X + 20 + (Program.directIPInput.Length > 0 ? Raylib.MeasureText(Program.directIPInput, 26) : 0) + 5, (int)ipTextBox.Y + 10, 3, 30, Color.White);
 
-                // Bouton VALIDER IP
-                if (DrawButton(centerX_screen - 120, zoneIP_Y + 110, 240, 45, "REJOINDRE VIA IP")) 
+                // --- BOUTON VALIDER ---
+                if (DrawButton(centerC - 120, centerCY + 80, 240, 50, "REJOINDRE")) 
                 {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.High); 
                     try
                     {
-                        // On tente de parser la chaîne en vraie IP Endpoint, sur le port fixe 7777 
                         IPAddress ipCible = IPAddress.Parse(Program.directIPInput);
                         IPEndPoint endPointCible = new IPEndPoint(ipCible, 7777); 
 
                         Console.WriteLine($"[RÉSEAU] Tentative de connexion directe Unicast vers {endPointCible}");
                         Program.netManager.Connect(endPointCible, "GoofyFPS_SecretKey"); 
-                        Program.currentLobbyPlayers.Clear();
+                        lock (Program._lobbyLock) { Program.currentLobbyPlayers.Clear(); }
                         Program.currentState = Program.GameState.Lobby; 
                     }
                     catch
                     {
-                        // Si l'IP est mal tapée (ex: "192.168..1"), on réinitialise pour éviter le crash
+                        // Si l'IP est mal tapée on vide pour éviter un crash
                         Program.directIPInput = "";
                     }
                 }
 
-                // Bouton RETOUR [cite: 2100]
+                // --- BOUTON RETOUR ---
                 if (DrawButton(50, 50, 150, 60, "RETOUR")) { 
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.netManager.Stop();
@@ -1408,47 +1394,51 @@ partial class Program
                 int playerY = (int)zoneJoueurs.Y + 20;
                 
                 // Rendu de la vraie liste synchronisée par le réseau !
-                for (int i = 0; i < Program.currentLobbyPlayers.Count; i++)
+                lock (_lobbyLock)
                 {
-                    var joueur = Program.currentLobbyPlayers[i];
-                    string texteJoueur = joueur.Name + (joueur.IsHost ? " (Host)" : "");
-                    
-                    // Ligne de séparation sous le texte
-                    Raylib.DrawText(texteJoueur, (int)zoneJoueurs.X + 20, playerY, 22, Color.White);
-                    Raylib.DrawLine((int)zoneJoueurs.X + 20, playerY + 30, (int)zoneJoueurs.X + 380, playerY + 30, Color.DarkGray);
-
-                    // Pastille de Statut (Vert = Prêt, Rouge = Pas prêt)
-                    Color couleurPastille = joueur.IsReady ? Color.Green : Color.Red;
-                    Raylib.DrawCircle((int)zoneJoueurs.X + 360, playerY + 12, 8, couleurPastille);
-
-                    playerY += 50;
-
-                    // ==========================================
-                    // BOUTON DE SÉCURITÉ : AFFICHER / CACHER L'IP (D'après ton design)
-                    // ==========================================
-                    if (Program.isServer)
+                    for (int i = 0; i < Program.currentLobbyPlayers.Count; i++)
                     {
-                        int ipBtnX = (int)zoneJoueurs.X + ((int)zoneJoueurs.Width / 2) - 100; // Centré sous le bloc droit
-                        int ipBtnY = (int)zoneJoueurs.Y + (int)zoneJoueurs.Height + 20;
+                        var joueur = Program.currentLobbyPlayers[i];
+                        string texteJoueur = joueur.Name + (joueur.IsHost ? " (Host)" : "");
+                        
+                        // Ligne de séparation sous le texte
+                        Raylib.DrawText(texteJoueur, (int)zoneJoueurs.X + 20, playerY, 22, Color.White);
+                        Raylib.DrawLine((int)zoneJoueurs.X + 20, playerY + 30, (int)zoneJoueurs.X + 380, playerY + 30, Color.DarkGray);
 
-                        // Le texte du bouton s'adapte dynamiquement
-                        string texteBoutonIP = Program.afficherIPDuServeur ? "MASQUER L'IP" : "IP SERVER";
+                        // Pastille de Statut (Vert = Prêt, Rouge = Pas prêt)
+                        Color couleurPastille = joueur.IsReady ? Color.Green : Color.Red;
+                        Raylib.DrawCircle((int)zoneJoueurs.X + 360, playerY + 12, 8, couleurPastille);
 
-                        if (DrawButton(ipBtnX, ipBtnY, 200, 40, texteBoutonIP))
+                        playerY += 50;
+
+                        // ==========================================
+                        // BOUTON DE SÉCURITÉ : AFFICHER / CACHER L'IP (D'après ton design)
+                        // ==========================================
+                        if (Program.isServer)
                         {
-                            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                            // Inversion de l'état : si c'était vrai ça devient faux, et inversement
-                            Program.afficherIPDuServeur = !Program.afficherIPDuServeur; 
-                        }
+                            int ipBtnX = (int)zoneJoueurs.X + ((int)zoneJoueurs.Width / 2) - 100; // Centré sous le bloc droit
+                            int ipBtnY = (int)zoneJoueurs.Y + (int)zoneJoueurs.Height + 20;
 
-                        // Si le joueur a cliqué pour révéler, on affiche le texte en blanc brillant en dessous
-                        if (Program.afficherIPDuServeur)
-                        {
-                            int ipTxtW = Raylib.MeasureText(Program.adresseIPLocaleServeur, 26);
-                            Raylib.DrawText(Program.adresseIPLocaleServeur, ((int)zoneJoueurs.X + (int)zoneJoueurs.Width / 2) - ipTxtW / 2, ipBtnY + 55, 26, Color.White);
+                            // Le texte du bouton s'adapte dynamiquement
+                            string texteBoutonIP = Program.afficherIPDuServeur ? "MASQUER L'IP" : "IP SERVER";
+
+                            if (DrawButton(ipBtnX, ipBtnY, 200, 40, texteBoutonIP))
+                            {
+                                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                                // Inversion de l'état : si c'était vrai ça devient faux, et inversement
+                                Program.afficherIPDuServeur = !Program.afficherIPDuServeur; 
+                            }
+
+                            // Si le joueur a cliqué pour révéler, on affiche le texte en blanc brillant en dessous
+                            if (Program.afficherIPDuServeur)
+                            {
+                                int ipTxtW = Raylib.MeasureText(Program.adresseIPLocaleServeur, 26);
+                                Raylib.DrawText(Program.adresseIPLocaleServeur, ((int)zoneJoueurs.X + (int)zoneJoueurs.Width / 2) - ipTxtW / 2, ipBtnY + 55, 26, Color.White);
+                            }
                         }
                     }
                 }
+                
 
                 // ==========================================
                 // LES BOUTONS D'ACTION (En bas)
@@ -1537,79 +1527,71 @@ partial class Program
             
             case Program.GameState.CreateMatch:
                 Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
-                
-                int centerC = Raylib.GetScreenWidth() / 2;
-                int centerCY = Raylib.GetScreenHeight() / 2;
+                int centerC2 = Raylib.GetScreenWidth() / 2;
+                int centerCY2 = Raylib.GetScreenHeight() / 2;
 
-                Raylib.DrawText("Créer un Match", centerC - Raylib.MeasureText("Créer un Match", 40)/2, centerCY - 150, 40, Color.White);
+                Raylib.DrawText("Créer un Match", centerC2 - Raylib.MeasureText("Créer un Match", 40)/2, centerCY2 - 200, 40, Color.White);
 
-                // La zone de texte
-                Rectangle textBox = new Rectangle(centerC - 300, centerCY - 50, 600, 60);
-                Raylib.DrawRectangleRec(textBox, new Color(40, 40, 40, 255));
-                Raylib.DrawRectangleLinesEx(textBox, 3, Color.Black);
+                // --- LES BOÎTES DE TEXTE ---
+                Rectangle pseudoBox = new Rectangle(centerC2 - 300, centerCY2 - 100, 600, 50);
+                Rectangle matchBox = new Rectangle(centerC2 - 300, centerCY2 - 10, 600, 50);
 
-                // --- LOGIQUE DU CLAVIER (La saisie) ---
+                // Gestion du clic pour le Focus
+                if (Raylib.IsMouseButtonPressed(MouseButton.Left))
+                {
+                    if (Raylib.CheckCollisionPointRec(souris, pseudoBox)) Program.activeTextBox = 1;
+                    else if (Raylib.CheckCollisionPointRec(souris, matchBox)) Program.activeTextBox = 2;
+                    else Program.activeTextBox = 0;
+                }
+                // Bonus UX : Utiliser TAB pour passer d'une boîte à l'autre
+                if (Raylib.IsKeyPressed(KeyboardKey.Tab)) Program.activeTextBox = (Program.activeTextBox == 1) ? 2 : 1;
+
+                // --- APPARENCE DES BOÎTES ---
+                // Boîte 1 : Pseudo
+                Raylib.DrawRectangleRec(pseudoBox, new Color(40, 40, 40, 255));
+                Raylib.DrawRectangleLinesEx(pseudoBox, 3, Program.activeTextBox == 1 ? Color.Red : Color.Black); // Surlignage rouge si actif
+                if (Program.playerNameInput.Length > 0) Raylib.DrawText(Program.playerNameInput, (int)pseudoBox.X + 20, (int)pseudoBox.Y + 12, 26, Color.White);
+                else Raylib.DrawText("Entrez votre Pseudo", (int)pseudoBox.X + 20, (int)pseudoBox.Y + 15, 20, Color.Gray);
+
+                // Boîte 2 : Nom du Match
+                Raylib.DrawRectangleRec(matchBox, new Color(40, 40, 40, 255));
+                Raylib.DrawRectangleLinesEx(matchBox, 3, Program.activeTextBox == 2 ? Color.Red : Color.Black);
+                if (Program.matchNameInput.Length > 0) Raylib.DrawText(Program.matchNameInput, (int)matchBox.X + 20, (int)matchBox.Y + 12, 26, Color.White);
+                else Raylib.DrawText("Entrez le nom du match", (int)matchBox.X + 20, (int)matchBox.Y + 15, 20, Color.Gray);
+
+                // --- CURSEUR CLIGNOTANT ---
+                bool clignote2 = ((int)(Raylib.GetTime() * 2)) % 2 == 0;
+                if (clignote2 && Program.activeTextBox == 1)
+                    Raylib.DrawRectangle((int)pseudoBox.X + 20 + (Program.playerNameInput.Length > 0 ? Raylib.MeasureText(Program.playerNameInput, 26) : 0) + 5, (int)pseudoBox.Y + 10, 3, 30, Color.White);
+                else if (clignote2 && Program.activeTextBox == 2)
+                    Raylib.DrawRectangle((int)matchBox.X + 20 + (Program.matchNameInput.Length > 0 ? Raylib.MeasureText(Program.matchNameInput, 26) : 0) + 5, (int)matchBox.Y + 10, 3, 30, Color.White);
+
+                // --- SAISIE CLAVIER UNIVERSELLE ---
                 int key = Raylib.GetCharPressed();
                 while (key > 0)
                 {
-                    // Si c'est une lettre valide et qu'on n'a pas dépassé 20 caractères
-                    if ((key >= 32) && (key <= 125) && (Program.matchNameInput.Length < 20))
-                    {
-                        Program.matchNameInput += (char)key;
-                    }
-                    key = Raylib.GetCharPressed(); // On vide le buffer
+                    if (Program.activeTextBox == 1 && key >= 32 && key <= 125 && Program.playerNameInput.Length < 15) Program.playerNameInput += (char)key;
+                    else if (Program.activeTextBox == 2 && key >= 32 && key <= 125 && Program.matchNameInput.Length < 20) Program.matchNameInput += (char)key;
+                    key = Raylib.GetCharPressed();
                 }
 
-                // La touche Effacer (Backspace)
-                if (Raylib.IsKeyPressed(KeyboardKey.Backspace) && Program.matchNameInput.Length > 0)
+                if (Raylib.IsKeyPressed(KeyboardKey.Backspace))
                 {
-                    Program.matchNameInput = Program.matchNameInput.Substring(0, Program.matchNameInput.Length - 1);
+                    if (Program.activeTextBox == 1 && Program.playerNameInput.Length > 0) Program.playerNameInput = Program.playerNameInput.Substring(0, Program.playerNameInput.Length - 1);
+                    else if (Program.activeTextBox == 2 && Program.matchNameInput.Length > 0) Program.matchNameInput = Program.matchNameInput.Substring(0, Program.matchNameInput.Length - 1);
                 }
 
-                // ==========================================
-                // AFFICHAGE DU TEXTE ET DU CURSEUR CLIGNOTANT
-                // ==========================================
-                
-                // 1. Mathématiques du clignotement (Vrai une demi-seconde sur deux)
-                bool afficherCurseur = ((int)(Raylib.GetTime() * 2)) % 2 == 0;
-
-                if (Program.matchNameInput.Length > 0)
-                {
-                    // A. On dessine le texte tapé
-                    Raylib.DrawText(Program.matchNameInput, (int)textBox.X + 20, (int)textBox.Y + 15, 30, Color.White);
-                    
-                    // B. On dessine le curseur À LA SUITE du texte
-                    if (afficherCurseur)
-                    {
-                        // On mesure la place que prend le texte pour décaler le curseur
-                        int largeurTexte = Raylib.MeasureText(Program.matchNameInput, 30);
-                        // Un petit rectangle blanc de 4 pixels de large et 30 de haut
-                        Raylib.DrawRectangle((int)textBox.X + 20 + largeurTexte + 5, (int)textBox.Y + 15, 4, 30, Color.White);
-                    }
-                }
-                else
-                {
-                    // A. On dessine le texte fantôme gris
-                    Raylib.DrawText("Entrez le nom du match", (int)textBox.X + 20, (int)textBox.Y + 20, 20, Color.Gray);
-                    
-                    // B. On dessine le curseur AU DÉBUT de la boîte de texte
-                    if (afficherCurseur)
-                    {
-                        Raylib.DrawRectangle((int)textBox.X + 20, (int)textBox.Y + 15, 4, 30, Color.White);
-                    }
-                }
                 // Bouton Créer
-                if (DrawButton(centerC - 100, centerCY + 50, 200, 50, "Créer"))
+                if (DrawButton(centerC2 - 100, centerCY2 + 80, 200, 50, "Créer"))
                 {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
                     Program.hostMatchName = string.IsNullOrEmpty(Program.matchNameInput) ? "Partie sans nom" : Program.matchNameInput;
                     
-                    // ON DÉMARRE LE SERVEUR OFFICIELLEMENT !
-                    Program.AllumerMoteurReseau(true);
+                    string pseudoFinal = string.IsNullOrEmpty(Program.playerNameInput) ? "Hôte_" + Raylib.GetRandomValue(10, 99) : Program.playerNameInput;
                     
-                    // On s'ajoute nous-même (l'Hôte) dans la liste du Lobby
+                    Program.AllumerMoteurReseau(true);
                     Program.currentLobbyPlayers.Clear();
-                    Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = "Moi (Hôte)", IsHost = true, IsReady = true, Peer = null });
+                    Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = pseudoFinal + " (Hôte)", IsHost = true, IsReady = true, Peer = null });
                     
                     Program.currentState = Program.GameState.Lobby;
                 }

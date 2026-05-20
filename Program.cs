@@ -322,10 +322,15 @@ public partial class Program
     // ==========================================
     // VARIABLES DU SALON MULTIJOUEUR (LOBBY)
     // ==========================================
-    public static string hostMatchName = "Serveur de Test"; // Le nom tapé par l'Hôte
-    public static string matchNameInput = "";               // La variable temporaire quand on tape au clavier
-    public static int mapChoisieIndex = 1;   
-    public static string directIPInput = "192.168.";               // 0 = Tuto, 1 = Ville, 2 = Sandbox
+    public static string hostMatchName = "Serveur de Test";
+    public static string matchNameInput = "";
+    public static string directIPInput = ""; 
+    
+    // NOUVEAU : Variables pour le Pseudo et le Focus des boîtes de texte
+    public static string playerNameInput = ""; 
+    public static int activeTextBox = 1; // 1 = Boîte Pseudo, 2 = Boîte Match/IP, 0 = Rien
+
+    public static int mapChoisieIndex = 1;
     public static bool afficherIPDuServeur = false;
     public static string adresseIPLocaleServeur = "127.0.0.1";
     
@@ -338,6 +343,7 @@ public partial class Program
         public NetPeer Peer; // Null si c'est Toi (l'hôte local)
     }
     public static List<LobbyPlayer> currentLobbyPlayers = new List<LobbyPlayer>();
+    private static readonly object _lobbyLock = new object();
 
 
     public static void AllumerMoteurReseau(bool host)
@@ -425,25 +431,21 @@ public partial class Program
         };
 
         // 2. QUELQU'UN EST BIEN ENTRÉ (Ou Toi tu as réussi à entrer chez l'hôte)
-        // 2. QUELQU'UN EST BIEN ENTRÉ (Ou Toi tu as réussi à entrer chez l'hôte)
         netListener.PeerConnectedEvent += peer =>
         {
-            // CORRECTION 1 : On utilise Address et Port au lieu de EndPoint
             Console.WriteLine($"[RÉSEAU] Connexion réussie avec {peer.Address}:{peer.Port}");
-            
             if (!isServer)
             {
-                // Si on est le Client, ça veut dire qu'on vient d'entrer dans le salon de l'Hôte !
-                // On prépare notre Passeport (JoinPacket) pour lui donner notre Pseudo
                 Packets.JoinPacket passeport = new Packets.JoinPacket();
-                passeport.PlayerName = "Joueur_" + Raylib.GetRandomValue(1000, 9999); // Pseudo provisoire
-
-                // CORRECTION 2 : La nouvelle méthode LiteNetLib pour envoyer un paquet via le processeur
-                NetDataWriter writer = new NetDataWriter();
-                netProcessor.Write(writer, passeport); // On emballe le passeport
-                peer.Send(writer, DeliveryMethod.ReliableOrdered); // On l'envoie !
                 
-                // On passe visuellement dans la salle d'attente
+                // CORRECTION : On utilise le pseudo tapé dans le menu (Avec une sécurité s'il est vide)
+                string pseudoFinal = string.IsNullOrEmpty(Program.playerNameInput) ? "Anonyme_" + Raylib.GetRandomValue(10, 99) : Program.playerNameInput;
+                passeport.PlayerName = pseudoFinal; 
+
+                NetDataWriter writer = new NetDataWriter();
+                netProcessor.Write(writer, passeport); 
+                peer.Send(writer, DeliveryMethod.ReliableOrdered); 
+                
                 currentState = GameState.Lobby;
             }
         };
@@ -454,7 +456,7 @@ public partial class Program
             if (isServer)
             {
                 // On retire le joueur de la liste
-                currentLobbyPlayers.RemoveAll(p => p.Peer == peer);
+                lock (_lobbyLock) {currentLobbyPlayers.RemoveAll(p => p.Peer == peer);}
                 // On prévient les survivants
                 MettreAJourEtDiffuserLobby();
             }
@@ -483,14 +485,6 @@ public partial class Program
         netProcessor.SubscribeReusable<Packets.LobbyStatePacket, NetPeer>(OnLobbyStateReceived);
         netProcessor.SubscribeReusable<Packets.StartGamePacket, NetPeer>(OnStartGameReceived);
 
-        if (lancerPartieEnAttente)
-        {
-            lancerPartieEnAttente = false;
-            mapChoisieIndex = mapIndexEnAttente;
-            isOnline = true;
-            ChoiceMap();
-            currentState = GameState.Playing;
-        }
 
         // Lancement effectif de la carte réseau
         if (host) 
@@ -536,13 +530,17 @@ public partial class Program
             Console.WriteLine($"[SERVEUR] Le joueur '{passeport.PlayerName}' rejoint le salon ({adresseIP})");
             
             // CORRECTION : On ajoute le vrai joueur à la liste du serveur !
-            currentLobbyPlayers.Add(new LobbyPlayer {
+            lock (_lobbyLock)
+            {
+                currentLobbyPlayers.Add(new LobbyPlayer {
                 Name = passeport.PlayerName,
                 IsReady = false,
                 IsHost = false,
                 Peer = peer
             });
 
+            }
+            
             // On diffuse la mise à jour à tout le monde
             MettreAJourEtDiffuserLobby();
         }
@@ -572,7 +570,7 @@ public partial class Program
             hostMatchName = packet.MatchName;
             mapChoisieIndex = packet.MapIndex;
 
-            currentLobbyPlayers.Clear();
+            lock (_lobbyLock) {currentLobbyPlayers.Clear();}
             
             // CORRECTION : On décode la phrase envoyée par le serveur
             if (!string.IsNullOrEmpty(packet.SerializedPlayers))
@@ -583,11 +581,14 @@ public partial class Program
                     string[] data = joueurs[i].Split(',');
                     if (data.Length == 2)
                     {
-                        currentLobbyPlayers.Add(new LobbyPlayer {
+                        lock (_lobbyLock) {
+                            currentLobbyPlayers.Add(new LobbyPlayer {
                             Name = data[0],
                             IsReady = data[1] == "1",
                             IsHost = (i == 0) // Le premier de la liste est toujours l'hôte
                         });
+                        }
+                        
                     }
                 }
             }
@@ -631,6 +632,49 @@ public partial class Program
         // On envoie le colis à tous les clients connectés
         netManager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
     }
+
+
+    public static void ChargerMapReseau(int mapIndex)
+{
+    // Nettoyage (une seule fois, pas en double)
+    foreach (MurPose mur in listeMur) simulation.Statics.Remove(mur.handlePhysique);
+    listeMur.Clear();
+    foreach (BarrelSpot spot in barrelSpots)
+        if (spot.estSolide) { simulation.Statics.Remove(spot.handlePhysique); spot.estSolide = false; }
+    foreach (Enemy e in enemiesList) if (e.isAlive) simulation.Bodies.Remove(e.bodyId);
+    enemiesList.Clear();
+    activeExplosions.Clear();
+    activeDamageTexts.Clear();
+    killCount = 0; deathCount = 0;
+
+    if (mapDejaChargee)
+    {
+        simulation.Statics.Remove(mapStaticHandle);
+        Raylib.UnloadModel(mapModel);
+        bepuMapMesh.Dispose(pool);
+        mapDejaChargee = false;
+    }
+
+    // Les chemins de tes maps
+    string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb" };
+    mapModel = Raylib.LoadModel(ModelMapPath[mapIndex]);
+
+    // ... extraction triangles BEPU (copie le bloc unsafe existant de ChoiceMap) ...
+
+    unsafe { for (int j = 0; j < mapModel.MaterialCount; j++) mapModel.Materials[j].Shader = lightShader; }
+
+    LoadMapSpawns(mapIndex);
+    InitBarrels();
+    InitEnnemis();
+
+    int idx = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+    BodyReference joueur = simulation.Bodies.GetBodyReference(PlayerId);
+    joueur.Pose.Position = listeSpawns[idx];
+    joueur.Velocity.Linear = Vector3.Zero;
+    joueur.Velocity.Angular = Vector3.Zero;
+    Raylib.DisableCursor();
+    mapDejaChargee = true;
+}
 
 
 
@@ -906,6 +950,15 @@ public partial class Program
         if (netManager != null)
         {
             netManager.PollEvents();
+        }
+
+        if (lancerPartieEnAttente)
+        {
+            lancerPartieEnAttente = false;
+            mapChoisieIndex = mapIndexEnAttente;
+            isOnline = true;
+            ChargerMapReseau(mapChoisieIndex); // voir crash 2
+            currentState = GameState.Playing;
         }
 
         // 2. LA LOGIQUE DU CLIENT : Crier périodiquement et Nettoyer
