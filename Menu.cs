@@ -1335,7 +1335,7 @@ partial class Program
                     catch
                     {
                         // Si l'IP est mal tapée (ex: "192.168..1"), on réinitialise pour éviter le crash
-                        Program.directIPInput = "192.168.";
+                        Program.directIPInput = "";
                     }
                 }
 

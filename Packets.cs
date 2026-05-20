@@ -31,8 +31,8 @@ public class Packets
     {
         public string MatchName;
         public int MapIndex;
-        public string[] PlayerNames;
-        public bool[] PlayerReadyStates;
+        // CORRECTION : On remplace les tableaux par une seule chaîne de texte
+        public string SerializedPlayers; 
     }
 
     // 5. SIGNAL "JE SUIS PRÊT" (Envoyé par un Client au Serveur)

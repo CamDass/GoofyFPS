@@ -342,6 +342,8 @@ public partial class Program
 
     public static void AllumerMoteurReseau(bool host)
     {
+        netProcessor = new NetPacketProcessor();
+
         netListener = new EventBasedNetListener();
         netManager = new NetManager(netListener);
         isServer = host;
@@ -481,6 +483,15 @@ public partial class Program
         netProcessor.SubscribeReusable<Packets.LobbyStatePacket, NetPeer>(OnLobbyStateReceived);
         netProcessor.SubscribeReusable<Packets.StartGamePacket, NetPeer>(OnStartGameReceived);
 
+        if (lancerPartieEnAttente)
+        {
+            lancerPartieEnAttente = false;
+            mapChoisieIndex = mapIndexEnAttente;
+            isOnline = true;
+            ChoiceMap();
+            currentState = GameState.Playing;
+        }
+
         // Lancement effectif de la carte réseau
         if (host) 
         {
@@ -553,39 +564,47 @@ public partial class Program
     }
 
     // 3. QUAND LE CLIENT REÇOIT LA MISE À JOUR DU SERVEUR
+    // 3. QUAND LE CLIENT REÇOIT LA MISE À JOUR DU SERVEUR
     public static void OnLobbyStateReceived(Packets.LobbyStatePacket packet, NetPeer peer)
     {
         if (!isServer)
         {
-            // Le client synchronise ses variables locales avec les ordres du serveur
             hostMatchName = packet.MatchName;
             mapChoisieIndex = packet.MapIndex;
 
             currentLobbyPlayers.Clear();
-            for (int i = 0; i < packet.PlayerNames.Length; i++)
+            
+            // CORRECTION : On décode la phrase envoyée par le serveur
+            if (!string.IsNullOrEmpty(packet.SerializedPlayers))
             {
-                currentLobbyPlayers.Add(new LobbyPlayer {
-                    Name = packet.PlayerNames[i],
-                    IsReady = packet.PlayerReadyStates[i],
-                    IsHost = (i == 0) // Le premier de la liste est toujours l'hôte
-                });
+                string[] joueurs = packet.SerializedPlayers.Split(';');
+                for (int i = 0; i < joueurs.Length; i++)
+                {
+                    string[] data = joueurs[i].Split(',');
+                    if (data.Length == 2)
+                    {
+                        currentLobbyPlayers.Add(new LobbyPlayer {
+                            Name = data[0],
+                            IsReady = data[1] == "1",
+                            IsHost = (i == 0) // Le premier de la liste est toujours l'hôte
+                        });
+                    }
+                }
             }
         }
     }
 
     // 4. QUAND LE SERVEUR REÇOIT L'ORDRE DE LANCEMENT OU QUE LE CLIENT LE REÇOIT
+
+    
+    public static bool lancerPartieEnAttente = false;
+    public static int mapIndexEnAttente = 0;
+
     public static void OnStartGameReceived(Packets.StartGamePacket packet, NetPeer peer)
     {
-        Console.WriteLine($"[RÉSEAU] Lancement de la partie sur la map index {packet.MapIndex}");
-        
-        mapChoisieIndex = packet.MapIndex;
-        isOnline = true; // REPARE LE BUG : Le jeu sait qu'il joue en réseau !
-        
-        // On charge la map de la même manière que ton menu Solo
-        mapDejaChargee = mapDejaChargee; // Alignement mémoire
-        ChoiceMap(); // Ta grosse fonction d'extraction de triangles
-        
-        currentState = GameState.Playing; // BAM ! Tout le monde bascule in-game
+        // On mémorise juste la commande, sans rien exécuter
+        mapIndexEnAttente = packet.MapIndex;
+        lancerPartieEnAttente = true;
     }
 
     // FONCTION UTILITAIRE : Le serveur emballe le Lobby et l'envoie à tout le monde
@@ -596,8 +615,15 @@ public partial class Program
         Packets.LobbyStatePacket pack = new Packets.LobbyStatePacket();
         pack.MatchName = hostMatchName;
         pack.MapIndex = mapChoisieIndex;
-        pack.PlayerNames = currentLobbyPlayers.Select(p => p.Name).ToArray();
-        pack.PlayerReadyStates = currentLobbyPlayers.Select(p => p.IsReady).ToArray();
+        
+        // CORRECTION : On fusionne tous les joueurs en une seule phrase (ex: "Moi,1;Joueur_123,0")
+        List<string> joueursData = new List<string>();
+        foreach (var p in currentLobbyPlayers)
+        {
+            int pret = p.IsReady ? 1 : 0;
+            joueursData.Add($"{p.Name},{pret}");
+        }
+        pack.SerializedPlayers = string.Join(";", joueursData);
 
         NetDataWriter writer = new NetDataWriter();
         netProcessor.Write(writer, pack);
