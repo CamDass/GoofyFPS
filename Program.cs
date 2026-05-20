@@ -377,6 +377,11 @@ public partial class Program
                     int jActuels = reader.GetInt();
                     int jMax = reader.GetInt();
 
+                    // ==========================================
+                    // AJOUT DU DEBUG DEMANDÉ
+                    // ==========================================
+                    Console.WriteLine($"salon trouvé : {nomSalon}");
+
                     // On met à jour notre Dictionnaire
                     if (!serveursDisponibles.ContainsKey(endPoint))
                     {
