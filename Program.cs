@@ -294,6 +294,7 @@ public partial class Program
         Lobby,              // La salle d'attente
         Playing,             // En jeu
         ServerBrowser,
+        CreateMatch
 
     }
     public static GameState currentState = GameState.MainMenu;
@@ -317,6 +318,25 @@ public partial class Program
     public static float chronoRecherche = 0f;
 
 
+
+    // ==========================================
+    // VARIABLES DU SALON MULTIJOUEUR (LOBBY)
+    // ==========================================
+    public static string hostMatchName = "Serveur de Test"; // Le nom tapé par l'Hôte
+    public static string matchNameInput = "";               // La variable temporaire quand on tape au clavier
+    public static int mapChoisieIndex = 1;                  // 0 = Tuto, 1 = Ville, 2 = Sandbox
+    
+    // Structure d'un joueur dans le Lobby
+    public class LobbyPlayer
+    {
+        public string Name;
+        public bool IsReady;
+        public bool IsHost;
+        public NetPeer Peer; // Null si c'est Toi (l'hôte local)
+    }
+    public static List<LobbyPlayer> currentLobbyPlayers = new List<LobbyPlayer>();
+
+
     public static void AllumerMoteurReseau(bool host)
     {
         netListener = new EventBasedNetListener();
@@ -337,7 +357,7 @@ public partial class Program
                     // On fabrique notre réponse
                     NetDataWriter writer = new NetDataWriter();
                     writer.Put("GOOFY_RES"); // Je suis une réponse GoofyFPS
-                    writer.Put("Le Salon du Chaos"); // Nom du serveur (On le rendra modifiable plus tard)
+                    writer.Put(Program.hostMatchName); // On utilise le VRAI nom de la partie !
                     writer.Put(1); // Joueurs actuels
                     writer.Put(4); // Joueurs max
                     
@@ -418,6 +438,23 @@ public partial class Program
             }
         };
 
+        netListener.PeerDisconnectedEvent += (peer, disconnectInfo) =>
+        {
+            Console.WriteLine($"[RÉSEAU] Déconnexion de {peer.Address}");
+            if (isServer)
+            {
+                // On retire le joueur de la liste
+                currentLobbyPlayers.RemoveAll(p => p.Peer == peer);
+                // On prévient les survivants
+                MettreAJourEtDiffuserLobby();
+            }
+            else
+            {
+                // Si le serveur a fermé, le client retourne au hub
+                currentState = GameState.NetworkHub;
+            }
+        };
+
         // ==========================================
         // LA DOUANE (Traitement des paquets connectés)
         // ==========================================
@@ -431,6 +468,10 @@ public partial class Program
         // 2. On abonne le traducteur à notre "Passeport" (JoinPacket)
         // Ça veut dire : "Si tu lis un JoinPacket, déclenche la fonction OnJoinPacketReceived"
         netProcessor.SubscribeReusable<Packets.JoinPacket, NetPeer>(OnJoinPacketReceived);
+        // Abonnements aux nouveaux paquets du Lobby
+        netProcessor.SubscribeReusable<Packets.ToggleReadyPacket, NetPeer>(OnReadyPacketReceived);
+        netProcessor.SubscribeReusable<Packets.LobbyStatePacket, NetPeer>(OnLobbyStateReceived);
+        netProcessor.SubscribeReusable<Packets.StartGamePacket, NetPeer>(OnStartGameReceived);
 
         // Lancement effectif de la carte réseau
         if (host) netManager.Start(7777); // Le serveur ouvre la porte 7777 fixement
@@ -438,18 +479,95 @@ public partial class Program
     }
 
 
-    // Fonction déclenchée automatiquement par le NetProcessor (ou par notre simulateur)
+
+    // 1. QUAND LE SERVEUR REÇOIT UN PASSEPORT (JoinPacket)
     public static void OnJoinPacketReceived(Packets.JoinPacket passeport, NetPeer peer)
     {
         if (isServer)
         {
-            // Sécurité : Si c'est un faux paquet, peer sera null. On met une fausse IP.
             string adresseIP = (peer != null) ? peer.Address.ToString() : "127.0.0.1 (SIMULATION)";
+            Console.WriteLine($"[SERVEUR] Le joueur '{passeport.PlayerName}' rejoint le salon ({adresseIP})");
             
-            Console.WriteLine($"[SERVEUR - LOBBY] Le joueur '{passeport.PlayerName}' vient d'entrer dans la salle d'attente ! (IP: {adresseIP})");
-            
-            // Plus tard ici : On ajoutera ce joueur à une liste officielle pour l'afficher sur l'écran du Lobby !
+            // CORRECTION : On ajoute le vrai joueur à la liste du serveur !
+            currentLobbyPlayers.Add(new LobbyPlayer {
+                Name = passeport.PlayerName,
+                IsReady = false,
+                IsHost = false,
+                Peer = peer
+            });
+
+            // On diffuse la mise à jour à tout le monde
+            MettreAJourEtDiffuserLobby();
         }
+    }
+
+    // 2. QUAND LE SERVEUR REÇOIT UN CHANGEMENT DE STATUT "PRÊT"
+    public static void OnReadyPacketReceived(Packets.ToggleReadyPacket packet, NetPeer peer)
+    {
+        if (isServer)
+        {
+            // On cherche le joueur correspondant au peer qui a envoyé le message
+            var joueur = currentLobbyPlayers.Find(p => p.Peer == peer);
+            if (joueur != null)
+            {
+                joueur.IsReady = packet.IsReady;
+                MettreAJourEtDiffuserLobby();
+            }
+        }
+    }
+
+    // 3. QUAND LE CLIENT REÇOIT LA MISE À JOUR DU SERVEUR
+    public static void OnLobbyStateReceived(Packets.LobbyStatePacket packet, NetPeer peer)
+    {
+        if (!isServer)
+        {
+            // Le client synchronise ses variables locales avec les ordres du serveur
+            hostMatchName = packet.MatchName;
+            mapChoisieIndex = packet.MapIndex;
+
+            currentLobbyPlayers.Clear();
+            for (int i = 0; i < packet.PlayerNames.Length; i++)
+            {
+                currentLobbyPlayers.Add(new LobbyPlayer {
+                    Name = packet.PlayerNames[i],
+                    IsReady = packet.PlayerReadyStates[i],
+                    IsHost = (i == 0) // Le premier de la liste est toujours l'hôte
+                });
+            }
+        }
+    }
+
+    // 4. QUAND LE SERVEUR REÇOIT L'ORDRE DE LANCEMENT OU QUE LE CLIENT LE REÇOIT
+    public static void OnStartGameReceived(Packets.StartGamePacket packet, NetPeer peer)
+    {
+        Console.WriteLine($"[RÉSEAU] Lancement de la partie sur la map index {packet.MapIndex}");
+        
+        mapChoisieIndex = packet.MapIndex;
+        isOnline = true; // REPARE LE BUG : Le jeu sait qu'il joue en réseau !
+        
+        // On charge la map de la même manière que ton menu Solo
+        mapDejaChargee = mapDejaChargee; // Alignement mémoire
+        ChoiceMap(); // Ta grosse fonction d'extraction de triangles
+        
+        currentState = GameState.Playing; // BAM ! Tout le monde bascule in-game
+    }
+
+    // FONCTION UTILITAIRE : Le serveur emballe le Lobby et l'envoie à tout le monde
+    public static void MettreAJourEtDiffuserLobby()
+    {
+        if (!isServer) return;
+
+        Packets.LobbyStatePacket pack = new Packets.LobbyStatePacket();
+        pack.MatchName = hostMatchName;
+        pack.MapIndex = mapChoisieIndex;
+        pack.PlayerNames = currentLobbyPlayers.Select(p => p.Name).ToArray();
+        pack.PlayerReadyStates = currentLobbyPlayers.Select(p => p.IsReady).ToArray();
+
+        NetDataWriter writer = new NetDataWriter();
+        netProcessor.Write(writer, pack);
+
+        // On envoie le colis à tous les clients connectés
+        netManager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
     }
 
 
@@ -728,31 +846,33 @@ public partial class Program
             netManager.PollEvents();
         }
 
-        // 2. LA LOGIQUE DU CLIENT : Crier et Nettoyer
+        // 2. LA LOGIQUE DU CLIENT : Crier périodiquement et Nettoyer
         if (netManager != null && !isServer && currentState == GameState.ServerBrowser)
         {
             float deltaTime = Raylib.GetFrameTime();
             chronoRecherche -= deltaTime;
             
-            // A. Envoyer une onde radar toutes les secondes
+            // A. Envoyer une onde radar toutes les 1.5 secondes (Broadcast)
             if (chronoRecherche <= 0)
             {
                 NetDataWriter writer = new NetDataWriter();
                 writer.Put("GOOFY_REQ");
-                netManager.SendBroadcast(writer, 7777); // On hurle sur le port 7777 de la maison
-                chronoRecherche = 1.0f;
+                netManager.SendBroadcast(writer, 7777); 
+                chronoRecherche = 1.5f; // Reset du timer
             }
 
-            // B. Nettoyer les serveurs fantômes (Qui ont fermé)
+            // B. CORRECTION : Nettoyer les serveurs fantômes (Qui ont fermé)
             List<IPEndPoint> serveursMorts = new List<IPEndPoint>();
-            foreach (var serveur in serveursDisponibles)
+            foreach (var keyValuePair in serveursDisponibles)
             {
-                serveur.Value.TempsDepuisDerniereReponse += deltaTime;
-                if (serveur.Value.TempsDepuisDerniereReponse > 3.0f) // S'il ne répond plus depuis 3s
+                // On incrémente le temps écoulé depuis la dernière frame !
+                keyValuePair.Value.TempsDepuisDerniereReponse += deltaTime;
+                if (keyValuePair.Value.TempsDepuisDerniereReponse > 3.0f) 
                 {
-                    serveursMorts.Add(serveur.Key);
+                    serveursMorts.Add(keyValuePair.Key);
                 }
             }
+            // Purge effective du dictionnaire
             foreach (var mort in serveursMorts) serveursDisponibles.Remove(mort);
         }
 

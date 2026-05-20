@@ -25,4 +25,25 @@ public class Packets
         public float DirX, DirY, DirZ;
         public string WeaponName; 
     }
+
+    // 4. SYNCHRONISATION DU LOBBY (Envoyé par le Serveur à tout le monde à chaque changement)
+    public class LobbyStatePacket
+    {
+        public string MatchName;
+        public int MapIndex;
+        public string[] PlayerNames;
+        public bool[] PlayerReadyStates;
+    }
+
+    // 5. SIGNAL "JE SUIS PRÊT" (Envoyé par un Client au Serveur)
+    public class ToggleReadyPacket
+    {
+        public bool IsReady;
+    }
+
+    // 6. SIGNAL DE LANCEMENT DE PARTIE (Envoyé par le Serveur à tous les Clients)
+    public class StartGamePacket
+    {
+        public int MapIndex;
+    }
 }

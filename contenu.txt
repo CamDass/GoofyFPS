@@ -1,5 +1,5 @@
 Structure du dossier pour le volume Windows
-Le numéro de série du volume est 000000FE A6CB:64E7
+Le numéro de série du volume est 00000022 A6CB:64E7
 C:.
 |   .gitignore
 |   contenu.txt
@@ -3607,10 +3607,10 @@ partial class Program
 
                 if (DrawButton(Raylib.GetScreenWidth()/2 - 150, Raylib.GetScreenHeight()/2 - 80, 300, 60, "HÉBERGER")) {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                    // On devient le serveur, et on va dans la salle d'attente
-                    Program.AllumerMoteurReseau(true);
-                    Program.currentState = Program.GameState.Lobby; // (Écran à créer plus tard)
+                    // On ne lance plus le serveur direct, on va taper le nom !
+                    Program.currentState = Program.GameState.CreateMatch; 
                 }
+
                 if (DrawButton(Raylib.GetScreenWidth()/2 - 150, Raylib.GetScreenHeight()/2 + 20, 300, 60, "REJOINDRE")) {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                     // On devient client, et on ouvre le radar !
@@ -3628,42 +3628,44 @@ partial class Program
 
             case Program.GameState.ServerBrowser:
                 Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
-                Raylib.DrawText("RECHERCHE DE PARTIES LAN...", Raylib.GetScreenWidth()/2 - 250, 100, 30, Color.Black);
-
-                int listY = 200;
                 
-                // On boucle sur notre dictionnaire réseau en direct !
+                int centerX_screen = Raylib.GetScreenWidth() / 2;
+                Raylib.DrawText("RECHERCHE DE PARTIES LAN...", centerX_screen - Raylib.MeasureText("RECHERCHE DE PARTIES LAN...", 30)/2, 100, 30, Color.Black);
+                
+                string dots = new string('.', (int)(Raylib.GetTime() * 2 % 4));
+                Raylib.DrawText("Analyse des fréquences" + dots, centerX_screen - Raylib.MeasureText("Analyse des fréquences...", 20)/2, 150, 20, Color.DarkGray);
+
+                int listY = 220;
+                
+                // Dessin des serveurs trouvés
                 foreach (var serveur in Program.serveursDisponibles.Values)
                 {
-                    string info = $"{serveur.NomDuSalon}  -  Joueurs: {serveur.JoueursActuels}/{serveur.JoueursMax}  -  IP: {serveur.EndPoint.Address}";
+                    Rectangle serverBox = new Rectangle(centerX_screen - 400, listY, 800, 60);
+                    bool isHover = Raylib.CheckCollisionPointRec(souris, serverBox);
                     
-                    Raylib.DrawRectangle(Raylib.GetScreenWidth()/2 - 400, listY, 800, 60, new Color(50, 50, 50, 200));
-                    Raylib.DrawText(info, Raylib.GetScreenWidth()/2 - 380, listY + 20, 20, Color.White);
+                    // Fond gris sombre, ou rouge si survolé
+                    Raylib.DrawRectangleRec(serverBox, isHover ? new Color(100, 50, 50, 255) : new Color(60, 60, 60, 255));
+                    Raylib.DrawRectangleLinesEx(serverBox, 3, Color.Black);
 
-                    // Le Bouton pour se connecter
-                    // Le Bouton pour se connecter
-                    if (DrawButton(Raylib.GetScreenWidth()/2 + 250, listY + 10, 130, 40, "REJOINDRE"))
+                    // Textes (Nom à gauche, Joueurs à droite)
+                    Raylib.DrawText(serveur.NomDuSalon, (int)serverBox.X + 20, listY + 15, 30, Color.White);
+                    string playerTxt = $"{serveur.JoueursActuels}/{serveur.JoueursMax} P";
+                    Raylib.DrawText(playerTxt, (int)serverBox.X + 650, listY + 15, 30, Color.White);
+
+                    // Clic pour rejoindre !
+                    if (isHover && Raylib.IsMouseButtonReleased(MouseButton.Left))
                     {
                         Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                        // FUTUR CODE : Connexion officielle au serveur ici !
-                        
-                        // NOUVEAU CODE DE CONNEXION :
-                        // On demande au gestionnaire réseau de se connecter à l'IP du serveur trouvé, avec le mot de passe
                         Program.netManager.Connect(serveur.EndPoint, "GoofyFPS_SecretKey");
+                        // On nettoie notre propre liste de joueurs, en attendant que l'hôte nous envoie la vraie !
+                        Program.currentLobbyPlayers.Clear(); 
+                        Program.currentState = Program.GameState.Lobby;
                     }
-                    listY += 70;
-                }
-
-                if (Program.serveursDisponibles.Count == 0)
-                {
-                    // L'animation des 3 petits points
-                    string dots = new string('.', (int)(Raylib.GetTime() * 2 % 4));
-                    Raylib.DrawText("Analyse des fréquences" + dots, Raylib.GetScreenWidth()/2 - 180, 200, 25, Color.DarkGray);
+                    listY += 75;
                 }
 
                 if (DrawButton(50, 50, 150, 60, "RETOUR")) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
-                    // On éteint la carte réseau proprement si on quitte
                     Program.netManager.Stop(); 
                     Program.currentState = Program.GameState.NetworkHub;
                 }
@@ -3709,7 +3711,7 @@ partial class Program
                 // ==========================================
                 // MODE DÉBUG : SIMULER L'ENTRÉE D'UN JOUEUR
                 // ==========================================
-                if (Program.isServer && Raylib.IsKeyPressed(KeyboardKey.M))
+                if (Program.isServer && Raylib.IsKeyPressed(KeyboardKey.Semicolon)) //touche M sur un clavier azerty 
                 {
                     Console.WriteLine("join");
                     // 1. On fabrique un faux passeport
@@ -3722,6 +3724,72 @@ partial class Program
 
 
                 break;
+
+            
+            case Program.GameState.CreateMatch:
+                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
+                
+                int centerC = Raylib.GetScreenWidth() / 2;
+                int centerCY = Raylib.GetScreenHeight() / 2;
+
+                Raylib.DrawText("Créer un Match", centerC - Raylib.MeasureText("Créer un Match", 40)/2, centerCY - 150, 40, Color.White);
+
+                // La zone de texte
+                Rectangle textBox = new Rectangle(centerC - 300, centerCY - 50, 600, 60);
+                Raylib.DrawRectangleRec(textBox, new Color(40, 40, 40, 255));
+                Raylib.DrawRectangleLinesEx(textBox, 3, Color.Black);
+
+                // --- LOGIQUE DU CLAVIER (La saisie) ---
+                int key = Raylib.GetCharPressed();
+                while (key > 0)
+                {
+                    // Si c'est une lettre valide et qu'on n'a pas dépassé 20 caractères
+                    if ((key >= 32) && (key <= 125) && (Program.matchNameInput.Length < 20))
+                    {
+                        Program.matchNameInput += (char)key;
+                    }
+                    key = Raylib.GetCharPressed(); // On vide le buffer
+                }
+
+                // La touche Effacer (Backspace)
+                if (Raylib.IsKeyPressed(KeyboardKey.Backspace) && Program.matchNameInput.Length > 0)
+                {
+                    Program.matchNameInput = Program.matchNameInput.Substring(0, Program.matchNameInput.Length - 1);
+                }
+
+                // Affichage du texte tapé ou du texte fantôme
+                if (Program.matchNameInput.Length > 0)
+                {
+                    Raylib.DrawText(Program.matchNameInput, (int)textBox.X + 20, (int)textBox.Y + 15, 30, Color.White);
+                }
+                else
+                {
+                    Raylib.DrawText("Entrez le nom du match", (int)textBox.X + 20, (int)textBox.Y + 20, 20, Color.Gray);
+                }
+
+                // Bouton Créer
+                if (DrawButton(centerC - 100, centerCY + 50, 200, 50, "Créer"))
+                {
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
+                    Program.hostMatchName = string.IsNullOrEmpty(Program.matchNameInput) ? "Partie sans nom" : Program.matchNameInput;
+                    
+                    // ON DÉMARRE LE SERVEUR OFFICIELLEMENT !
+                    Program.AllumerMoteurReseau(true);
+                    
+                    // On s'ajoute nous-même (l'Hôte) dans la liste du Lobby
+                    Program.currentLobbyPlayers.Clear();
+                    Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = "Moi (Hôte)", IsHost = true, IsReady = true, Peer = null });
+                    
+                    Program.currentState = Program.GameState.Lobby;
+                }
+
+                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
+                    Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                    Program.currentState = Program.GameState.NetworkHub;
+                }
+                break;
+
+                
         }
 
         // --- AFFICHAGE DES EFFETS DE CLIC (Toujours par dessus) ---
@@ -4351,6 +4419,7 @@ public partial class Program
         Lobby,              // La salle d'attente
         Playing,             // En jeu
         ServerBrowser,
+        CreateMatch
 
     }
     public static GameState currentState = GameState.MainMenu;
@@ -4374,6 +4443,25 @@ public partial class Program
     public static float chronoRecherche = 0f;
 
 
+
+    // ==========================================
+    // VARIABLES DU SALON MULTIJOUEUR (LOBBY)
+    // ==========================================
+    public static string hostMatchName = "Serveur de Test"; // Le nom tapé par l'Hôte
+    public static string matchNameInput = "";               // La variable temporaire quand on tape au clavier
+    public static int mapChoisieIndex = 1;                  // 0 = Tuto, 1 = Ville, 2 = Sandbox
+    
+    // Structure d'un joueur dans le Lobby
+    public class LobbyPlayer
+    {
+        public string Name;
+        public bool IsReady;
+        public bool IsHost;
+        public NetPeer Peer; // Null si c'est Toi (l'hôte local)
+    }
+    public static List<LobbyPlayer> currentLobbyPlayers = new List<LobbyPlayer>();
+
+
     public static void AllumerMoteurReseau(bool host)
     {
         netListener = new EventBasedNetListener();
@@ -4394,7 +4482,7 @@ public partial class Program
                     // On fabrique notre réponse
                     NetDataWriter writer = new NetDataWriter();
                     writer.Put("GOOFY_RES"); // Je suis une réponse GoofyFPS
-                    writer.Put("Le Salon du Chaos"); // Nom du serveur (On le rendra modifiable plus tard)
+                    writer.Put(Program.hostMatchName); // On utilise le VRAI nom de la partie !
                     writer.Put(1); // Joueurs actuels
                     writer.Put(4); // Joueurs max
                     
