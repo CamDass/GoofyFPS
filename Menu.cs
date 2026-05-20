@@ -1241,46 +1241,108 @@ partial class Program
             
 
             case Program.GameState.ServerBrowser:
-                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
+                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White); 
+                int centerX_screen = Raylib.GetScreenWidth() / 2; 
                 
-                int centerX_screen = Raylib.GetScreenWidth() / 2;
-                Raylib.DrawText("RECHERCHE DE PARTIES LAN...", centerX_screen - Raylib.MeasureText("RECHERCHE DE PARTIES LAN...", 30)/2, 100, 30, Color.Black);
-                
-                string dots = new string('.', (int)(Raylib.GetTime() * 2 % 4));
-                Raylib.DrawText("Analyse des fréquences" + dots, centerX_screen - Raylib.MeasureText("Analyse des fréquences...", 20)/2, 150, 20, Color.DarkGray);
+                Raylib.DrawText("RECHERCHE DE PARTIES LAN...", centerX_screen - Raylib.MeasureText("RECHERCHE DE PARTIES LAN...", 30)/2, 60, 30, Color.Black);
+                string dots = new string('.', (int)(Raylib.GetTime() * 2 % 4)); 
+                Raylib.DrawText("Radar actif" + dots, centerX_screen - Raylib.MeasureText("Radar actif...", 20)/2, 105, 20, Color.DarkGray);
 
-                int listY = 220;
-                
-                // Dessin des serveurs trouvés
-                foreach (var serveur in Program.serveursDisponibles.Values)
+                // ==========================================
+                // 1. AFFICHAGE DES RÉSULTATS DU RADAR
+                // ==========================================
+                int listY = 160; 
+                foreach (var serveur in Program.serveursDisponibles.Values) 
                 {
-                    Rectangle serverBox = new Rectangle(centerX_screen - 400, listY, 800, 60);
-                    bool isHover = Raylib.CheckCollisionPointRec(souris, serverBox);
+                    Rectangle serverBox = new Rectangle(centerX_screen - 400, listY, 800, 55); 
+                    bool isHover = Raylib.CheckCollisionPointRec(souris, serverBox); 
                     
-                    // Fond gris sombre, ou rouge si survolé
-                    Raylib.DrawRectangleRec(serverBox, isHover ? new Color(100, 50, 50, 255) : new Color(60, 60, 60, 255));
-                    Raylib.DrawRectangleLinesEx(serverBox, 3, Color.Black);
+                    Raylib.DrawRectangleRec(serverBox, isHover ? new Color(100, 50, 50, 255) : new Color(60, 60, 60, 255)); 
+                    Raylib.DrawRectangleLinesEx(serverBox, 2, Color.Black);
 
-                    // Textes (Nom à gauche, Joueurs à droite)
-                    Raylib.DrawText(serveur.NomDuSalon, (int)serverBox.X + 20, listY + 15, 30, Color.White);
-                    string playerTxt = $"{serveur.JoueursActuels}/{serveur.JoueursMax} P";
-                    Raylib.DrawText(playerTxt, (int)serverBox.X + 650, listY + 15, 30, Color.White);
+                    Raylib.DrawText(serveur.NomDuSalon, (int)serverBox.X + 20, listY + 12, 26, Color.White); 
+                    string playerTxt = $"{serveur.JoueursActuels}/{serveur.JoueursMax} P"; 
+                    Raylib.DrawText(playerTxt, (int)serverBox.X + 680, listY + 12, 26, Color.White); 
 
-                    // Clic pour rejoindre !
-                    if (isHover && Raylib.IsMouseButtonReleased(MouseButton.Left))
+                    if (isHover && Raylib.IsMouseButtonReleased(MouseButton.Left)) 
                     {
-                        Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                        Program.netManager.Connect(serveur.EndPoint, "GoofyFPS_SecretKey");
-                        // On nettoie notre propre liste de joueurs, en attendant que l'hôte nous envoie la vraie !
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); 
+                        Program.netManager.Connect(serveur.EndPoint, "GoofyFPS_SecretKey"); 
                         Program.currentLobbyPlayers.Clear(); 
-                        Program.currentState = Program.GameState.Lobby;
+                        Program.currentState = Program.GameState.Lobby; 
                     }
-                    listY += 75;
+                    listY += 65;
                 }
 
-                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
+                if (Program.serveursDisponibles.Count == 0)
+                {
+                    Raylib.DrawText("(Aucun salon détecté automatiquement par le téléphone)", centerX_screen - Raylib.MeasureText("(Aucun salon détecté automatiquement par le téléphone)", 18)/2, 180, 18, Color.Gray);
+                }
+
+                // ==========================================
+                // 2. ZONE DE CONNEXION DIRECTE VIA IP (Dépannage Hotspot)
+                // ==========================================
+                int zoneIP_Y = Raylib.GetScreenHeight() - 320;
+                Raylib.DrawLine(centerX_screen - 400, zoneIP_Y - 20, centerX_screen + 400, zoneIP_Y - 20, Color.Black);
+                
+                Raylib.DrawText("CONNEXION DIRECTE (Saisie manuelle IP)", centerX_screen - Raylib.MeasureText("CONNEXION DIRECTE (Saisie manuelle IP)", 22)/2, zoneIP_Y, 22, Color.Black);
+
+                Rectangle ipTextBox = new Rectangle(centerX_screen - 250, zoneIP_Y + 40, 500, 50);
+                Raylib.DrawRectangleRec(ipTextBox, new Color(40, 40, 40, 255));
+                Raylib.DrawRectangleLinesEx(ipTextBox, 2, Color.Black);
+
+                // --- Saisie clavier pour l'IP ---
+                int keyChar = Raylib.GetCharPressed(); 
+                while (keyChar > 0)
+                {
+                    // On accepte les chiffres (48-57) et le point (46) pour une adresse IP
+                    if (((keyChar >= 48 && keyChar <= 57) || keyChar == 46) && (Program.directIPInput.Length < 15))
+                    {
+                        Program.directIPInput += (char)keyChar; 
+                    }
+                    keyChar = Raylib.GetCharPressed(); 
+                }
+
+                if (Raylib.IsKeyPressed(KeyboardKey.Backspace) && Program.directIPInput.Length > 0) 
+                {
+                    Program.directIPInput = Program.directIPInput.Substring(0, Program.directIPInput.Length - 1); 
+                }
+
+                // Rendu du texte de l'IP et curseur clignotant
+                bool clignote = ((int)(Raylib.GetTime() * 2)) % 2 == 0; 
+                Raylib.DrawText(Program.directIPInput, (int)ipTextBox.X + 15, (int)ipTextBox.Y + 12, 26, Color.White); 
+                if (clignote)
+                {
+                    int txtW = Raylib.MeasureText(Program.directIPInput, 26); 
+                    Raylib.DrawRectangle((int)ipTextBox.X + 15 + txtW + 4, (int)ipTextBox.Y + 12, 3, 26, Color.White);
+                }
+
+                // Bouton VALIDER IP
+                if (DrawButton(centerX_screen - 120, zoneIP_Y + 110, 240, 45, "REJOINDRE VIA IP")) 
+                {
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.High); 
+                    try
+                    {
+                        // On tente de parser la chaîne en vraie IP Endpoint, sur le port fixe 7777 
+                        IPAddress ipCible = IPAddress.Parse(Program.directIPInput);
+                        IPEndPoint endPointCible = new IPEndPoint(ipCible, 7777); 
+
+                        Console.WriteLine($"[RÉSEAU] Tentative de connexion directe Unicast vers {endPointCible}");
+                        Program.netManager.Connect(endPointCible, "GoofyFPS_SecretKey"); 
+                        Program.currentLobbyPlayers.Clear();
+                        Program.currentState = Program.GameState.Lobby; 
+                    }
+                    catch
+                    {
+                        // Si l'IP est mal tapée (ex: "192.168..1"), on réinitialise pour éviter le crash
+                        Program.directIPInput = "192.168.";
+                    }
+                }
+
+                // Bouton RETOUR [cite: 2100]
+                if (DrawButton(50, 50, 150, 60, "RETOUR")) { 
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
-                    Program.netManager.Stop(); 
+                    Program.netManager.Stop();
                     Program.currentState = Program.GameState.NetworkHub;
                 }
                 break;
@@ -1360,6 +1422,32 @@ partial class Program
                     Raylib.DrawCircle((int)zoneJoueurs.X + 360, playerY + 12, 8, couleurPastille);
 
                     playerY += 50;
+
+                    // ==========================================
+                    // BOUTON DE SÉCURITÉ : AFFICHER / CACHER L'IP (D'après ton design)
+                    // ==========================================
+                    if (Program.isServer)
+                    {
+                        int ipBtnX = (int)zoneJoueurs.X + ((int)zoneJoueurs.Width / 2) - 100; // Centré sous le bloc droit
+                        int ipBtnY = (int)zoneJoueurs.Y + (int)zoneJoueurs.Height + 20;
+
+                        // Le texte du bouton s'adapte dynamiquement
+                        string texteBoutonIP = Program.afficherIPDuServeur ? "MASQUER L'IP" : "IP SERVER";
+
+                        if (DrawButton(ipBtnX, ipBtnY, 200, 40, texteBoutonIP))
+                        {
+                            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                            // Inversion de l'état : si c'était vrai ça devient faux, et inversement
+                            Program.afficherIPDuServeur = !Program.afficherIPDuServeur; 
+                        }
+
+                        // Si le joueur a cliqué pour révéler, on affiche le texte en blanc brillant en dessous
+                        if (Program.afficherIPDuServeur)
+                        {
+                            int ipTxtW = Raylib.MeasureText(Program.adresseIPLocaleServeur, 26);
+                            Raylib.DrawText(Program.adresseIPLocaleServeur, ((int)zoneJoueurs.X + (int)zoneJoueurs.Width / 2) - ipTxtW / 2, ipBtnY + 55, 26, Color.White);
+                        }
+                    }
                 }
 
                 // ==========================================

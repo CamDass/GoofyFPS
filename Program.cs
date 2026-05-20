@@ -324,7 +324,10 @@ public partial class Program
     // ==========================================
     public static string hostMatchName = "Serveur de Test"; // Le nom tapé par l'Hôte
     public static string matchNameInput = "";               // La variable temporaire quand on tape au clavier
-    public static int mapChoisieIndex = 1;                  // 0 = Tuto, 1 = Ville, 2 = Sandbox
+    public static int mapChoisieIndex = 1;   
+    public static string directIPInput = "192.168.";               // 0 = Tuto, 1 = Ville, 2 = Sandbox
+    public static bool afficherIPDuServeur = false;
+    public static string adresseIPLocaleServeur = "127.0.0.1";
     
     // Structure d'un joueur dans le Lobby
     public class LobbyPlayer
@@ -479,8 +482,36 @@ public partial class Program
         netProcessor.SubscribeReusable<Packets.StartGamePacket, NetPeer>(OnStartGameReceived);
 
         // Lancement effectif de la carte réseau
-        if (host) netManager.Start(7777); // Le serveur ouvre la porte 7777 fixement
-        else netManager.Start();          // Le client prend un port au hasard
+        if (host) 
+        {
+            netManager.Start(7777); // Le serveur ouvre la porte 7777 fixement
+
+            // ==========================================
+            // LOGIQUE DE RÉCUPÉRATION DE L'IP LOCALE (Calculé 1 seule fois)
+            // ==========================================
+            try
+            {
+                var dnsHost = Dns.GetHostEntry(Dns.GetHostName());
+                foreach (var ip in dnsHost.AddressList)
+                {
+                    // On ne prend QUE les adresses IPv4 classiques (InterNetwork), pas l'IPv6
+                    if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                    {
+                        adresseIPLocaleServeur = ip.ToString();
+                        break; // On a trouvé notre IP locale principale, on s'arrête
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[RÉSEAU - ERROR] Impossible de lire l'IP locale : " + ex.Message);
+                adresseIPLocaleServeur = "IP Introuvable";
+            }
+        }
+        else 
+        {
+            netManager.Start(); // Le client prend un port au hasard
+        }
     }
 
 
