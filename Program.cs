@@ -677,6 +677,46 @@ public partial class Program
 }
 
 
+    
+public static void GenererPhysiqueMap(Model modele)
+{
+    Console.WriteLine($"[DEBUG] Extraction des triangles de la map ({modele.MeshCount} parties détectées)...");
+    unsafe 
+    {
+        int totalTriangles = 0;
+        for (int i = 0; i < modele.MeshCount; i++) totalTriangles += modele.Meshes[i].TriangleCount;
+
+        pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
+        int triangleActuel = 0;
+
+        for (int m = 0; m < modele.MeshCount; m++)
+        {
+            Raylib_cs.Mesh raylibMesh = modele.Meshes[m];
+            float* vertices = raylibMesh.Vertices;
+            ushort* indices = raylibMesh.Indices; 
+
+            for (int t = 0; t < raylibMesh.TriangleCount; t++)
+            {
+                int index1 = (indices != null) ? indices[t * 3 + 0] : t * 3 + 0;
+                int index2 = (indices != null) ? indices[t * 3 + 1] : t * 3 + 1;
+                int index3 = (indices != null) ? indices[t * 3 + 2] : t * 3 + 2;
+
+                Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
+                Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
+                Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
+
+                bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
+                triangleActuel++;
+            }
+        }
+
+        bepuMapMesh = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
+        TypedIndex ticketCarte = simulation.Shapes.Add(bepuMapMesh);
+        mapStaticHandle = simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+        mapDejaChargee = true;
+    }
+}
+
 
 
 
