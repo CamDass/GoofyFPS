@@ -83,17 +83,18 @@ GoofyFPS/
 
 ## Technologies Utilisées
 
-- **Langage** : C# 11.0
+- **Langage** : C#
 - **Framework Graphique** : Raylib-cs 7.0.2
 - **Moteur Physique** : BepuPhysics 2.4.0
+- **Réseau** : LiteNetLib 2.1.3 (multijoueur LAN)
 - **Shaders** : GLSL (OpenGL 3.3)
-- **Plateforme** : Windows (compilé pour .NET 11.0)
+- **Plateforme** : Windows (compilé pour .NET 10.0)
 
 ## Installation et Lancement
 
 ### Prérequis
 
-- .NET 11.0 SDK
+- .NET 10.0 SDK
 - Windows 10/11
 - Carte graphique compatible OpenGL 3.3+
 
@@ -122,7 +123,20 @@ Pour compiler en mode Release :
 dotnet build --configuration Release
 ```
 
-Le binaire se trouve dans `bin/Release/net11.0/GoofyFPS.exe`
+Le binaire se trouve dans `bin/Release/net10.0/GoofyFPS.exe`
+
+## Multijoueur LAN
+
+Le jeu propose un mode multijoueur en réseau local (PvP, sans zombies) :
+
+1. **Héberger** : Menu → PLAY → MULTIJOUEUR (LAN) → HÉBERGER → entrez votre pseudo et le nom du match → Créer. Le port utilisé est le 7777 (UDP).
+2. **Rejoindre** : Menu → PLAY → MULTIJOUEUR (LAN) → REJOINDRE. Les salons de votre réseau sont détectés automatiquement (broadcast) et listés — cliquez dessus pour rejoindre. Vous pouvez aussi taper l'IP de l'hôte directement (bouton "IP SERVER" dans le lobby de l'hôte pour l'afficher).
+3. **Lobby** : les clients cliquent sur METTRE PRÊT ; l'hôte choisit la map puis clique sur LANCER LA PARTIE.
+4. En jeu : les autres joueurs apparaissent en capsules oranges avec leur pseudo et barre de vie. Tableau des scores dans le menu pause (Tab).
+
+Si le pare-feu Windows demande une autorisation au premier lancement, acceptez-la (réseau privé) pour que la découverte LAN fonctionne.
+
+**Modes de test** (debug) : lancer avec la variable d'environnement `GOOFY_AUTOHOST=1` pour héberger automatiquement un salon, ou `GOOFY_AUTOJOIN=1` pour chercher et rejoindre automatiquement le premier salon trouvé.
 
 ## Structure du Projet
 

@@ -413,66 +413,9 @@ partial class Program
 
                     mapModel = Raylib.LoadModel(ModelMapPath[n]);
 
-
-                    Console.WriteLine($"[DEBUG] Extraction des triangles de la map ({mapModel.MeshCount} parties détectées)...");
-
-                    unsafe 
-                    {
-                        int totalTriangles = 0;
-                        for (int i = 0; i < mapModel.MeshCount; i++) totalTriangles += mapModel.Meshes[i].TriangleCount;
-
-                        pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
-                        int triangleActuel = 0;
-
-                        for (int m = 0; m < mapModel.MeshCount; m++)
-                        {
-                            Raylib_cs.Mesh raylibMesh = mapModel.Meshes[m];
-                            float* vertices = raylibMesh.Vertices;
-                            ushort* indices = raylibMesh.Indices; 
-
-                            for (int t = 0; t < raylibMesh.TriangleCount; t++)
-                            {
-                                int index1, index2, index3;
-
-                                // Si Blender a bien fait son travail (Mesh indexé)
-                                if (indices != null)
-                                {
-                                    index1 = indices[t * 3 + 0];
-                                    index2 = indices[t * 3 + 1];
-                                    index3 = indices[t * 3 + 2];
-                                }
-                                // Si Blender a exporté "en vrac" (Vertices purs)
-                                else
-                                {
-                                    index1 = t * 3 + 0;
-                                    index2 = t * 3 + 1;
-                                    index3 = t * 3 + 2;
-                                }
-
-                                Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
-                                Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
-                                Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
-
-                                bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
-                                triangleActuel++;
-                            }
-                        }
-
-                        // On utilise notre variable globale au lieu de "var"
-                        bepuMapMesh = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
-                        TypedIndex ticketCarte = simulation.Shapes.Add(bepuMapMesh);
-                        
-                        // CORRECTION : On SAUVEGARDE le handle dans notre variable globale
-                        mapStaticHandle = simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
-                        
-                        // On valide qu'une map est en mémoire pour le prochain nettoyage !
-                        mapDejaChargee = true;
-
-                        Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
-                    }
-
-
-
+                    // L'extraction des triangles BEPU vit maintenant dans ExtraireTrianglesMap()
+                    // (partagée avec le mode réseau pour éviter le code dupliqué)
+                    ExtraireTrianglesMap();
 
 
 
@@ -1020,24 +963,27 @@ partial class Program
             Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
             isPaused = false;
             Raylib.EnableCursor();
-            
+
             // Grand nettoyage avant de retourner au menu principal
             foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
             enemiesList.Clear();
             activeExplosions.Clear();
             activeDamageTexts.Clear();
-            
+
+            // NOUVEAU : On coupe le réseau proprement (sinon l'hôte continue de tourner en fantôme !)
+            Program.CouperReseau();
+
             Program.currentState = Program.GameState.MainMenu;
         }
 
         // ==========================================
-        // 3. LE TABLEAU DES SCORES (À droite)
+        // 3. LE TABLEAU DES SCORES (À droite) - LES VRAIS JOUEURS !
         // ==========================================
         int scoreWidth = 600;
         int scoreHeight = 400;
-        
+
         // Position X à 50% de l'écran (sur la droite)
-        int scoreX = (LargeurFenetre / 2); 
+        int scoreX = (LargeurFenetre / 2);
         int scoreY = posY_resume; // Aligné sur le haut du bouton RESUME pour faire propre
 
         // Fond du tableau (Gris très foncé transparent)
@@ -1045,7 +991,7 @@ partial class Program
 
         // En-tête (Gris moyen opaque)
         Raylib.DrawRectangle(scoreX, scoreY, scoreWidth, 50, new Color(80, 80, 80, 255));
-        
+
         // --- Titres des colonnes ---
         int textY = scoreY + 15;
         Raylib.DrawText("name", scoreX + 20, textY, 25, Color.White);
@@ -1053,19 +999,35 @@ partial class Program
         Raylib.DrawText("death", scoreX + 420, textY, 25, Color.White);
         Raylib.DrawText("ping", scoreX + 520, textY, 25, Color.White);
 
-        // --- FAUSSE LIGNE 1 : TOI (Mockup) ---
-        int row1Y = scoreY + 70;
-        Raylib.DrawText("CamPitaine", scoreX + 20, row1Y, 30, Color.White);
-        Raylib.DrawText(Program.killCount.ToString(), scoreX + 300, row1Y, 30, Color.White);
-        Raylib.DrawText(Program.deathCount.ToString(), scoreX + 420, row1Y, 30, Color.White);
-        Raylib.DrawText("10", scoreX + 520, row1Y, 30, Color.Green); // Ping excellent = Vert
+        // --- LIGNE 1 : NOUS ---
+        int rowY = scoreY + 70;
+        string monNom = string.IsNullOrEmpty(Program.myLobbyName) ? "Moi" : Program.myLobbyName;
+        int monPing = (!Program.isServer && Program.netManager != null && Program.netManager.FirstPeer != null) ? Program.netManager.FirstPeer.Ping : 0;
+        Raylib.DrawText(monNom, scoreX + 20, rowY, 30, Color.White);
+        Raylib.DrawText(Program.killCount.ToString(), scoreX + 300, rowY, 30, Color.White);
+        Raylib.DrawText(Program.deathCount.ToString(), scoreX + 420, rowY, 30, Color.White);
+        Raylib.DrawText(monPing.ToString(), scoreX + 520, rowY, 30, monPing < 80 ? Color.Green : Color.Red);
+        rowY += 50;
 
-        // --- FAUSSE LIGNE 2 : L'ENNEMI (Mockup) ---
-        int row2Y = scoreY + 120;
-        Raylib.DrawText("NoobSucker99", scoreX + 20, row2Y, 30, Color.LightGray);
-        Raylib.DrawText("5", scoreX + 300, row2Y, 30, Color.LightGray);
-        Raylib.DrawText("12", scoreX + 420, row2Y, 30, Color.LightGray);
-        Raylib.DrawText("150", scoreX + 520, row2Y, 30, Color.Red); // Ping mauvais = Rouge
+        // --- LES AUTRES JOUEURS (Synchronisés par le réseau) ---
+        foreach (Program.RemotePlayer rp in Program.remotePlayers.Values)
+        {
+            string pingTexte = "-";
+            Color pingCouleur = Color.LightGray;
+            if (Program.isServer && Program.peersParId.TryGetValue(rp.Id, out NetPeer sonPeer))
+            {
+                pingTexte = sonPeer.Ping.ToString();
+                pingCouleur = sonPeer.Ping < 80 ? Color.Green : Color.Red;
+            }
+
+            Raylib.DrawText(rp.Name, scoreX + 20, rowY, 30, Color.LightGray);
+            Raylib.DrawText(rp.Kills.ToString(), scoreX + 300, rowY, 30, Color.LightGray);
+            Raylib.DrawText(rp.Deaths.ToString(), scoreX + 420, rowY, 30, Color.LightGray);
+            Raylib.DrawText(pingTexte, scoreX + 520, rowY, 30, pingCouleur);
+            rowY += 50;
+
+            if (rowY > scoreY + scoreHeight - 40) break; // On déborde pas du tableau
+        }
     }
 
 
@@ -1305,18 +1267,18 @@ partial class Program
                     Raylib.DrawRectangle((int)ipTextBox.X + 20 + (Program.directIPInput.Length > 0 ? Raylib.MeasureText(Program.directIPInput, 26) : 0) + 5, (int)ipTextBox.Y + 10, 3, 30, Color.White);
 
                 // --- BOUTON VALIDER ---
-                if (DrawButton(centerC - 120, centerCY + 80, 240, 50, "REJOINDRE")) 
+                if (DrawButton(centerC - 120, centerCY + 80, 240, 50, "REJOINDRE"))
                 {
-                    Program.PlaySoundWithPriority(select, Program.SoundPriority.High); 
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
                     try
                     {
                         IPAddress ipCible = IPAddress.Parse(Program.directIPInput);
-                        IPEndPoint endPointCible = new IPEndPoint(ipCible, 7777); 
+                        IPEndPoint endPointCible = new IPEndPoint(ipCible, 7777);
 
                         Console.WriteLine($"[RÉSEAU] Tentative de connexion directe Unicast vers {endPointCible}");
-                        Program.netManager.Connect(endPointCible, "GoofyFPS_SecretKey"); 
+                        Program.netManager.Connect(endPointCible, "GoofyFPS_SecretKey");
                         lock (Program._lobbyLock) { Program.currentLobbyPlayers.Clear(); }
-                        Program.currentState = Program.GameState.Lobby; 
+                        Program.currentState = Program.GameState.Lobby;
                     }
                     catch
                     {
@@ -1325,10 +1287,34 @@ partial class Program
                     }
                 }
 
+                // ==========================================
+                // NOUVEAU : LA LISTE DES SALONS DÉTECTÉS PAR LE RADAR
+                // (Le broadcast tourne déjà dans la boucle principale, ici on AFFICHE enfin le résultat !)
+                // ==========================================
+                int listeY = centerCY + 160;
+                string titreListe = serveursDisponibles.Count > 0 ? "SALONS DÉTECTÉS SUR LE RÉSEAU :" : "Recherche de salons sur le réseau...";
+                Raylib.DrawText(titreListe, centerC - Raylib.MeasureText(titreListe, 22) / 2, listeY, 22, Color.White);
+                listeY += 35;
+
+                var salons = serveursDisponibles.Values.ToList();
+                for (int s = 0; s < salons.Count && s < 4; s++)
+                {
+                    var salon = salons[s];
+                    string ligneSalon = $"{salon.NomDuSalon}  ({salon.JoueursActuels}/{salon.JoueursMax})  -  {salon.EndPoint.Address}";
+                    if (DrawButton(centerC - 300, listeY + s * 60, 600, 50, ligneSalon))
+                    {
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
+                        Console.WriteLine($"[RÉSEAU] Connexion au salon '{salon.NomDuSalon}' sur {salon.EndPoint}");
+                        Program.netManager.Connect(new IPEndPoint(salon.EndPoint.Address, 7777), "GoofyFPS_SecretKey");
+                        lock (Program._lobbyLock) { Program.currentLobbyPlayers.Clear(); }
+                        Program.currentState = Program.GameState.Lobby;
+                    }
+                }
+
                 // --- BOUTON RETOUR ---
-                if (DrawButton(50, 50, 150, 60, "RETOUR")) { 
+                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
-                    Program.netManager.Stop();
+                    Program.CouperReseau();
                     Program.currentState = Program.GameState.NetworkHub;
                 }
                 break;
@@ -1410,35 +1396,37 @@ partial class Program
                         Raylib.DrawCircle((int)zoneJoueurs.X + 360, playerY + 12, 8, couleurPastille);
 
                         playerY += 50;
-
-                        // ==========================================
-                        // BOUTON DE SÉCURITÉ : AFFICHER / CACHER L'IP (D'après ton design)
-                        // ==========================================
-                        if (Program.isServer)
-                        {
-                            int ipBtnX = (int)zoneJoueurs.X + ((int)zoneJoueurs.Width / 2) - 100; // Centré sous le bloc droit
-                            int ipBtnY = (int)zoneJoueurs.Y + (int)zoneJoueurs.Height + 20;
-
-                            // Le texte du bouton s'adapte dynamiquement
-                            string texteBoutonIP = Program.afficherIPDuServeur ? "MASQUER L'IP" : "IP SERVER";
-
-                            if (DrawButton(ipBtnX, ipBtnY, 200, 40, texteBoutonIP))
-                            {
-                                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                                // Inversion de l'état : si c'était vrai ça devient faux, et inversement
-                                Program.afficherIPDuServeur = !Program.afficherIPDuServeur; 
-                            }
-
-                            // Si le joueur a cliqué pour révéler, on affiche le texte en blanc brillant en dessous
-                            if (Program.afficherIPDuServeur)
-                            {
-                                int ipTxtW = Raylib.MeasureText(Program.adresseIPLocaleServeur, 26);
-                                Raylib.DrawText(Program.adresseIPLocaleServeur, ((int)zoneJoueurs.X + (int)zoneJoueurs.Width / 2) - ipTxtW / 2, ipBtnY + 55, 26, Color.White);
-                            }
-                        }
                     }
                 }
-                
+
+                // ==========================================
+                // BOUTON DE SÉCURITÉ : AFFICHER / CACHER L'IP
+                // (CORRECTION : sorti de la boucle des joueurs ! Avant, il était dessiné
+                // une fois PAR joueur au même endroit : un clic le basculait plusieurs fois)
+                // ==========================================
+                if (Program.isServer)
+                {
+                    int ipBtnX = (int)zoneJoueurs.X + ((int)zoneJoueurs.Width / 2) - 100; // Centré sous le bloc droit
+                    int ipBtnY = (int)zoneJoueurs.Y + (int)zoneJoueurs.Height + 20;
+
+                    // Le texte du bouton s'adapte dynamiquement
+                    string texteBoutonIP = Program.afficherIPDuServeur ? "MASQUER L'IP" : "IP SERVER";
+
+                    if (DrawButton(ipBtnX, ipBtnY, 200, 40, texteBoutonIP))
+                    {
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                        // Inversion de l'état : si c'était vrai ça devient faux, et inversement
+                        Program.afficherIPDuServeur = !Program.afficherIPDuServeur;
+                    }
+
+                    // Si le joueur a cliqué pour révéler, on affiche le texte en blanc brillant en dessous
+                    if (Program.afficherIPDuServeur)
+                    {
+                        int ipTxtW = Raylib.MeasureText(Program.adresseIPLocaleServeur, 26);
+                        Raylib.DrawText(Program.adresseIPLocaleServeur, ((int)zoneJoueurs.X + (int)zoneJoueurs.Width / 2) - ipTxtW / 2, ipBtnY + 55, 26, Color.White);
+                    }
+                }
+
 
                 // ==========================================
                 // LES BOUTONS D'ACTION (En bas)
@@ -1482,7 +1470,10 @@ partial class Program
                 else
                 {
                     // Code Client : Trouver notre propre état Prêt
-                    var moi = Program.currentLobbyPlayers.Find(p => p.Name.StartsWith("Joueur_")); // Ton pattern de pseudo temporaire
+                    // CORRECTION : on se cherche par notre ID unique (l'ancien code cherchait
+                    // un pseudo commençant par "Joueur_" qui n'existe plus -> bouton cassé)
+                    Program.LobbyPlayer moi;
+                    lock (Program._lobbyLock) { moi = Program.currentLobbyPlayers.Find(p => p.Id == Program.myPlayerId); }
                     bool monEtatPret = moi != null ? moi.IsReady : false;
                     
                     string texteBoutonPret = monEtatPret ? "PRÊT (ANNULER)" : "METTRE PRÊT";
@@ -1509,7 +1500,7 @@ partial class Program
                 if (DrawButton(50, 50, 150, 60, "RETOUR"))
                 {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
-                    Program.netManager.Stop(); // Coupe la carte réseau proprement
+                    Program.CouperReseau(); // Coupe la carte réseau proprement
                     Program.currentState = Program.GameState.NetworkHub;
                 }
 
@@ -1586,13 +1577,20 @@ partial class Program
                 {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
                     Program.hostMatchName = string.IsNullOrEmpty(Program.matchNameInput) ? "Partie sans nom" : Program.matchNameInput;
-                    
+
                     string pseudoFinal = string.IsNullOrEmpty(Program.playerNameInput) ? "Hôte_" + Raylib.GetRandomValue(10, 99) : Program.playerNameInput;
-                    
+                    // Sécurité : la virgule et le point-virgule servent de séparateurs réseau
+                    pseudoFinal = pseudoFinal.Replace(",", "").Replace(";", "");
+                    Program.myLobbyName = pseudoFinal;
+
                     Program.AllumerMoteurReseau(true);
-                    Program.currentLobbyPlayers.Clear();
-                    Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = pseudoFinal + " (Hôte)", IsHost = true, IsReady = true, Peer = null });
-                    
+                    lock (Program._lobbyLock)
+                    {
+                        Program.currentLobbyPlayers.Clear();
+                        // L'hôte porte TOUJOURS l'ID 0 (myPlayerId est déjà mis à 0 par AllumerMoteurReseau)
+                        Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = pseudoFinal, IsHost = true, IsReady = true, Id = 0, Peer = null });
+                    }
+
                     Program.currentState = Program.GameState.Lobby;
                 }
 
