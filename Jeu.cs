@@ -370,6 +370,10 @@ static void InitBarrels()
         survivalTime = 0f;
         enemySpawnTimer = 10;
 
+        // EN LIGNE (LAN) : pas de zombies ! C'est du joueur contre joueur.
+        // (Les ennemis ne sont pas synchronisés entre les machines, chacun verrait des zombies différents)
+        if (isOnline) return;
+
         // 3. On fait apparaître 2 ennemis de base
         if (enemySpawnPoints.Count >= 2)
         {
@@ -444,8 +448,11 @@ static void InitBarrels()
             }
             else
             {
+                // 0. On annonce notre mort aux autres joueurs (pour le tableau des scores)
+                AnnoncerMaMort();
+
                 // 1. On réinitialise la vie du joueur
-                localPlayer.Respawn(); 
+                localPlayer.Respawn();
 
                 // 2. On choisit un index au hasard dans ta liste de spawns existante
                 int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
@@ -1132,6 +1139,15 @@ static void InitBarrels()
         camera.Up = Vector3.Transform(new Vector3(0, 1f, 0), Matrix4x4.CreateFromAxisAngle(CamFroward, rollActuel));
         camera.Target = camera.Position + CamFroward;
 
+        // ==========================================
+        // LE BATTEMENT DE COEUR DU MULTIJOUEUR :
+        // On envoie notre position et on lisse celle des autres
+        // ==========================================
+        if (isOnline)
+        {
+            MettreAJourReseauEnJeu(deltaTime, espionCube.Pose.Position, CameraYaw, CameraPitch);
+        }
+
 
 
         if (Raylib.IsKeyPressed(KeyBinds.DebugToggleInfo)){
@@ -1154,7 +1170,8 @@ static void InitBarrels()
             enemySpawnTimer -= deltaTime;
 
             // Si le temps est écoulé, et qu'il n'y a pas déjà trop de zombies (ex: limite de 30)
-            if (enemySpawnTimer <= 0f && enemiesList.Count < 40)
+            // EN LIGNE : pas de zombies, c'est du PvP !
+            if (!isOnline && enemySpawnTimer <= 0f && enemiesList.Count < 40)
             {
                 // On choisit un point de spawn au hasard
                 int randomSpawnIndex = random.Next(enemySpawnPoints.Count);
@@ -1240,7 +1257,12 @@ static void InitBarrels()
             //dessiner le model du joueur
             Vector3 PointHaut = new Vector3(posCube.X, posCube.Y + 0.5f, posCube.Z);
             Vector3 PointBas = new Vector3(posCube.X, posCube.Y - 0.5f, posCube.Z);
-            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8,Color.White); 
+            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8,Color.White);
+
+            // ==========================================
+            // DESSINER LES AUTRES JOUEURS (Multijoueur LAN)
+            // ==========================================
+            if (isOnline) DessinerJoueursDistants();
 
 
 
@@ -1347,6 +1369,11 @@ static void InitBarrels()
             }
             
         Raylib.EndMode3D();
+
+        // ==========================================
+        // PSEUDOS + VIE DES AUTRES JOUEURS (Multijoueur LAN)
+        // ==========================================
+        if (isOnline) DessinerNomsJoueursDistants(camera, CamFroward);
 
         // 1. LES BARRES DE VIE
         // 1. LES BARRES DE VIE (Affichage ciblé)
@@ -1581,6 +1608,12 @@ static void InitBarrels()
                 recoilAngle = -15.0f;
                 laserStart = startL;
                 laserEnd = endL;
+
+                // ==========================================
+                // MULTIJOUEUR : on annonce le tir aux autres
+                // et on vérifie si on a touché un joueur !
+                // ==========================================
+                if (isOnline) TraiterTirLocalReseau(currentWeapon, camera.Position, direction, startL, endL);
             }
         }
 
