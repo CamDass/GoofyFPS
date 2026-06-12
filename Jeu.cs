@@ -645,7 +645,8 @@ static void InitBarrels()
         // 1. On anticipe la vérification de l'arme pour savoir si on vise
         bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon); 
         bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee; 
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee;
+        Program.localIsAiming = isAiming; // pour que les autres voient notre arme centrée en visée
 
         // 2. LA REDUCTION DE SENSIBILITÉ (Le secret professionnel)
         if (isAiming)

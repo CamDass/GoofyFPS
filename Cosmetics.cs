@@ -88,92 +88,105 @@ partial class Program
         Rlgl.Rotatef(yaw * RadVersDeg, 0, 1, 0);
         // Dans ce repère local : +Z = devant le joueur, +X = sa droite
 
-        // Penchement wall-run : on mappe le roll caméra (max ±0.25 rad) vers ±5° max
-        float leanRad = Math.Clamp(lean * 0.35f, -0.0873f, 0.0873f);
+        // Penchement wall-run : on mappe le roll caméra (max ±0.25 rad) vers ±10° max
+        float leanRad = Math.Clamp(lean * 0.7f, -0.1745f, 0.1745f);
         if (leanRad != 0f) Rlgl.Rotatef(leanRad * RadVersDeg, 0, 0, 1);
 
         // Le corps
         Raylib.DrawCapsule(new Vector3(0, 0.5f, 0), new Vector3(0, -0.5f, 0), 0.5f, 8, 8, couleursSkin[couleurIdx]);
         Raylib.DrawCapsuleWires(new Vector3(0, 0.5f, 0), new Vector3(0, -0.5f, 0), 0.5f, 8, 8, Color.Black);
 
-        // Le visage, verrouillé sur le dôme de la tête
+        // === SYSTÈME DE CALQUES ===
+        // 1) Le VISAGE d'abord (collé sur le dôme)
+        // 2) Le CHAPEAU/CASQUE par-dessus
+        // Cet ordre garantit que le couvre-chef recouvre toujours le visage
+        // (ex : le masque de robot cache la tête), jamais l'inverse.
         DessinerFaceSkinLocale(faceIdx, pitch);
-
-        // Le chapeau, posé sur le crâne
         DessinerChapeauSkinLocal(hatIdx);
 
         Rlgl.PopMatrix();
     }
 
     // ==========================================
-    // LES TÊTES — verrouillées sur le dôme du crâne
-    // Repère : origine = CENTRE du dôme (sommet du segment de la capsule),
-    // +Z = regard horizontal. On pivote autour du centre du dôme, donc le
-    // visage GLISSE sur la surface de la sphère et ne sort jamais du corps.
+    // LES VISAGES — peints à PLAT sur le dôme de la tête (pas des boules qui dépassent !)
+    // Repère : origine = CENTRE du dôme. +Z = regard horizontal. Les traits
+    // (yeux, bouche...) affleurent la surface avant du dôme (z ~ 0.45) et suivent
+    // le regard. Le corps lui-même sert de "peau" du visage, comme un vrai bonhomme.
     // ==========================================
     static void DessinerFaceSkinLocale(int faceIdx, float pitch)
     {
+        if (faceIdx < 0) return; // aucune tête équipée -> tête lisse
+
         Rlgl.PushMatrix();
-        Rlgl.Translatef(0, 0.5f, 0); // le centre du dôme (la "vraie" tête)
+        Rlgl.Translatef(0, 0.5f, 0); // centre du dôme = la vraie tête
+        float pitchFace = Math.Clamp(pitch, -0.8f, 0.8f);
+        Rlgl.Rotatef(-pitchFace * RadVersDeg, 1, 0, 0); // le visage suit le regard
 
-        // Le visage suit le regard, borné pour rester sur la partie avant du dôme
-        float pitchFace = Math.Clamp(pitch, -0.95f, 0.95f);
-        Rlgl.Rotatef(-pitchFace * RadVersDeg, 1, 0, 0);
+        Color noir = new Color(22, 22, 22, 255);
 
-        // Tous les éléments sont posés autour de (0, +0.10, ~0.42) : ce point est
-        // à ~0.43 du centre du dôme (rayon 0.5), donc les visages affleurent
-        // la surface, quel que soit le pitch. VERROUILLÉ !
         switch (faceIdx)
         {
-            case 0: // SMILEY
-                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.40f), 0.18f, new Color(225, 185, 25, 255));
-                Raylib.DrawSphere(new Vector3(-0.07f, 0.16f, 0.54f), 0.035f, Color.Black);
-                Raylib.DrawSphere(new Vector3(0.07f, 0.16f, 0.54f), 0.035f, Color.Black);
-                Raylib.DrawCube(new Vector3(-0.06f, 0.06f, 0.55f), 0.04f, 0.03f, 0.03f, Color.Black);
-                Raylib.DrawCube(new Vector3(0, 0.03f, 0.555f), 0.06f, 0.03f, 0.03f, Color.Black);
-                Raylib.DrawCube(new Vector3(0.06f, 0.06f, 0.55f), 0.04f, 0.03f, 0.03f, Color.Black);
+            case 0: // SMILEY — deux yeux + un grand sourire, à plat sur la tête
+                Raylib.DrawSphere(new Vector3(-0.13f, 0.13f, 0.45f), 0.05f, noir);
+                Raylib.DrawSphere(new Vector3(0.13f, 0.13f, 0.45f), 0.05f, noir);
+                DessinerArcBouche(0.26f, -0.01f, 0.46f, 0.13f, noir);
                 break;
 
-            case 1: // CYCLOPE
-                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.40f), 0.18f, new Color(225, 225, 215, 255));
-                Raylib.DrawSphere(new Vector3(0, 0.12f, 0.53f), 0.075f, new Color(35, 95, 180, 255));
-                Raylib.DrawSphere(new Vector3(0, 0.12f, 0.58f), 0.035f, Color.Black);
+            case 1: // CYCLOPE — un gros œil unique, plat
+                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.45f), 0.13f, new Color(235, 235, 230, 255));
+                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.55f), 0.06f, new Color(40, 110, 200, 255));
+                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.59f), 0.028f, noir);
                 break;
 
-            case 2: // ROBOT
-                Raylib.DrawCube(new Vector3(0, 0.10f, 0.40f), 0.30f, 0.30f, 0.26f, new Color(120, 125, 135, 255));
-                Raylib.DrawCubeWires(new Vector3(0, 0.10f, 0.40f), 0.30f, 0.30f, 0.26f, Color.Black);
-                Raylib.DrawCube(new Vector3(-0.08f, 0.14f, 0.54f), 0.06f, 0.05f, 0.02f, new Color(200, 40, 40, 255));
-                Raylib.DrawCube(new Vector3(0.08f, 0.14f, 0.54f), 0.06f, 0.05f, 0.02f, new Color(200, 40, 40, 255));
-                Raylib.DrawCube(new Vector3(0, 0.02f, 0.54f), 0.16f, 0.025f, 0.02f, new Color(200, 50, 50, 255));
-                Raylib.DrawCylinder(new Vector3(0, 0.25f, 0.40f), 0.015f, 0.015f, 0.12f, 8, Color.DarkGray);
-                Raylib.DrawSphere(new Vector3(0, 0.39f, 0.40f), 0.035f, new Color(200, 40, 40, 255));
+            case 2: // ROBOT — plaque frontale PLATE + visière lumineuse + grille de bouche
+                Raylib.DrawCube(new Vector3(0, 0.07f, 0.43f), 0.38f, 0.32f, 0.06f, new Color(125, 130, 140, 255));
+                Raylib.DrawCubeWires(new Vector3(0, 0.07f, 0.43f), 0.38f, 0.32f, 0.06f, new Color(55, 60, 70, 255));
+                Raylib.DrawCube(new Vector3(0, 0.14f, 0.47f), 0.30f, 0.06f, 0.02f, new Color(45, 215, 235, 255)); // visière
+                for (int i = -1; i <= 1; i++)
+                    Raylib.DrawCube(new Vector3(i * 0.07f, -0.05f, 0.47f), 0.03f, 0.08f, 0.02f, new Color(40, 44, 52, 255));
+                Raylib.DrawSphere(new Vector3(-0.16f, 0.18f, 0.45f), 0.022f, new Color(70, 75, 85, 255)); // boulons
+                Raylib.DrawSphere(new Vector3(0.16f, 0.18f, 0.45f), 0.022f, new Color(70, 75, 85, 255));
                 break;
 
-            case 3: // CITROUILLE
-                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.40f), 0.19f, new Color(200, 100, 15, 255));
-                Raylib.DrawCube(new Vector3(-0.07f, 0.15f, 0.56f), 0.055f, 0.055f, 0.03f, Color.Black);
-                Raylib.DrawCube(new Vector3(0.07f, 0.15f, 0.56f), 0.055f, 0.055f, 0.03f, Color.Black);
-                Raylib.DrawCube(new Vector3(0, 0.03f, 0.57f), 0.14f, 0.035f, 0.03f, Color.Black);
-                Raylib.DrawCylinder(new Vector3(0, 0.27f, 0.40f), 0.025f, 0.04f, 0.09f, 8, new Color(50, 110, 40, 255));
+            case 3: // CITROUILLE — jack-o'-lantern gravé (triangles noirs)
+                TriangleVisage(new Vector3(-0.18f, 0.18f, 0.46f), new Vector3(-0.04f, 0.18f, 0.46f), new Vector3(-0.11f, 0.05f, 0.46f), noir); // œil G
+                TriangleVisage(new Vector3(0.04f, 0.18f, 0.46f), new Vector3(0.18f, 0.18f, 0.46f), new Vector3(0.11f, 0.05f, 0.46f), noir);   // œil D
+                TriangleVisage(new Vector3(-0.05f, 0.02f, 0.47f), new Vector3(0.05f, 0.02f, 0.47f), new Vector3(0f, -0.06f, 0.47f), noir);    // nez
+                DessinerArcBouche(0.32f, -0.10f, 0.46f, 0.10f, noir);                                                                          // bouche
+                TriangleVisage(new Vector3(-0.07f, -0.13f, 0.47f), new Vector3(-0.02f, -0.13f, 0.47f), new Vector3(-0.045f, -0.04f, 0.47f), noir); // dent
+                TriangleVisage(new Vector3(0.02f, -0.13f, 0.47f), new Vector3(0.07f, -0.13f, 0.47f), new Vector3(0.045f, -0.04f, 0.47f), noir);    // dent
                 break;
 
-            case 4: // CLOWN
-                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.40f), 0.18f, new Color(225, 225, 215, 255));
-                Raylib.DrawSphere(new Vector3(0, 0.09f, 0.565f), 0.06f, new Color(190, 30, 30, 255));
-                Raylib.DrawSphere(new Vector3(-0.07f, 0.17f, 0.53f), 0.035f, new Color(35, 95, 180, 255));
-                Raylib.DrawSphere(new Vector3(0.07f, 0.17f, 0.53f), 0.035f, new Color(35, 95, 180, 255));
-                Raylib.DrawCube(new Vector3(-0.07f, 0.02f, 0.535f), 0.04f, 0.03f, 0.03f, new Color(190, 30, 30, 255));
-                Raylib.DrawCube(new Vector3(0, -0.01f, 0.53f), 0.08f, 0.03f, 0.03f, new Color(190, 30, 30, 255));
-                Raylib.DrawCube(new Vector3(0.07f, 0.02f, 0.535f), 0.04f, 0.03f, 0.03f, new Color(190, 30, 30, 255));
-                break;
-
-            default: // PAS DE TÊTE ÉQUIPÉE : la boule grise classique, sur le dôme
-                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.43f), 0.15f, Color.DarkGray);
+            case 4: // CLOWN — nez rouge, yeux bleus, grand sourire rouge
+                Raylib.DrawSphere(new Vector3(-0.12f, 0.15f, 0.45f), 0.045f, new Color(35, 95, 185, 255));
+                Raylib.DrawSphere(new Vector3(0.12f, 0.15f, 0.45f), 0.045f, new Color(35, 95, 185, 255));
+                Raylib.DrawSphere(new Vector3(0, 0.05f, 0.49f), 0.06f, new Color(200, 35, 35, 255)); // le nez (un nez a le droit de dépasser !)
+                DessinerArcBouche(0.28f, -0.04f, 0.46f, 0.15f, new Color(200, 35, 35, 255));
                 break;
         }
 
         Rlgl.PopMatrix();
+    }
+
+    // Un sourire : une rangée de petits cubes suivant une parabole (creux au centre,
+    // remontant aux coins). Dessiné dans le repère local du dôme.
+    static void DessinerArcBouche(float largeur, float yCentre, float z, float creux, Color couleur)
+    {
+        const int n = 7;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (i / (float)(n - 1)) * 2f - 1f;      // -1 .. +1
+            float x = t * (largeur / 2f);
+            float y = yCentre - (1f - t * t) * creux;       // le centre descend, les coins remontent
+            Raylib.DrawCube(new Vector3(x, y, z), 0.05f, 0.05f, 0.03f, couleur);
+        }
+    }
+
+    // Un triangle plat, dessiné dans les deux sens pour être visible quel que soit le côté.
+    static void TriangleVisage(Vector3 a, Vector3 b, Vector3 c, Color couleur)
+    {
+        Raylib.DrawTriangle3D(a, b, c, couleur);
+        Raylib.DrawTriangle3D(a, c, b, couleur);
     }
 
     // ==========================================

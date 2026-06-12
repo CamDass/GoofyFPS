@@ -43,6 +43,7 @@ partial class Program
         public float ReloadStartTime;   // Heure locale du début du rechargement (pour l'animation)
         public float BobSpeed;          // Vitesse de déplacement lissée (pour le balancement de l'arme)
         public float Lean;              // Penchement wall-run (roll caméra reçu)
+        public bool IsAiming;           // En visée -> arme centrée
     }
 
     // Un trait de tir d'un AUTRE joueur (purement visuel)
@@ -56,6 +57,7 @@ partial class Program
     public static int myPlayerId = 0;                 // Notre numéro unique (0 = l'hôte)
     public static int nextPlayerId = 1;               // Compteur d'IDs (utilisé par le serveur uniquement)
     public static string myLobbyName = "";            // Notre pseudo tel qu'il apparaît dans le lobby
+    public static bool localIsAiming = false;          // Sommes-nous en train de viser ? (rempli par BouclePrincipale)
     public static Dictionary<int, RemotePlayer> remotePlayers = new Dictionary<int, RemotePlayer>();
     public static Dictionary<int, NetPeer> peersParId = new Dictionary<int, NetPeer>(); // Serveur : pour router les paquets
     public static List<RemoteShotVisual> remoteShots = new List<RemoteShotVisual>();
@@ -148,6 +150,7 @@ partial class Program
             rp.ReloadStartTime = (float)Raylib.GetTime();
         rp.IsReloading = packet.IsReloading;
         rp.Lean = packet.Lean;
+        rp.IsAiming = packet.IsAiming;
         if (!rp.HasState)
         {
             // Première nouvelle : on téléporte directement (pas de glissement depuis (0,0,0))
@@ -316,7 +319,8 @@ partial class Program
             SkinFace = skinFace,
             WeaponIndex = weapons.IndexOf(currentWeapon),
             IsReloading = currentWeapon.isReloading,
-            Lean = rollActuel // le penchement wall-run (roll caméra)
+            Lean = rollActuel, // le penchement wall-run (roll caméra)
+            IsAiming = localIsAiming
         };
 
         if (isServer)
@@ -399,15 +403,30 @@ partial class Program
         Vector3 forwardH = new Vector3(MathF.Sin(rp.Yaw), 0f, MathF.Cos(rp.Yaw));
         Vector3 right = new Vector3(MathF.Cos(rp.Yaw), 0f, -MathF.Sin(rp.Yaw));
 
-        // Position de la main : à hauteur d'épaule, côté droit, un peu en avant
-        Vector3 mainPos = rp.Position
-                        + new Vector3(0f, ARME_OFFSET_HAUT, 0f)
-                        + right * ARME_OFFSET_DROITE
-                        + forwardH * ARME_OFFSET_AVANT;
+        Vector3 mainPos;
+        float pitchArme;
 
-        // Balancement vertical selon la vitesse (comme le headbob du viewmodel local)
-        float ampliBob = Math.Clamp(rp.BobSpeed * 0.006f, 0f, 0.06f);
-        mainPos.Y += MathF.Sin((float)Raylib.GetTime() * 10f) * ampliBob;
+        if (rp.IsAiming)
+        {
+            // VISÉE : l'arme est ramenée AU CENTRE, devant le visage, alignée sur le regard.
+            // (C'est la pose "épaulée" que voit l'adversaire.)
+            mainPos = rp.Position
+                    + new Vector3(0f, 0.5f, 0f)   // hauteur des yeux (dôme)
+                    + forwardH * 0.45f;           // pile devant le visage
+            pitchArme = Math.Clamp(rp.Pitch, -0.9f, 0.9f); // pitch complet : on vise droit
+        }
+        else
+        {
+            // HANCHE : à hauteur d'épaule, côté droit, un peu en avant, avec balancement
+            mainPos = rp.Position
+                    + new Vector3(0f, ARME_OFFSET_HAUT, 0f)
+                    + right * ARME_OFFSET_DROITE
+                    + forwardH * ARME_OFFSET_AVANT;
+            float ampliBob = Math.Clamp(rp.BobSpeed * 0.006f, 0f, 0.06f);
+            mainPos.Y += MathF.Sin((float)Raylib.GetTime() * 10f) * ampliBob;
+            // Pitch borné hors visée : l'arme ne balaye pas le torse aux angles extrêmes.
+            pitchArme = Math.Clamp(rp.Pitch, ARME_PITCH_MIN, ARME_PITCH_MAX);
+        }
 
         // Animation de rechargement (l'arme bascule puis se redresse)
         float reloadTilt = 0f;
@@ -416,10 +435,6 @@ partial class Program
             float elapsed = (float)Raylib.GetTime() - rp.ReloadStartTime;
             reloadTilt = AngleRechargement(elapsed, arme.reloadtime);
         }
-
-        // Le pitch de l'arme est borné : elle pivote autour de la main (hors du corps),
-        // mais on l'empêche quand même de balayer le torse aux angles extrêmes.
-        float pitchArme = Math.Clamp(rp.Pitch, ARME_PITCH_MIN, ARME_PITCH_MAX);
 
         // On empile une matrice : translation -> orientation -> dessin du modèle à l'origine
         Rlgl.PushMatrix();

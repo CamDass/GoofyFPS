@@ -37,6 +37,8 @@ public class Packets
         public bool IsReloading { get; set; }
         // Le penchement wall-run (roll caméra), pour incliner le modèle chez les autres
         public float Lean { get; set; }
+        // En visée ? (clic droit) -> l'arme est centrée devant le visage côté adversaire
+        public bool IsAiming { get; set; }
     }
 
     // 2bis. UN MUR CONSTRUIT (Touche F) — diffusé pour que TOUT le monde
