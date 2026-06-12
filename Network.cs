@@ -385,8 +385,8 @@ partial class Program
     // ==========================================
     // --- Constantes d'ajustement visuel (à régler à l'œil si besoin) ---
     const float ARME_ECHELLE = 1.0f;         // les modèles 3D sont en 1:1 (1 unité = 1 mètre)
-    const float ARME_OFFSET_DROITE = 0.45f;  // décalage vers la main droite
-    const float ARME_OFFSET_AVANT = 0.35f;   // décalage vers l'avant
+    const float ARME_OFFSET_DROITE = 0.40f;  // décalage vers la main droite
+    const float ARME_OFFSET_AVANT = 0.40f;   // décalage vers l'avant
     const float ARME_OFFSET_HAUT = 0.22f;    // hauteur (épaules)
     const float ARME_ROT_BASE = 0f;          // orientation de base du modèle (selon l'export Blender)
     // Bornes du pitch de l'arme : on bloque la rotation pour qu'elle ne traverse
@@ -395,8 +395,8 @@ partial class Program
     const float ARME_PITCH_MAX = 0.75f;      // ~+43° (vers le haut)
     // --- Pose de VISÉE (clic droit) ---
     const float ARME_VISEE_HAUT = 0.48f;     // hauteur (yeux)
-    const float ARME_VISEE_COTE = 0.30f;     // décalage latéral en visée (signe à inverser si mauvais côté)
-    const float ARME_VISEE_AVANT = 0.32f;    // distance devant le visage (plus petit = plus proche)
+    const float ARME_VISEE_COTE = 0.50f;     // décalage latéral en visée (signe à inverser si mauvais côté)
+    const float ARME_VISEE_AVANT = 0.30f;    // distance devant le visage (plus petit = plus proche)
 
     public static void DessinerArmeJoueurDistant(RemotePlayer rp)
     {
