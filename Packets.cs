@@ -27,6 +27,10 @@ public class Packets
         public float Pitch { get; set; }
         public float Yaw { get; set; }
         public int Health { get; set; }
+        // Le skin du joueur (pour que les autres voient nos cosmétiques en jeu)
+        public int SkinColor { get; set; }
+        public int SkinHat { get; set; } = -1;
+        public int SkinFace { get; set; } = -1;
     }
 
     // 3. LES ACTIONS PONCTUELLES (Tirer)

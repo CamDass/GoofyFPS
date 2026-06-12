@@ -293,7 +293,8 @@ public partial class Program
         Lobby,              // La salle d'attente
         Playing,             // En jeu
         ServerBrowser,
-        CreateMatch
+        CreateMatch,
+        Customization       // Le menu de personnalisation du personnage (skins)
 
     }
     public static GameState currentState = GameState.MainMenu;
@@ -1125,6 +1126,8 @@ public static void GenererPhysiqueMap(Model modele)
         
 
         UpdateAllVolumes();
+
+        ChargerSkin(); // On recharge le skin sauvegardé (couleur, chapeau, tête)
 
         Raylib.SetTargetFPS(FPS);
         X_carre = Raylib.GetScreenWidth()/2;

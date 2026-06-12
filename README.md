@@ -132,11 +132,21 @@ Le jeu propose un mode multijoueur en réseau local (PvP, sans zombies) :
 1. **Héberger** : Menu → PLAY → MULTIJOUEUR (LAN) → HÉBERGER → entrez votre pseudo et le nom du match → Créer. Le port utilisé est le 7777 (UDP).
 2. **Rejoindre** : Menu → PLAY → MULTIJOUEUR (LAN) → REJOINDRE. Les salons de votre réseau sont détectés automatiquement (broadcast) et listés — cliquez dessus pour rejoindre. Vous pouvez aussi taper l'IP de l'hôte directement (bouton "IP SERVER" dans le lobby de l'hôte pour l'afficher).
 3. **Lobby** : les clients cliquent sur METTRE PRÊT ; l'hôte choisit la map puis clique sur LANCER LA PARTIE.
-4. En jeu : les autres joueurs apparaissent en capsules oranges avec leur pseudo et barre de vie. Tableau des scores dans le menu pause (Tab).
+4. En jeu : les autres joueurs apparaissent avec leur skin (couleur, chapeau, tête), leur pseudo et leur barre de vie. Tableau des scores dans le menu pause (Tab).
 
 Si le pare-feu Windows demande une autorisation au premier lancement, acceptez-la (réseau privé) pour que la découverte LAN fonctionne.
 
 **Modes de test** (debug) : lancer avec la variable d'environnement `GOOFY_AUTOHOST=1` pour héberger automatiquement un salon, ou `GOOFY_AUTOJOIN=1` pour chercher et rejoindre automatiquement le premier salon trouvé.
+
+## Personnalisation du personnage (Skins)
+
+Depuis le menu PLAY → CUSTOM, vous pouvez personnaliser votre personnage (clic-glisser sur le perso pour le faire tourner) :
+
+- **9 couleurs** de corps
+- **5 chapeaux** : haut-de-forme, cône de chantier, couronne royale, canard en plastique, casquette à hélice
+- **5 têtes** (remplacent la boule grise du regard) : smiley, cyclope, robot, citrouille, clown
+
+Le skin est sauvegardé dans `skin.cfg` et synchronisé en multijoueur : les autres joueurs voient vos cosmétiques en jeu. Tout est dessiné en primitives 3D (aucun asset à charger).
 
 ## Structure du Projet
 

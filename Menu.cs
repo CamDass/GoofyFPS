@@ -1165,6 +1165,10 @@ partial class Program
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.NetworkHub;
                 }
+                if (DrawButton(centerX - 150, centerY + 120, 300, 60, "SKIN")) {
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                    Program.currentState = Program.GameState.Customization;
+                }
                 if (DrawButton(50, 50, 150, 60, "RETOUR")) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.MainMenu;
@@ -1173,7 +1177,12 @@ partial class Program
 
             case Program.GameState.ChoiceMap:
                 // --- 4. TA SÉLECTION DE MAP ---
-                ChoiceMap(); 
+                ChoiceMap();
+                break;
+
+            case Program.GameState.Customization:
+                // --- LE VESTIAIRE : personnalisation du personnage ---
+                Program.MenuCustomization();
                 break;
 
             case Program.GameState.NetworkHub:

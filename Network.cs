@@ -30,6 +30,10 @@ partial class Program
         public bool HasState;           // Tant qu'on n'a reçu aucune position, on ne le dessine pas
         public int Kills;
         public int Deaths;
+        // Son skin (reçu via PlayerStatePacket)
+        public int SkinColor;
+        public int SkinHat = -1;
+        public int SkinFace = -1;
     }
 
     // Un trait de tir d'un AUTRE joueur (purement visuel)
@@ -125,6 +129,9 @@ partial class Program
         rp.Yaw = packet.Yaw;
         rp.Pitch = packet.Pitch;
         rp.Health = packet.Health;
+        rp.SkinColor = packet.SkinColor;
+        rp.SkinHat = packet.SkinHat;
+        rp.SkinFace = packet.SkinFace;
         if (!rp.HasState)
         {
             // Première nouvelle : on téléporte directement (pas de glissement depuis (0,0,0))
@@ -138,6 +145,23 @@ partial class Program
             reusableWriter.Reset();
             netProcessor.Write(reusableWriter, packet);
             netManager.SendToAll(reusableWriter, DeliveryMethod.Sequenced, peer);
+        }
+    }
+
+    // Chaque arme a sa "portée sonore" cohérente : un coup de couteau ne s'entend
+    // pas à 20 mètres, alors qu'un sniper résonne dans toute la map.
+    public static float DistanceAudibleArme(string nomArme)
+    {
+        switch (nomArme)
+        {
+            case "Karambit": return 12f;   // le couteau : quasi silencieux
+            case "Pistol":   return 60f;
+            case "Revolver": return 80f;
+            case "Shotgun":  return 90f;
+            case "Sword":    return 90f;   // attention : la "Sword" est en réalité un fusil type SCAR
+            case "Sniper":   return 160f;
+            case "Bazooka":  return 130f;
+            default:         return 80f;
         }
     }
 
@@ -160,7 +184,7 @@ partial class Program
         Weapon armeDuTireur = weapons.FirstOrDefault(w => w.name == packet.WeaponName);
         if (armeDuTireur != null && currentState == GameState.Playing)
         {
-            PlaySound3D(armeDuTireur.soundname, origin, 150f);
+            PlaySound3D(armeDuTireur.soundname, origin, DistanceAudibleArme(packet.WeaponName));
         }
 
         // 3. Relais serveur
@@ -270,7 +294,10 @@ partial class Program
             Z = maPosition.Z,
             Yaw = monYaw,
             Pitch = monPitch,
-            Health = localPlayer.Health
+            Health = localPlayer.Health,
+            SkinColor = skinCouleur,
+            SkinHat = skinHat,
+            SkinFace = skinFace
         };
 
         if (isServer)
@@ -307,20 +334,8 @@ partial class Program
         {
             if (!rp.HasState) continue;
 
-            // La même capsule que le joueur local, mais orange pour les distinguer
-            Vector3 pointHaut = new Vector3(rp.Position.X, rp.Position.Y + 0.5f, rp.Position.Z);
-            Vector3 pointBas = new Vector3(rp.Position.X, rp.Position.Y - 0.5f, rp.Position.Z);
-            Raylib.DrawCapsule(pointHaut, pointBas, 0.5f, 8, 8, Color.Orange);
-            Raylib.DrawCapsuleWires(pointHaut, pointBas, 0.5f, 8, 8, Color.Black);
-
-            // Un petit "nez" pour voir dans quelle direction il regarde
-            Vector3 regard = new Vector3(
-                MathF.Cos(rp.Pitch) * MathF.Sin(rp.Yaw),
-                MathF.Sin(rp.Pitch),
-                MathF.Cos(rp.Pitch) * MathF.Cos(rp.Yaw)
-            );
-            Vector3 teteCentre = pointHaut + new Vector3(0, 0.2f, 0);
-            Raylib.DrawSphere(teteCentre + regard * 0.45f, 0.15f, Color.DarkGray);
+            // Le personnage complet avec son skin : couleur, chapeau et tête !
+            DessinerPersonnageComplet(rp.Position, rp.Yaw, rp.Pitch, rp.SkinColor, rp.SkinHat, rp.SkinFace);
         }
 
         // Les traits de tir des autres joueurs

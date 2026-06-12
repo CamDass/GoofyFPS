@@ -1259,10 +1259,10 @@ static void InitBarrels()
                 }
             }
 
-            //dessiner le model du joueur
+            //dessiner le model du joueur (avec la couleur de son skin !)
             Vector3 PointHaut = new Vector3(posCube.X, posCube.Y + 0.5f, posCube.Z);
             Vector3 PointBas = new Vector3(posCube.X, posCube.Y - 0.5f, posCube.Z);
-            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8,Color.White);
+            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8, Program.couleursSkin[Program.skinCouleur]);
 
             // ==========================================
             // DESSINER LES AUTRES JOUEURS (Multijoueur LAN)
