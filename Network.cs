@@ -395,7 +395,7 @@ partial class Program
     const float ARME_PITCH_MAX = 0.75f;      // ~+43° (vers le haut)
     // --- Pose de VISÉE (clic droit) ---
     const float ARME_VISEE_HAUT = 0.48f;     // hauteur (yeux)
-    const float ARME_VISEE_COTE = -0.16f;     // décalage latéral en visée (signe à inverser si mauvais côté)
+    const float ARME_VISEE_COTE = 0.30f;     // décalage latéral en visée (signe à inverser si mauvais côté)
     const float ARME_VISEE_AVANT = 0.32f;    // distance devant le visage (plus petit = plus proche)
 
     public static void DessinerArmeJoueurDistant(RemotePlayer rp)
