@@ -35,6 +35,22 @@ public class Packets
         // pour que les autres voient le bon modèle 3D et son animation.
         public int WeaponIndex { get; set; }
         public bool IsReloading { get; set; }
+        // Le penchement wall-run (roll caméra), pour incliner le modèle chez les autres
+        public float Lean { get; set; }
+    }
+
+    // 2bis. UN MUR CONSTRUIT (Touche F) — diffusé pour que TOUT le monde
+    // ait le mur en visuel ET en physique (sinon on passe à travers !)
+    public class WallPlacedPacket
+    {
+        public int PlayerId { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+        public float Z { get; set; }
+        public float QX { get; set; }
+        public float QY { get; set; }
+        public float QZ { get; set; }
+        public float QW { get; set; }
     }
 
     // 3. LES ACTIONS PONCTUELLES (Tirer)

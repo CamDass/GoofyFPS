@@ -696,7 +696,8 @@ static void InitBarrels()
         // ==========================================
         // MODE CONSTRUCTION (Touche F)
         // ==========================================
-        couleurMurTransparent = new Color(255, 130, 50, 150);
+        // Alpha bas (70) : on doit voir les joueurs/ennemis À TRAVERS la préview du mur !
+        couleurMurTransparent = new Color(255, 130, 50, 70);
         modeConstruction = false;
         if (KeyBinds.IsBuildWallPressed())
         {
@@ -732,10 +733,11 @@ static void InitBarrels()
                 {
                     Program.PlaySound3D(wallSound, positionPrevueMur, 20f);
                     wallChrono = 0;
-                    StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
-                    StaticHandle handle = simulation.Statics.Add(description);
-                
-                    listeMur.Add(new MurPose(positionPrevueMur, rotationPrevueMur, handle));
+                    PoserMur(positionPrevueMur, rotationPrevueMur);
+
+                    // En ligne : on annonce le mur pour qu'il existe chez TOUT le monde
+                    // (visuel + physique), sinon les autres passent au travers !
+                    if (isOnline) AnnoncerMurPose(positionPrevueMur, rotationPrevueMur);
                 }
                 else
                 {
@@ -1371,6 +1373,8 @@ static void InitBarrels()
 
                 float angleDegresPreview = angleRadians * (180.0f / MathF.PI);
                 Raylib.DrawModelEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, couleurMurTransparent);
+                // Le contour rend la préview lisible malgré la forte transparence
+                Raylib.DrawModelWiresEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, new Color(255, 130, 50, 200));
             }
             
         Raylib.EndMode3D();
@@ -1556,10 +1560,36 @@ static void InitBarrels()
                 // Combiner le recul avec l'inclinaison du rechargement
                 float reloadRotation = currentWeapon.GetReloadRotationAngle();
                 float totalRotation = recoilAngle + reloadRotation;
-                
+
+                // ==========================================
+                // LA LUMIÈRE DYNAMIQUE DU VIEWMODEL
+                // ==========================================
+                // L'arme vit dans sa propre mini-scène (weaponCamera fixe), donc le soleil
+                // "monde" ne bouge jamais par rapport à elle : elle était toujours éclairée pareil.
+                // L'astuce : exprimer la direction du soleil DANS le repère de la caméra du joueur.
+                // Quand on tourne sur soi-même, cette direction change, et l'arme réagit à la lumière !
+                Vector3 dirSoleil = Vector3.Normalize(soleilPosition - camera.Position);
+                Vector3 axeAvant = CamFroward;
+                Vector3 axeHaut = camera.Up;
+                Vector3 axeDroite = Vector3.Normalize(Vector3.Cross(axeHaut, axeAvant));
+                // La weaponCamera regarde vers +Z avec up +Y : son repère est l'identité,
+                // donc les composantes (droite, haut, avant) se réutilisent telles quelles.
+                Vector3 soleilVueArme = new Vector3(
+                    Vector3.Dot(dirSoleil, axeDroite),
+                    Vector3.Dot(dirSoleil, axeHaut),
+                    Vector3.Dot(dirSoleil, axeAvant)
+                ) * 100f; // loin, pour un éclairage quasi directionnel
+
+                Raylib.SetShaderValue(lightShader, lightPosLoc, soleilVueArme, ShaderUniformDataType.Vec3);
+                Raylib.SetShaderValue(lightShader, viewPosLoc, weaponCamera.Position, ShaderUniformDataType.Vec3);
+
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 0 }, ShaderUniformDataType.Int);
                 Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, totalRotation, weaponScale, Color.White);
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
+
+                // On remet la lumière "monde" pour tout ce qui sera dessiné ensuite
+                Raylib.SetShaderValue(lightShader, lightPosLoc, soleilPosition, ShaderUniformDataType.Vec3);
+                Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
 
             Raylib.EndMode3D();
             

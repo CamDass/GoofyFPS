@@ -4,6 +4,9 @@ using System.Linq;
 using Raylib_cs;
 using System.Numerics;
 
+// Physique (pour poser les murs reçus du réseau)
+using BepuPhysics;
+
 // Réseau
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -39,6 +42,7 @@ partial class Program
         public bool IsReloading;
         public float ReloadStartTime;   // Heure locale du début du rechargement (pour l'animation)
         public float BobSpeed;          // Vitesse de déplacement lissée (pour le balancement de l'arme)
+        public float Lean;              // Penchement wall-run (roll caméra reçu)
     }
 
     // Un trait de tir d'un AUTRE joueur (purement visuel)
@@ -70,6 +74,7 @@ partial class Program
         netProcessor.SubscribeReusable<Packets.PlayerHitPacket, NetPeer>(OnPlayerHitReceived);
         netProcessor.SubscribeReusable<Packets.PlayerDiedPacket, NetPeer>(OnPlayerDiedReceived);
         netProcessor.SubscribeReusable<Packets.PlayerLeftPacket, NetPeer>(OnPlayerLeftReceived);
+        netProcessor.SubscribeReusable<Packets.WallPlacedPacket, NetPeer>(OnWallPlacedReceived);
     }
 
     // Remise à zéro de la session réseau (au moment d'allumer le moteur)
@@ -142,6 +147,7 @@ partial class Program
         if (packet.IsReloading && !rp.IsReloading)
             rp.ReloadStartTime = (float)Raylib.GetTime();
         rp.IsReloading = packet.IsReloading;
+        rp.Lean = packet.Lean;
         if (!rp.HasState)
         {
             // Première nouvelle : on téléporte directement (pas de glissement depuis (0,0,0))
@@ -309,7 +315,8 @@ partial class Program
             SkinHat = skinHat,
             SkinFace = skinFace,
             WeaponIndex = weapons.IndexOf(currentWeapon),
-            IsReloading = currentWeapon.isReloading
+            IsReloading = currentWeapon.isReloading,
+            Lean = rollActuel // le penchement wall-run (roll caméra)
         };
 
         if (isServer)
@@ -353,7 +360,8 @@ partial class Program
             if (!rp.HasState) continue;
 
             // Le personnage complet avec son skin : couleur, chapeau et tête !
-            DessinerPersonnageComplet(rp.Position, rp.Yaw, rp.Pitch, rp.SkinColor, rp.SkinHat, rp.SkinFace);
+            // (+ le penchement wall-run, purement visuel)
+            DessinerPersonnageComplet(rp.Position, rp.Yaw, rp.Pitch, rp.SkinColor, rp.SkinHat, rp.SkinFace, rp.Lean);
 
             // Son arme tenue (le bon modèle 3D, orienté + animé)
             DessinerArmeJoueurDistant(rp);
@@ -372,11 +380,15 @@ partial class Program
     // avec balancement (vitesse) et animation de rechargement.
     // ==========================================
     // --- Constantes d'ajustement visuel (à régler à l'œil si besoin) ---
-    const float ARME_ECHELLE = 0.12f;      // taille du modèle d'arme dans le monde
-    const float ARME_OFFSET_DROITE = 0.32f; // décalage vers la main droite
-    const float ARME_OFFSET_AVANT = 0.20f;  // décalage vers l'avant
-    const float ARME_OFFSET_HAUT = 0.30f;    // hauteur (épaules)
-    const float ARME_ROT_BASE = 180f;        // orientation de base du modèle (selon l'export Blender)
+    const float ARME_ECHELLE = 1.0f;         // les modèles 3D sont en 1:1 (1 unité = 1 mètre)
+    const float ARME_OFFSET_DROITE = 0.45f;  // décalage vers la main droite
+    const float ARME_OFFSET_AVANT = 0.35f;   // décalage vers l'avant
+    const float ARME_OFFSET_HAUT = 0.22f;    // hauteur (épaules)
+    const float ARME_ROT_BASE = 0f;          // orientation de base du modèle (selon l'export Blender)
+    // Bornes du pitch de l'arme : on bloque la rotation pour qu'elle ne traverse
+    // jamais le corps quand le joueur regarde le sol ou le ciel.
+    const float ARME_PITCH_MIN = -0.55f;     // ~-31° (vers le bas)
+    const float ARME_PITCH_MAX = 0.75f;      // ~+43° (vers le haut)
 
     public static void DessinerArmeJoueurDistant(RemotePlayer rp)
     {
@@ -405,14 +417,60 @@ partial class Program
             reloadTilt = AngleRechargement(elapsed, arme.reloadtime);
         }
 
+        // Le pitch de l'arme est borné : elle pivote autour de la main (hors du corps),
+        // mais on l'empêche quand même de balayer le torse aux angles extrêmes.
+        float pitchArme = Math.Clamp(rp.Pitch, ARME_PITCH_MIN, ARME_PITCH_MAX);
+
         // On empile une matrice : translation -> orientation -> dessin du modèle à l'origine
         Rlgl.PushMatrix();
         Rlgl.Translatef(mainPos.X, mainPos.Y, mainPos.Z);
         Rlgl.Rotatef(rp.Yaw * RadVersDeg + ARME_ROT_BASE, 0f, 1f, 0f); // orientation horizontale
-        Rlgl.Rotatef(-rp.Pitch * RadVersDeg, 1f, 0f, 0f);              // visée haut/bas
+        Rlgl.Rotatef(-pitchArme * RadVersDeg, 1f, 0f, 0f);             // visée haut/bas (bornée)
         Rlgl.Rotatef(reloadTilt, 1f, 0f, 0f);                          // inclinaison de rechargement
         Raylib.DrawModel(arme.modelname, Vector3.Zero, ARME_ECHELLE, Color.White);
         Rlgl.PopMatrix();
+    }
+
+    // ==========================================
+    // LES MURS CONSTRUITS (Touche F) EN MULTIJOUEUR
+    // Un mur posé doit exister chez TOUT le monde : en visuel ET en physique,
+    // sinon les autres passent au travers sans même le voir !
+    // ==========================================
+    public static void PoserMur(Vector3 position, Quaternion rotation)
+    {
+        StaticDescription description = new StaticDescription(position, rotation, formeMurIndex);
+        StaticHandle handle = simulation.Statics.Add(description);
+        listeMur.Add(new MurPose(position, rotation, handle));
+    }
+
+    public static void AnnoncerMurPose(Vector3 position, Quaternion rotation)
+    {
+        Packets.WallPlacedPacket paquet = new Packets.WallPlacedPacket
+        {
+            PlayerId = myPlayerId,
+            X = position.X, Y = position.Y, Z = position.Z,
+            QX = rotation.X, QY = rotation.Y, QZ = rotation.Z, QW = rotation.W
+        };
+        if (isServer) DiffuserATous(paquet, DeliveryMethod.ReliableOrdered);
+        else EnvoyerAuServeur(paquet, DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void OnWallPlacedReceived(Packets.WallPlacedPacket packet, NetPeer peer)
+    {
+        if (packet.PlayerId == myPlayerId) return; // notre propre écho
+
+        Vector3 pos = new Vector3(packet.X, packet.Y, packet.Z);
+        Quaternion rot = new Quaternion(packet.QX, packet.QY, packet.QZ, packet.QW);
+        PoserMur(pos, rot);
+        PlaySound3D(wallSound, pos, 20f);
+
+        // Le serveur relaie le mur aux autres clients
+        if (isServer)
+        {
+            reusableWriter.Reset();
+            netProcessor.Write(reusableWriter, packet);
+            netManager.SendToAll(reusableWriter, DeliveryMethod.ReliableOrdered, peer);
+        }
     }
 
     // L'angle d'inclinaison de l'arme pendant le rechargement (copie de Weapon.GetReloadRotationAngle,
