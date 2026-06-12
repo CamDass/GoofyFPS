@@ -34,6 +34,11 @@ partial class Program
         public int SkinColor;
         public int SkinHat = -1;
         public int SkinFace = -1;
+        // Son arme tenue + animations
+        public int WeaponIndex;
+        public bool IsReloading;
+        public float ReloadStartTime;   // Heure locale du début du rechargement (pour l'animation)
+        public float BobSpeed;          // Vitesse de déplacement lissée (pour le balancement de l'arme)
     }
 
     // Un trait de tir d'un AUTRE joueur (purement visuel)
@@ -132,6 +137,11 @@ partial class Program
         rp.SkinColor = packet.SkinColor;
         rp.SkinHat = packet.SkinHat;
         rp.SkinFace = packet.SkinFace;
+        rp.WeaponIndex = packet.WeaponIndex;
+        // Détection du DÉBUT d'un rechargement (front montant) -> on lance l'animation localement
+        if (packet.IsReloading && !rp.IsReloading)
+            rp.ReloadStartTime = (float)Raylib.GetTime();
+        rp.IsReloading = packet.IsReloading;
         if (!rp.HasState)
         {
             // Première nouvelle : on téléporte directement (pas de glissement depuis (0,0,0))
@@ -297,7 +307,9 @@ partial class Program
             Health = localPlayer.Health,
             SkinColor = skinCouleur,
             SkinHat = skinHat,
-            SkinFace = skinFace
+            SkinFace = skinFace,
+            WeaponIndex = weapons.IndexOf(currentWeapon),
+            IsReloading = currentWeapon.isReloading
         };
 
         if (isServer)
@@ -314,7 +326,13 @@ partial class Program
         {
             if (!rp.HasState) continue;
             float lerp = Math.Clamp(15f * deltaTime, 0f, 1f);
+            Vector3 avant = rp.Position;
             rp.Position += (rp.TargetPosition - rp.Position) * lerp;
+
+            // On estime sa vitesse horizontale (pour le balancement de son arme)
+            float deplaceHoriz = new Vector2(rp.Position.X - avant.X, rp.Position.Z - avant.Z).Length();
+            float vitesseInst = deltaTime > 0f ? deplaceHoriz / deltaTime : 0f;
+            rp.BobSpeed += (vitesseInst - rp.BobSpeed) * 0.15f; // lissage
         }
 
         // 3. FAIRE VIEILLIR les traits de tir distants
@@ -336,6 +354,9 @@ partial class Program
 
             // Le personnage complet avec son skin : couleur, chapeau et tête !
             DessinerPersonnageComplet(rp.Position, rp.Yaw, rp.Pitch, rp.SkinColor, rp.SkinHat, rp.SkinFace);
+
+            // Son arme tenue (le bon modèle 3D, orienté + animé)
+            DessinerArmeJoueurDistant(rp);
         }
 
         // Les traits de tir des autres joueurs
@@ -344,6 +365,68 @@ partial class Program
             int alpha = (int)(Math.Clamp(shot.Timer, 0f, 1f) * 255);
             Raylib.DrawLine3D(shot.Start, shot.End, new Color(255, 200, 80, alpha));
         }
+    }
+
+    // ==========================================
+    // L'ARME D'UN JOUEUR DISTANT : bon modèle 3D, orienté selon son regard,
+    // avec balancement (vitesse) et animation de rechargement.
+    // ==========================================
+    // --- Constantes d'ajustement visuel (à régler à l'œil si besoin) ---
+    const float ARME_ECHELLE = 0.12f;      // taille du modèle d'arme dans le monde
+    const float ARME_OFFSET_DROITE = 0.32f; // décalage vers la main droite
+    const float ARME_OFFSET_AVANT = 0.20f;  // décalage vers l'avant
+    const float ARME_OFFSET_HAUT = 0.30f;    // hauteur (épaules)
+    const float ARME_ROT_BASE = 180f;        // orientation de base du modèle (selon l'export Blender)
+
+    public static void DessinerArmeJoueurDistant(RemotePlayer rp)
+    {
+        if (rp.WeaponIndex < 0 || rp.WeaponIndex >= weapons.Count) return;
+        Weapon arme = weapons[rp.WeaponIndex];
+
+        // Repère horizontal du joueur (même convention que CamFroward : facing = (sin yaw, *, cos yaw))
+        Vector3 forwardH = new Vector3(MathF.Sin(rp.Yaw), 0f, MathF.Cos(rp.Yaw));
+        Vector3 right = new Vector3(MathF.Cos(rp.Yaw), 0f, -MathF.Sin(rp.Yaw));
+
+        // Position de la main : à hauteur d'épaule, côté droit, un peu en avant
+        Vector3 mainPos = rp.Position
+                        + new Vector3(0f, ARME_OFFSET_HAUT, 0f)
+                        + right * ARME_OFFSET_DROITE
+                        + forwardH * ARME_OFFSET_AVANT;
+
+        // Balancement vertical selon la vitesse (comme le headbob du viewmodel local)
+        float ampliBob = Math.Clamp(rp.BobSpeed * 0.006f, 0f, 0.06f);
+        mainPos.Y += MathF.Sin((float)Raylib.GetTime() * 10f) * ampliBob;
+
+        // Animation de rechargement (l'arme bascule puis se redresse)
+        float reloadTilt = 0f;
+        if (rp.IsReloading)
+        {
+            float elapsed = (float)Raylib.GetTime() - rp.ReloadStartTime;
+            reloadTilt = AngleRechargement(elapsed, arme.reloadtime);
+        }
+
+        // On empile une matrice : translation -> orientation -> dessin du modèle à l'origine
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(mainPos.X, mainPos.Y, mainPos.Z);
+        Rlgl.Rotatef(rp.Yaw * RadVersDeg + ARME_ROT_BASE, 0f, 1f, 0f); // orientation horizontale
+        Rlgl.Rotatef(-rp.Pitch * RadVersDeg, 1f, 0f, 0f);              // visée haut/bas
+        Rlgl.Rotatef(reloadTilt, 1f, 0f, 0f);                          // inclinaison de rechargement
+        Raylib.DrawModel(arme.modelname, Vector3.Zero, ARME_ECHELLE, Color.White);
+        Rlgl.PopMatrix();
+    }
+
+    // L'angle d'inclinaison de l'arme pendant le rechargement (copie de Weapon.GetReloadRotationAngle,
+    // mais piloté par le temps réseau local pour rester synchrone visuellement).
+    static float AngleRechargement(float elapsed, float reloadtime)
+    {
+        if (elapsed < 0f || elapsed >= reloadtime) return 0f;
+        float thirdTime = reloadtime / 5f;
+        float twoThirdTime = 3f * reloadtime / 5f;
+        if (elapsed <= thirdTime) return -45f * (elapsed / thirdTime);
+        if (elapsed <= twoThirdTime) return -45f;
+        float p = (elapsed - twoThirdTime) / thirdTime;
+        float a = -45f + 45f * p;
+        return a >= 0f ? 0f : a;
     }
 
     // ==========================================

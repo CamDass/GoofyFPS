@@ -31,6 +31,10 @@ public class Packets
         public int SkinColor { get; set; }
         public int SkinHat { get; set; } = -1;
         public int SkinFace { get; set; } = -1;
+        // L'arme tenue (index dans la liste weapons) + état de rechargement,
+        // pour que les autres voient le bon modèle 3D et son animation.
+        public int WeaponIndex { get; set; }
+        public bool IsReloading { get; set; }
     }
 
     // 3. LES ACTIONS PONCTUELLES (Tirer)
