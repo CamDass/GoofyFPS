@@ -215,10 +215,12 @@ partial class Program
             ObtenirJoueurDistant(packet.KillerId).Kills++;
         }
 
-        // Le serveur diffuse l'info à tous les autres
+        // Le serveur diffuse l'info à TOUT le monde, y compris la victime.
+        // (Important : sans ça, la victime ne verrait jamais le kill de son tueur
+        //  monter sur le tableau des scores, car elle n'applique pas la logique en local.)
         if (isServer)
         {
-            DiffuserATous(packet, DeliveryMethod.ReliableOrdered, peer);
+            DiffuserATous(packet, DeliveryMethod.ReliableOrdered);
         }
     }
 

@@ -891,7 +891,7 @@ static void InitBarrels()
             float SpeedCoef = IsSprinting ? 1.7f : 1f;
             float vMax = 8f * SpeedCoef; 
             float fAcceleration = 0.2f; 
-            float rollActuel = 0f;
+            float rollCible = 0f;
 
             if (IsWallRunning)
             {
@@ -910,10 +910,15 @@ static void InitBarrels()
 
                 fAcceleration = 0.1f;
                 if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
-                if (KeyBinds.IsMoveLeftPressed()) rollActuel = 0.25f;
-                else if (KeyBinds.IsMoveRightPressed()) rollActuel = -0.25f;
-            } 
-            else { rollActuel = 0f; fAcceleration = 0.2f; }
+                // La caméra se penche du côté OPPOSÉ au mur sur lequel on court.
+                // (Program.rollActuel positif = penche à droite, négatif = penche à gauche)
+                if (capteurMurDroit.toucheMur) rollCible = -0.25f;       // mur à droite -> on se penche à gauche
+                else if (capteurMurGauche.toucheMur) rollCible = 0.25f;  // mur à gauche -> on se penche à droite
+            }
+            else { rollCible = 0f; fAcceleration = 0.2f; }
+
+            // Inclinaison douce de la caméra vers la cible (lue plus bas par camera.Up, ligne ~1140)
+            Program.rollActuel += (rollCible - Program.rollActuel) * MathF.Min(1f, deltaTime * 10f);
 
             // Accroupir & Glissade
 
