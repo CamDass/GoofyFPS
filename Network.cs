@@ -393,6 +393,10 @@ partial class Program
     // jamais le corps quand le joueur regarde le sol ou le ciel.
     const float ARME_PITCH_MIN = -0.55f;     // ~-31° (vers le bas)
     const float ARME_PITCH_MAX = 0.75f;      // ~+43° (vers le haut)
+    // --- Pose de VISÉE (clic droit) ---
+    const float ARME_VISEE_HAUT = 0.48f;     // hauteur (yeux)
+    const float ARME_VISEE_COTE = 0.16f;     // décalage latéral en visée (signe à inverser si mauvais côté)
+    const float ARME_VISEE_AVANT = 0.32f;    // distance devant le visage (plus petit = plus proche)
 
     public static void DessinerArmeJoueurDistant(RemotePlayer rp)
     {
@@ -408,11 +412,13 @@ partial class Program
 
         if (rp.IsAiming)
         {
-            // VISÉE : l'arme est ramenée AU CENTRE, devant le visage, alignée sur le regard.
-            // (C'est la pose "épaulée" que voit l'adversaire.)
+            // VISÉE : l'arme remonte devant le visage (pose "épaulée" que voit l'adversaire).
+            // ARME_VISEE_COTE recadre le côté (le modèle a son origine sur la crosse) ;
+            // ARME_VISEE_AVANT la rapproche du visage. Inverser le signe de COTE si du mauvais côté.
             mainPos = rp.Position
-                    + new Vector3(0f, 0.5f, 0f)   // hauteur des yeux (dôme)
-                    + forwardH * 0.45f;           // pile devant le visage
+                    + new Vector3(0f, ARME_VISEE_HAUT, 0f)
+                    + right * ARME_VISEE_COTE
+                    + forwardH * ARME_VISEE_AVANT;
             pitchArme = Math.Clamp(rp.Pitch, -0.9f, 0.9f); // pitch complet : on vise droit
         }
         else
