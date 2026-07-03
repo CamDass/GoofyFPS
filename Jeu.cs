@@ -101,6 +101,19 @@ partial class Program
         new Vector3(90f,1.02f,-32f),                                                            // bas de rampe
         new Vector3(-6f,23f,-78f),                                                              // plateforme nord
         new Vector3(45f,1.02f,-40f), new Vector3(10f,1.02f,20f), new Vector3(88f,21.7f,-100f)
+        ],
+
+
+        // Map 3 : Blocs (barils au sol + quelques-uns sur les plateformes)
+        [
+        new Vector3(-31.6f, 1.02f,  -0.6f), new Vector3(62.4f, 1.02f, -34.6f),
+        new Vector3( 34.4f, 1.02f,  33.4f), new Vector3( 8.4f, 1.02f, -34.6f),
+        new Vector3( -7.6f, 1.02f,  33.4f), new Vector3(62.4f, 1.02f,   5.4f),
+        new Vector3( 12.4f, 1.02f,   5.4f), new Vector3(-27.6f,1.02f, -34.6f),
+        new Vector3( 34.4f, 1.02f, -16.6f), new Vector3(62.4f, 1.02f,  33.4f),
+        new Vector3( -3.5f, 6.56f,  -6.7f), new Vector3(46.0f, 6.56f,  -5.9f),  // hautes plateformes
+        new Vector3( 12.4f, 6.09f, -15.9f), new Vector3(27.1f, 6.09f,   3.3f),
+        new Vector3( 16.3f, 5.58f, -26.5f)
         ]
     };
 
@@ -141,6 +154,15 @@ partial class Program
         new Vector3( 96f,0.12f,-145f), new Vector3(-44f,0.12f,-145f),
         new Vector3( 28f,0.12f,-146f), new Vector3(-44f,0.12f, -30f),
         new Vector3( 96f,0.12f, -60f), new Vector3(28f,0.12f,  83f)
+        ],
+
+
+        // Map 3 : Blocs
+        [
+        new Vector3( 32.4f, 1f,  15.4f), new Vector3(-33.6f, 1f, -34.6f),
+        new Vector3(-33.6f, 1f,  33.4f), new Vector3( 62.4f, 1f, -34.6f),
+        new Vector3( 14.4f, 1f, -30.6f), new Vector3(-11.6f, 1f,  -0.6f),
+        new Vector3(  2.4f, 1f,  33.4f), new Vector3( 62.4f, 1f,  33.4f)
         ]
     };
 

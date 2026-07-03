@@ -66,6 +66,15 @@ public partial class Program
         new Vector3( 90f, 0.12f,-130f), new Vector3(-40f,0.12f,-128f),
         new Vector3( 28f, 0.12f,  -2f), new Vector3(-38f,18.1f, -24f),  // plateforme P2
         new Vector3( 20f, 20.1f, -32f), new Vector3(78f, 6.2f,  47f)   // PE / landing couloir
+        ],
+
+
+        // Map 3 : Blocs (arène symétrique, sol Y=0, X:[-36..67] Z:[-38..38])
+        [
+        new Vector3(-33.6f, 1f, -34.6f), new Vector3(62.4f, 1f,  33.4f),
+        new Vector3( -9.6f, 1f,  33.4f), new Vector3(40.4f, 1f, -34.6f),
+        new Vector3( 28.4f, 1f,   7.4f), new Vector3(-33.6f, 1f,  3.4f),
+        new Vector3(  4.4f, 1f, -22.6f), new Vector3(62.4f, 1f, -4.6f)
         ]
     };
     
@@ -95,7 +104,7 @@ public partial class Program
     }
     
     // Images & HUD
-    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, cibleTexture, ImageMapTest, ImageMapVille, Imageville2;
+    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, cibleTexture, ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs;
     static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, BlurBackground, imageexplosion;
     static float tempsAffichage = 3.0f; 
     static float opaciteImage = 255.0f; 
@@ -742,7 +751,7 @@ public partial class Program
     }
 
     // Les chemins de tes maps
-    string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb" };
+    string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb", "blockmap.glb" };
     mapModel = Raylib.LoadModel(ModelMapPath[mapIndex]);
 
     // CORRECTION DU "CRASH 2" : avant, la map réseau n'avait AUCUNE collision physique
@@ -913,6 +922,7 @@ public static void GenererPhysiqueMap(Model modele)
         ImageMapTest = Raylib.LoadTexture("src\\testMap.png");
         ImageMapVille = Raylib.LoadTexture("src\\ville.png");
         Imageville2 = Raylib.LoadTexture("src\\ville2.png");
+        ImageMapBlocs = Raylib.LoadTexture("src\\blockmap.png");
 
 
         ennemiModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");

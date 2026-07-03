@@ -361,18 +361,18 @@ partial class Program
         // ========================================================
         // REMARQUE : Remplace "textureMap1", etc. par tes vraies variables de textures préchargées
         // Pour l'instant, je mets ton "Logo" comme placeholder pour que ça compile sans erreur.
-        Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2 }; 
-        string[] nomsMap = { "Tutoriel", "La Ville", "Chantier" };
-        string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
-        string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb"};
-        //attention si on ajoute une map ne pas oublier de mettre 
+        Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs };
+        string[] nomsMap = { "Tutoriel", "La Ville", "Chantier", "Blocs" };
+        string[] destinationsMap = { "boucle", "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
+        string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb","blockmap.glb"};
+        //attention si on ajoute une map ne pas oublier de mettre
         //les spawnpoint a jour dans jeu.cs
 
         // Paramètres de taille et d'espacement
         int largeurMap = 350;
         int hauteurMap = 220;
         int espacement = 80;
-        int nbMaps = 3;
+        int nbMaps = 4;
 
         // Calcul mathématique pour centrer le tout parfaitement
         int largeurTotale = (largeurMap * nbMaps) + (espacement * (nbMaps - 1));
@@ -1345,14 +1345,14 @@ partial class Program
                 Raylib.DrawRectangleLinesEx(zoneMap, 3, Color.Black);
                 Raylib.DrawText("CHOIX MAP", (int)zoneMap.X + (int)zoneMap.Width/2 - 60, (int)zoneMap.Y + 20, 24, Color.White);
 
-                // Rendu des vignettes de tes 3 maps préchargées
-                Texture2D[] vignettes = { ImageMapTest, ImageMapVille, Imageville2 }; // [cite: 572]
-                int vignetteW = 220;
-                int vignetteH = 140;
+                // Rendu des vignettes de tes maps préchargées
+                Texture2D[] vignettes = { ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs };
+                int vignetteW = 160;
+                int vignetteH = 110;
                 int startVignetteX = (int)zoneMap.X + 40;
                 int startVignetteY = (int)zoneMap.Y + 80;
 
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < vignettes.Length; i++)
                 {
                     Rectangle boxVignette = new Rectangle(startVignetteX + (i * (vignetteW + 30)), startVignetteY, vignetteW, vignetteH);
                     
