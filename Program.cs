@@ -61,7 +61,12 @@ public partial class Program
         
         
         // Map 2 : Sandbox
-        [new Vector3(0, 5, 0)]
+        [
+        new Vector3(-30f, 0.12f,  70f), new Vector3(90f, 0.12f,  70f),
+        new Vector3( 90f, 0.12f,-130f), new Vector3(-40f,0.12f,-128f),
+        new Vector3( 28f, 0.12f,  -2f), new Vector3(-38f,18.1f, -24f),  // plateforme P2
+        new Vector3( 20f, 20.1f, -32f), new Vector3(78f, 6.2f,  47f)   // PE / landing couloir
+        ]
     };
     
     // 2. La liste active (qui sera remplie par le jeu)

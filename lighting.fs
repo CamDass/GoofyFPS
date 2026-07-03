@@ -28,14 +28,33 @@ void main()
     // Si le pixel est transparent, on l'ignore (utile pour les grillages ou feuilles)
     if (baseColor.a == 0.0) discard;
 
-    // 2. LUMIÈRE
-    vec3 ambient = vec3(0.3, 0.3, 0.3); // J'ai un peu éclairci les ombres pour plus de visibilité
-    vec3 lightDir = normalize(lightPos - fragPosition);
-    float diff = max(dot(fragNormal, lightDir), 0.0);
-    vec3 diffuse = diff * lightColor.rgb;
+    // AMÉLIORATION : on passe les couleurs en espace LINÉAIRE.
+    // Les calculs de lumière (addition/mélange) ne sont corrects qu'en linéaire.
+    // On repasse en gamma tout à la fin -> tes couleurs gardent EXACTEMENT le même rendu,
+    // mais les transitions lumière/ombre deviennent naturelles au lieu de "fades".
+    vec3 baseLin  = pow(baseColor.rgb, vec3(2.2));
+    vec3 lightLin = pow(lightColor.rgb, vec3(2.2));
 
-    // L'objet éclairé (avant le brouillard)
-    vec3 lightingResult = (ambient + diffuse) * baseColor.rgb;
+    // AMÉLIORATION : on renormalise la normale.
+    // Entre deux sommets elle est interpolée et perd sa longueur de 1 -> l'éclairage bave.
+    vec3 N = normalize(fragNormal);
+    vec3 viewDir = normalize(viewPos - fragPosition);
+
+    // 2. LUMIÈRE
+    vec3 ambient = pow(vec3(0.3, 0.3, 0.3), vec3(2.2)); // même valeur qu'avant (juste linéarisée)
+    vec3 lightDir = normalize(lightPos - fragPosition);
+    float diff = max(dot(N, lightDir), 0.0);
+    vec3 diffuse = diff * lightLin;
+
+    // AMÉLIORATION : SPÉCULAIRE (Blinn-Phong) -> reflets et volume sur les surfaces.
+    // Utilise ta couleur de soleil existante, donc aucune nouvelle couleur introduite.
+    vec3 halfDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(N, halfDir), 0.0), 32.0); // 32 = taille du reflet (plus grand = plus net)
+    vec3 specular = spec * lightLin * 0.35;            // 0.35 = intensité du reflet
+    specular *= diff;                                  // pas de reflet sur une face dans l'ombre
+
+    // L'objet éclairé (avant le brouillard), en espace linéaire
+    vec3 lightingResult = (ambient + diffuse) * baseLin + specular;
 
     // ==========================================
     // 3. LE BROUILLARD (FOG)
@@ -54,11 +73,16 @@ void main()
         float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
         
         // Couleur du brouillard (C'est exactement le orange de ton Horizon de l'Étape 4 !)
-        vec3 fogColor = vec3(120.0/255.0, 60.0/255.0, 50.0/255.0);
+        // Linéarisée pour rester dans le même espace que le reste du calcul (même rendu à l'écran).
+        vec3 fogColor = pow(vec3(120.0/255.0, 60.0/255.0, 50.0/255.0), vec3(2.2));
 
         // On utilise "mix" pour mélanger la vraie couleur avec le brouillard selon la distance
         finalRGB = mix(lightingResult, fogColor, fogFactor);
     }
+
+    // AMÉLIORATION : retour en espace gamma (sinon l'image entière paraît trop sombre).
+    // C'est ce qui rapproche le plus le rendu de Blender (qui travaille aussi en linéaire).
+    finalRGB = pow(finalRGB, vec3(1.0/2.2));
 
     // Résultat final !
     finalColor = vec4(finalRGB, baseColor.a);

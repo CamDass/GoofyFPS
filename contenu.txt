@@ -1,8 +1,9 @@
 Structure du dossier pour le volume Windows
-Le numéro de série du volume est 00000078 A6CB:64E7
+Le numéro de série du volume est 000000C4 A6CB:64E7
 C:.
 |   .gitignore
 |   contenu.txt
+|   Cosmetics.cs
 |   EffetClic.cs
 |   ennemi.cs
 |   generer_contenu.py
@@ -15,6 +16,7 @@ C:.
 |   lighting.vs
 |   map.glb
 |   Menu.cs
+|   Network.cs
 |   Packets.cs
 |   Physics.cs
 |   player.cs
@@ -22,6 +24,7 @@ C:.
 |   README.md
 |   sandbox.glb
 |   Settings.cs
+|   skin.cfg
 |   test.glb
 |   Weapon.cs
 |   
@@ -91,6 +94,38 @@ C:.
 |               
 +---bin
 |   \---Debug
+|       +---net10.0
+|       |   |   BepuPhysics.dll
+|       |   |   BepuUtilities.dll
+|       |   |   GoofyFPS.deps.json
+|       |   |   GoofyFPS.dll
+|       |   |   GoofyFPS.exe
+|       |   |   GoofyFPS.pdb
+|       |   |   GoofyFPS.runtimeconfig.json
+|       |   |   LiteNetLib.dll
+|       |   |   Raylib-cs.dll
+|       |   |   
+|       |   \---runtimes
+|       |       +---linux-x64
+|       |       |   \---native
+|       |       |           libraylib.so
+|       |       |           
+|       |       +---osx-arm64
+|       |       |   \---native
+|       |       |           libraylib.dylib
+|       |       |           
+|       |       +---osx-x64
+|       |       |   \---native
+|       |       |           libraylib.dylib
+|       |       |           
+|       |       +---win-x64
+|       |       |   \---native
+|       |       |           raylib.dll
+|       |       |           
+|       |       \---win-x86
+|       |           \---native
+|       |                   raylib.dll
+|       |                   
 |       \---net11.0
 |           |   BepuPhysics.dll
 |           |   BepuUtilities.dll
@@ -131,6 +166,29 @@ C:.
 |   |   project.nuget.cache
 |   |   
 |   +---Debug
+|   |   +---net10.0
+|   |   |   |   .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
+|   |   |   |   apphost.exe
+|   |   |   |   GoofyFPS.AssemblyInfo.cs
+|   |   |   |   GoofyFPS.AssemblyInfoInputs.cache
+|   |   |   |   GoofyFPS.assets.cache
+|   |   |   |   GoofyFPS.csproj.AssemblyReference.cache
+|   |   |   |   GoofyFPS.csproj.CoreCompileInputs.cache
+|   |   |   |   GoofyFPS.csproj.FileListAbsolute.txt
+|   |   |   |   GoofyFPS.csproj.Up2Date
+|   |   |   |   GoofyFPS.dll
+|   |   |   |   GoofyFPS.GeneratedMSBuildEditorConfig.editorconfig
+|   |   |   |   GoofyFPS.genruntimeconfig.cache
+|   |   |   |   GoofyFPS.GlobalUsings.g.cs
+|   |   |   |   GoofyFPS.pdb
+|   |   |   |   GoofyFPS.sourcelink.json
+|   |   |   |   
+|   |   |   +---ref
+|   |   |   |       GoofyFPS.dll
+|   |   |   |       
+|   |   |   \---refint
+|   |   |           GoofyFPS.dll
+|   |   |           
 |   |   \---net11.0
 |   |       |   .NETCoreApp,Version=v11.0.AssemblyAttributes.cs
 |   |       |   apphost.exe
@@ -211,6 +269,417 @@ C:.
             clic3-blanc.png
             clic3-noir.png
             
+
+========
+
+Cosmetics.cs
+
+using System;
+using System.IO;
+using System.Numerics;
+using Raylib_cs;
+
+// ========================================================
+// LE SYSTÈME DE COSMÉTIQUES (Skins)
+// ========================================================
+// - 9 couleurs de corps, 5 chapeaux, 5 têtes (visages)
+// - Tout est dessiné avec des primitives Raylib : aucun modèle 3D à charger !
+// - Le choix du joueur est sauvegardé dans skin.cfg et voyage sur le réseau
+//   via PlayerStatePacket : les autres joueurs voient donc notre skin en jeu.
+//
+// ANATOMIE DU PERSONNAGE :
+// - Le corps est une capsule (rayon 0.5). La TÊTE est le dôme du haut
+//   (la demi-sphère de rayon 0.5 centrée sur le sommet du segment).
+// - Le visage est VERROUILLÉ sur la surface de ce dôme : il glisse dessus
+//   en suivant le regard (yaw + pitch) mais ne peut jamais sortir du corps.
+partial class Program
+{
+    // --- LES 9 COULEURS DU CORPS (palette sobre, pas flashy) ---
+    public static readonly string[] nomsCouleursSkin = { "Orange", "Rouge", "Bleu", "Vert", "Gris clair", "Violet", "Rose", "Marron", "Noir" };
+    public static readonly Color[] couleursSkin =
+    {
+        new Color(185, 95, 15, 255),    // orange foncé
+        new Color(140, 30, 30, 255),    // rouge foncé
+        new Color(35, 60, 140, 255),    // bleu foncé
+        new Color(30, 105, 50, 255),    // vert foncé
+        new Color(185, 185, 185, 255),  // gris clair
+        new Color(90, 45, 130, 255),    // violet foncé
+        new Color(170, 70, 120, 255),   // rose foncé
+        new Color(85, 55, 35, 255),     // marron foncé
+        new Color(35, 35, 35, 255)      // noir
+    };
+
+    // --- LES 5 CHAPEAUX (équipables / déséquipables) ---
+    public static readonly string[] nomsChapeaux = { "Haut-de-forme", "Cone de chantier", "Couronne royale", "Masque de robot", "Casque de samourai" };
+
+    // --- LES 5 TÊTES (remplacent la boule grise du regard) ---
+    public static readonly string[] nomsFaces = { "Smiley", "Cyclope", "Robot", "Citrouille", "Clown" };
+
+    // --- LE SKIN ACTUELLEMENT ÉQUIPÉ ---
+    public static int skinCouleur = 0;  // index dans couleursSkin
+    public static int skinHat = -1;     // -1 = aucun chapeau
+    public static int skinFace = -1;    // -1 = la boule grise classique
+
+    // --- ÉTAT DU MENU DE PERSONNALISATION ---
+    static int ongletCustom = 0;        // 0 = Couleur, 1 = Chapeau, 2 = Tête
+    static float previewYaw = 0.6f;     // Rotation du perso dans l'aperçu (clic-glisser)
+
+    const float RadVersDeg = 180f / MathF.PI;
+
+    // ==========================================
+    // SAUVEGARDE / CHARGEMENT DU SKIN (skin.cfg)
+    // ==========================================
+    public static void ChargerSkin()
+    {
+        try
+        {
+            if (!File.Exists("skin.cfg")) return;
+            string[] parts = File.ReadAllText("skin.cfg").Split(';');
+            skinCouleur = Math.Clamp(int.Parse(parts[0]), 0, couleursSkin.Length - 1);
+            skinHat = Math.Clamp(int.Parse(parts[1]), -1, nomsChapeaux.Length - 1);
+            skinFace = Math.Clamp(int.Parse(parts[2]), -1, nomsFaces.Length - 1);
+        }
+        catch { /* fichier corrompu : on garde le skin par défaut */ }
+    }
+
+    public static void SauvegarderSkin()
+    {
+        try { File.WriteAllText("skin.cfg", $"{skinCouleur};{skinHat};{skinFace}"); }
+        catch { }
+    }
+
+    // ==========================================
+    // LE DESSIN DU PERSONNAGE COMPLET
+    // (Partagé entre l'aperçu du menu ET les joueurs distants en jeu)
+    // ==========================================
+    // 'lean' = penchement wall-run (le roll caméra du joueur). Purement visuel :
+    // la capsule PHYSIQUE reste parfaitement droite (les capteurs de murs ne sont
+    // donc jamais perturbés), seul le modèle 3D s'incline, plafonné à ±5°.
+    public static void DessinerPersonnageComplet(Vector3 centre, float yaw, float pitch, int couleurIdx, int hatIdx, int faceIdx, float lean = 0f)
+    {
+        if (couleurIdx < 0 || couleurIdx >= couleursSkin.Length) couleurIdx = 0;
+
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(centre.X, centre.Y, centre.Z);
+        Rlgl.Rotatef(yaw * RadVersDeg, 0, 1, 0);
+        // Dans ce repère local : +Z = devant le joueur, +X = sa droite
+
+        // Penchement wall-run : on mappe le roll caméra (max ±0.25 rad) vers ±10° max
+        float leanRad = Math.Clamp(lean * 0.7f, -0.1745f, 0.1745f);
+        if (leanRad != 0f) Rlgl.Rotatef(leanRad * RadVersDeg, 0, 0, 1);
+
+        // Le corps
+        Raylib.DrawCapsule(new Vector3(0, 0.5f, 0), new Vector3(0, -0.5f, 0), 0.5f, 8, 8, couleursSkin[couleurIdx]);
+        Raylib.DrawCapsuleWires(new Vector3(0, 0.5f, 0), new Vector3(0, -0.5f, 0), 0.5f, 8, 8, Color.Black);
+
+        // === SYSTÈME DE CALQUES ===
+        // 1) Le VISAGE d'abord (collé sur le dôme)
+        // 2) Le CHAPEAU/CASQUE par-dessus
+        // Cet ordre garantit que le couvre-chef recouvre toujours le visage
+        // (ex : le masque de robot cache la tête), jamais l'inverse.
+        DessinerFaceSkinLocale(faceIdx, pitch);
+        DessinerChapeauSkinLocal(hatIdx);
+
+        Rlgl.PopMatrix();
+    }
+
+    // ==========================================
+    // LES VISAGES — peints à PLAT sur le dôme de la tête (pas des boules qui dépassent !)
+    // Repère : origine = CENTRE du dôme. +Z = regard horizontal. Les traits
+    // (yeux, bouche...) affleurent la surface avant du dôme (z ~ 0.45) et suivent
+    // le regard. Le corps lui-même sert de "peau" du visage, comme un vrai bonhomme.
+    // ==========================================
+    static void DessinerFaceSkinLocale(int faceIdx, float pitch)
+    {
+        if (faceIdx < 0) return; // aucune tête équipée -> tête lisse
+
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(0, 0.5f, 0); // centre du dôme = la vraie tête
+        float pitchFace = Math.Clamp(pitch, -0.8f, 0.8f);
+        Rlgl.Rotatef(-pitchFace * RadVersDeg, 1, 0, 0); // le visage suit le regard
+
+        Color noir = new Color(22, 22, 22, 255);
+
+        switch (faceIdx)
+        {
+            case 0: // SMILEY — deux yeux + un grand sourire, à plat sur la tête
+                Raylib.DrawSphere(new Vector3(-0.13f, 0.13f, 0.45f), 0.05f, noir);
+                Raylib.DrawSphere(new Vector3(0.13f, 0.13f, 0.45f), 0.05f, noir);
+                DessinerArcBouche(0.26f, -0.01f, 0.46f, 0.13f, noir);
+                break;
+
+            case 1: // CYCLOPE — un gros œil unique, plat
+                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.45f), 0.13f, new Color(235, 235, 230, 255));
+                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.55f), 0.06f, new Color(40, 110, 200, 255));
+                Raylib.DrawSphere(new Vector3(0, 0.10f, 0.59f), 0.028f, noir);
+                break;
+
+            case 2: // ROBOT — plaque frontale PLATE + visière lumineuse + grille de bouche
+                Raylib.DrawCube(new Vector3(0, 0.07f, 0.43f), 0.38f, 0.32f, 0.06f, new Color(125, 130, 140, 255));
+                Raylib.DrawCubeWires(new Vector3(0, 0.07f, 0.43f), 0.38f, 0.32f, 0.06f, new Color(55, 60, 70, 255));
+                Raylib.DrawCube(new Vector3(0, 0.14f, 0.47f), 0.30f, 0.06f, 0.02f, new Color(45, 215, 235, 255)); // visière
+                for (int i = -1; i <= 1; i++)
+                    Raylib.DrawCube(new Vector3(i * 0.07f, -0.05f, 0.47f), 0.03f, 0.08f, 0.02f, new Color(40, 44, 52, 255));
+                Raylib.DrawSphere(new Vector3(-0.16f, 0.18f, 0.45f), 0.022f, new Color(70, 75, 85, 255)); // boulons
+                Raylib.DrawSphere(new Vector3(0.16f, 0.18f, 0.45f), 0.022f, new Color(70, 75, 85, 255));
+                break;
+
+            case 3: // CITROUILLE — jack-o'-lantern gravé (triangles noirs)
+                TriangleVisage(new Vector3(-0.18f, 0.18f, 0.46f), new Vector3(-0.04f, 0.18f, 0.46f), new Vector3(-0.11f, 0.05f, 0.46f), noir); // œil G
+                TriangleVisage(new Vector3(0.04f, 0.18f, 0.46f), new Vector3(0.18f, 0.18f, 0.46f), new Vector3(0.11f, 0.05f, 0.46f), noir);   // œil D
+                TriangleVisage(new Vector3(-0.05f, 0.02f, 0.47f), new Vector3(0.05f, 0.02f, 0.47f), new Vector3(0f, -0.06f, 0.47f), noir);    // nez
+                DessinerArcBouche(0.32f, -0.10f, 0.46f, 0.10f, noir);                                                                          // bouche
+                TriangleVisage(new Vector3(-0.07f, -0.13f, 0.47f), new Vector3(-0.02f, -0.13f, 0.47f), new Vector3(-0.045f, -0.04f, 0.47f), noir); // dent
+                TriangleVisage(new Vector3(0.02f, -0.13f, 0.47f), new Vector3(0.07f, -0.13f, 0.47f), new Vector3(0.045f, -0.04f, 0.47f), noir);    // dent
+                break;
+
+            case 4: // CLOWN — nez rouge, yeux bleus, grand sourire rouge
+                Raylib.DrawSphere(new Vector3(-0.12f, 0.15f, 0.45f), 0.045f, new Color(35, 95, 185, 255));
+                Raylib.DrawSphere(new Vector3(0.12f, 0.15f, 0.45f), 0.045f, new Color(35, 95, 185, 255));
+                Raylib.DrawSphere(new Vector3(0, 0.05f, 0.49f), 0.06f, new Color(200, 35, 35, 255)); // le nez (un nez a le droit de dépasser !)
+                DessinerArcBouche(0.28f, -0.04f, 0.46f, 0.15f, new Color(200, 35, 35, 255));
+                break;
+        }
+
+        Rlgl.PopMatrix();
+    }
+
+    // Un sourire : une rangée de petits cubes suivant une parabole (creux au centre,
+    // remontant aux coins). Dessiné dans le repère local du dôme.
+    static void DessinerArcBouche(float largeur, float yCentre, float z, float creux, Color couleur)
+    {
+        const int n = 7;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (i / (float)(n - 1)) * 2f - 1f;      // -1 .. +1
+            float x = t * (largeur / 2f);
+            float y = yCentre - (1f - t * t) * creux;       // le centre descend, les coins remontent
+            Raylib.DrawCube(new Vector3(x, y, z), 0.05f, 0.05f, 0.03f, couleur);
+        }
+    }
+
+    // Un triangle plat, dessiné dans les deux sens pour être visible quel que soit le côté.
+    static void TriangleVisage(Vector3 a, Vector3 b, Vector3 c, Color couleur)
+    {
+        Raylib.DrawTriangle3D(a, b, c, couleur);
+        Raylib.DrawTriangle3D(a, c, b, couleur);
+    }
+
+    // ==========================================
+    // LES CHAPEAUX — posés sur le crâne (ne suivent PAS le pitch, comme un vrai chapeau)
+    // Repère : origine = centre du dôme (rayon 0.5), +Z = devant le joueur.
+    // Rappel : rayon du dôme à la hauteur h = sqrt(0.25 - h²)
+    //   h=0.20 -> 0.46 | h=0.30 -> 0.40 | h=0.40 -> 0.30 | h=0.45 -> 0.22
+    // ==========================================
+    static void DessinerChapeauSkinLocal(int hatIdx)
+    {
+        if (hatIdx < 0) return;
+
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(0, 0.5f, 0); // le centre du dôme
+
+        switch (hatIdx)
+        {
+            case 0: // HAUT-DE-FORME
+                Color noirChapeau = new Color(25, 25, 25, 255);
+                Raylib.DrawCylinder(new Vector3(0, 0.40f, 0), 0.42f, 0.42f, 0.05f, 18, noirChapeau);
+                Raylib.DrawCylinder(new Vector3(0, 0.45f, 0), 0.26f, 0.26f, 0.45f, 18, noirChapeau);
+                Raylib.DrawCylinder(new Vector3(0, 0.46f, 0), 0.27f, 0.27f, 0.10f, 18, new Color(150, 25, 25, 255));
+                break;
+
+            case 1: // CÔNE DE CHANTIER
+                Color orangeCone = new Color(200, 75, 15, 255);
+                Raylib.DrawCylinder(new Vector3(0, 0.40f, 0), 0.34f, 0.34f, 0.05f, 16, orangeCone);
+                Raylib.DrawCylinder(new Vector3(0, 0.45f, 0), 0.19f, 0.30f, 0.26f, 16, orangeCone);
+                Raylib.DrawCylinder(new Vector3(0, 0.71f, 0), 0.14f, 0.185f, 0.10f, 16, new Color(225, 225, 220, 255));
+                Raylib.DrawCylinder(new Vector3(0, 0.81f, 0), 0.02f, 0.135f, 0.20f, 16, orangeCone);
+                break;
+
+            case 2: // COURONNE ROYALE (haute et ajustée sur le crâne)
+                Color orRoyal = new Color(210, 165, 40, 255);
+                Color orFonce = new Color(170, 130, 30, 255);
+                // L'anneau épouse le dôme vers son sommet (rayon du dôme à h=0.34 : ~0.37)
+                Raylib.DrawCylinder(new Vector3(0, 0.34f, 0), 0.38f, 0.40f, 0.14f, 12, orRoyal);
+                // Les pointes
+                for (int i = 0; i < 6; i++)
+                {
+                    float angle = i * MathF.Tau / 6f;
+                    Raylib.DrawCylinder(new Vector3(MathF.Sin(angle) * 0.36f, 0.48f, MathF.Cos(angle) * 0.36f), 0.0f, 0.05f, 0.13f, 6, orFonce);
+                }
+                // Le rubis, devant
+                Raylib.DrawSphere(new Vector3(0, 0.41f, 0.40f), 0.045f, new Color(160, 25, 35, 255));
+                break;
+
+            case 3: // MASQUE DE ROBOT (plaqué sur l'avant de la tête)
+                Color metal = new Color(145, 150, 160, 255);
+                Color metalFonce = new Color(105, 110, 120, 255);
+                Color glow = new Color(40, 210, 230, 255);
+                // La plaque frontale principale
+                Raylib.DrawCube(new Vector3(0, 0.06f, 0.42f), 0.40f, 0.34f, 0.10f, metal);
+                Raylib.DrawCubeWires(new Vector3(0, 0.06f, 0.42f), 0.40f, 0.34f, 0.10f, new Color(60, 65, 75, 255));
+                // La plaque du front
+                Raylib.DrawCube(new Vector3(0, 0.27f, 0.33f), 0.32f, 0.10f, 0.12f, metalFonce);
+                // Les joues (retours sur les côtés)
+                Raylib.DrawCube(new Vector3(-0.21f, 0.04f, 0.34f), 0.06f, 0.26f, 0.16f, metalFonce);
+                Raylib.DrawCube(new Vector3(0.21f, 0.04f, 0.34f), 0.06f, 0.26f, 0.16f, metalFonce);
+                // La visière lumineuse (les "yeux")
+                Raylib.DrawCube(new Vector3(0, 0.12f, 0.475f), 0.30f, 0.05f, 0.02f, glow);
+                // La grille de bouche
+                Raylib.DrawCube(new Vector3(-0.07f, -0.05f, 0.475f), 0.025f, 0.08f, 0.02f, new Color(45, 48, 55, 255));
+                Raylib.DrawCube(new Vector3(0, -0.05f, 0.475f), 0.025f, 0.08f, 0.02f, new Color(45, 48, 55, 255));
+                Raylib.DrawCube(new Vector3(0.07f, -0.05f, 0.475f), 0.025f, 0.08f, 0.02f, new Color(45, 48, 55, 255));
+                // Les boulons
+                Raylib.DrawSphere(new Vector3(-0.21f, 0.16f, 0.40f), 0.028f, new Color(70, 75, 85, 255));
+                Raylib.DrawSphere(new Vector3(0.21f, 0.16f, 0.40f), 0.028f, new Color(70, 75, 85, 255));
+                // L'antenne
+                Raylib.DrawCylinder(new Vector3(0.13f, 0.40f, 0.10f), 0.013f, 0.013f, 0.16f, 8, metalFonce);
+                Raylib.DrawSphere(new Vector3(0.13f, 0.57f, 0.10f), 0.03f, new Color(190, 40, 40, 255));
+                break;
+
+            case 4: // CASQUE DE SAMOURAÏ (kabuto)
+                Color laque = new Color(95, 25, 28, 255);       // rouge laqué sombre
+                Color laqueFonce = new Color(70, 18, 20, 255);
+                Color orSamourai = new Color(205, 160, 45, 255);
+                // Le bol du casque (recouvre le sommet du crâne)
+                Raylib.DrawSphere(new Vector3(0, 0.20f, 0), 0.48f, laque);
+                // Le rebord
+                Raylib.DrawCylinder(new Vector3(0, 0.28f, 0), 0.50f, 0.52f, 0.05f, 14, laqueFonce);
+                // Le protège-nuque (shikoro) : 3 anneaux évasés, étagés vers l'arrière
+                Raylib.DrawCylinder(new Vector3(0, 0.16f, -0.04f), 0.52f, 0.56f, 0.06f, 14, new Color(85, 22, 25, 255));
+                Raylib.DrawCylinder(new Vector3(0, 0.09f, -0.06f), 0.56f, 0.60f, 0.06f, 14, new Color(75, 20, 22, 255));
+                Raylib.DrawCylinder(new Vector3(0, 0.02f, -0.08f), 0.60f, 0.64f, 0.06f, 14, laqueFonce);
+                // Le cimier doré (maedate) : un V en deux lames, sur le front
+                Rlgl.PushMatrix();
+                Rlgl.Translatef(0, 0.52f, 0.42f);
+                Rlgl.Rotatef(28f, 0, 0, 1);
+                Raylib.DrawCube(new Vector3(0, 0.13f, 0), 0.045f, 0.26f, 0.02f, orSamourai);
+                Rlgl.PopMatrix();
+                Rlgl.PushMatrix();
+                Rlgl.Translatef(0, 0.52f, 0.42f);
+                Rlgl.Rotatef(-28f, 0, 0, 1);
+                Raylib.DrawCube(new Vector3(0, 0.13f, 0), 0.045f, 0.26f, 0.02f, orSamourai);
+                Rlgl.PopMatrix();
+                // L'attache du cimier + l'ornement central
+                Raylib.DrawCube(new Vector3(0, 0.40f, 0.45f), 0.16f, 0.07f, 0.03f, orSamourai);
+                Raylib.DrawSphere(new Vector3(0, 0.50f, 0.44f), 0.04f, orSamourai);
+                // Le pommeau au sommet
+                Raylib.DrawSphere(new Vector3(0, 0.69f, 0), 0.05f, orSamourai);
+                break;
+        }
+
+        Rlgl.PopMatrix();
+    }
+
+    // ==========================================
+    // LE MENU DE PERSONNALISATION (état Customization)
+    // ==========================================
+    public static void MenuCustomization()
+    {
+        // ClearBackground nettoie AUSSI le tampon de profondeur : indispensable
+        // pour que l'aperçu 3D ne se batte pas avec la frame précédente.
+        Raylib.ClearBackground(new Color(240, 240, 240, 255));
+        Raylib.DrawTextureEx(BlurBackground, new Vector2(0, 0), 0f, 1f, Color.White);
+
+        Vector2 souris = Raylib.GetMousePosition();
+
+        // --- ROTATION DU PERSO AU CLIC-GLISSER (sur la moitié gauche de l'écran) ---
+        if (Raylib.IsMouseButtonDown(MouseButton.Left) && souris.X < LargeurFenetre / 2f && souris.Y > 130)
+        {
+            previewYaw += Raylib.GetMouseDelta().X * 0.012f;
+        }
+
+        // --- L'APERÇU 3D DU PERSONNAGE ---
+        // (Le Target est décalé en X pour que le perso apparaisse sur la gauche de l'écran)
+        Camera3D camPreview = new Camera3D
+        {
+            Position = new Vector3(0.9f, 1.15f, 3.4f),
+            Target = new Vector3(0.9f, 0.75f, 0f),
+            Up = new Vector3(0, 1, 0),
+            FovY = 45f,
+            Projection = CameraProjection.Perspective
+        };
+
+        Raylib.BeginMode3D(camPreview);
+        Raylib.DrawCylinder(new Vector3(0, -0.55f, 0), 1.0f, 1.1f, 0.12f, 24, new Color(70, 70, 70, 255)); // le socle
+        DessinerPersonnageComplet(new Vector3(0, 0.6f, 0), previewYaw, 0f, skinCouleur, skinHat, skinFace);
+        Raylib.EndMode3D();
+
+        // --- TITRE & AIDE ---
+        Raylib.DrawText("PERSONNALISATION", LargeurFenetre / 2 - Raylib.MeasureText("PERSONNALISATION", 40) / 2, 60, 40, Color.Black);
+        Raylib.DrawText("Clique et glisse sur le personnage pour le faire tourner", 120, HauteurFenetre - 80, 20, Color.DarkGray);
+
+        // --- LES 3 ONGLETS ---
+        int panelX = LargeurFenetre / 2 + 80;
+        int tabY = 170;
+        string[] onglets = { "COULEUR", "CHAPEAU", "TETE" };
+        for (int i = 0; i < onglets.Length; i++)
+        {
+            int tabX = panelX + i * 170;
+            if (DrawButton(tabX, tabY, 160, 50, onglets[i]))
+            {
+                PlaySoundWithPriority(select, SoundPriority.Low);
+                ongletCustom = i;
+            }
+            if (ongletCustom == i) Raylib.DrawRectangle(tabX, tabY + 52, 160, 6, Color.Red);
+        }
+
+        int itemY = 260;
+
+        if (ongletCustom == 0)
+        {
+            // --- LA GRILLE 3x3 DE COULEURS ---
+            for (int i = 0; i < couleursSkin.Length; i++)
+            {
+                int col = i % 3;
+                int row = i / 3;
+                Rectangle swatch = new Rectangle(panelX + col * 110, itemY + row * 110, 90, 90);
+                Raylib.DrawRectangleRec(swatch, couleursSkin[i]);
+
+                bool hover = Raylib.CheckCollisionPointRec(souris, swatch);
+                bool equipee = (skinCouleur == i);
+                Raylib.DrawRectangleLinesEx(swatch, equipee ? 6 : 2, equipee ? Color.Lime : (hover ? Color.Red : Color.Black));
+
+                if (hover && Raylib.IsMouseButtonReleased(MouseButton.Left))
+                {
+                    PlaySoundWithPriority(select, SoundPriority.Low);
+                    skinCouleur = i;
+                }
+            }
+            Raylib.DrawText("Couleur : " + nomsCouleursSkin[skinCouleur], panelX, itemY + 3 * 110 + 10, 25, Color.Black);
+        }
+        else
+        {
+            // --- LA LISTE DES CHAPEAUX OU DES TÊTES ---
+            string[] noms = (ongletCustom == 1) ? nomsChapeaux : nomsFaces;
+            int indexEquipe = (ongletCustom == 1) ? skinHat : skinFace;
+
+            for (int i = 0; i < noms.Length; i++)
+            {
+                int y = itemY + i * 75;
+                bool estEquipe = (indexEquipe == i);
+
+                if (DrawButton(panelX, y, 420, 60, (estEquipe ? "[X] " : "") + noms[i]))
+                {
+                    PlaySoundWithPriority(select, SoundPriority.Low);
+                    int nouvelIndex = estEquipe ? -1 : i; // re-cliquer sur l'objet équipé = le déséquiper
+                    if (ongletCustom == 1) skinHat = nouvelIndex;
+                    else skinFace = nouvelIndex;
+                }
+                if (estEquipe) Raylib.DrawRectangleLinesEx(new Rectangle(panelX - 4, y - 4, 428, 68), 4, Color.Lime);
+            }
+            Raylib.DrawText("Clique sur l'objet equipe [X] pour l'enlever", panelX, itemY + noms.Length * 75 + 10, 18, Color.DarkGray);
+        }
+
+        // --- RETOUR (avec sauvegarde du skin) ---
+        if (DrawButton(50, 50, 150, 60, "RETOUR"))
+        {
+            PlaySoundWithPriority(unselect, SoundPriority.Low);
+            SauvegarderSkin();
+            currentState = GameState.ModeSelection;
+        }
+    }
+}
+
 
 ========
 
@@ -544,8 +1013,14 @@ partial class Program
 
         // Map 2 : Sandbox
         [
-            new Vector3(10f, 1.5f, 10f), 
-            new Vector3(-10f, 1.5f, -10f)
+        new Vector3(24f,1.02f,-18f), new Vector3(28f,1.02f,-18f), new Vector3(26f,1.02f,-22f), // grappe centrale
+        new Vector3(70f,1.02f,-20f), new Vector3(74f,1.02f,-20f),                               // grappe est
+        new Vector3(60f,1.02f, 47f), new Vector3( 0f,1.02f, 47f),                               // pièges couloir wall-run
+        new Vector3(-38f,1.02f,40f),                                                            // base ascension ouest
+        new Vector3(-6f,21f,-32f), new Vector3(20f,21f,-32f),                                   // sur hub / PE (récompense hauteur)
+        new Vector3(90f,1.02f,-32f),                                                            // bas de rampe
+        new Vector3(-6f,23f,-78f),                                                              // plateforme nord
+        new Vector3(45f,1.02f,-40f), new Vector3(10f,1.02f,20f), new Vector3(88f,21.7f,-100f)
         ]
     };
 
@@ -582,8 +1057,10 @@ partial class Program
 
         // Map 2 : Sandbox
         [
-            new Vector3(20f, 2f, 20f), 
-            new Vector3(-20f, 2f, -20f)
+        new Vector3(-44f,0.12f, 80f), new Vector3(96f,0.12f,  80f),
+        new Vector3( 96f,0.12f,-145f), new Vector3(-44f,0.12f,-145f),
+        new Vector3( 28f,0.12f,-146f), new Vector3(-44f,0.12f, -30f),
+        new Vector3( 96f,0.12f, -60f), new Vector3(28f,0.12f,  83f)
         ]
     };
 
@@ -821,6 +1298,10 @@ static void InitBarrels()
         survivalTime = 0f;
         enemySpawnTimer = 10;
 
+        // EN LIGNE (LAN) : pas de zombies ! C'est du joueur contre joueur.
+        // (Les ennemis ne sont pas synchronisés entre les machines, chacun verrait des zombies différents)
+        if (isOnline) return;
+
         // 3. On fait apparaître 2 ennemis de base
         if (enemySpawnPoints.Count >= 2)
         {
@@ -895,8 +1376,11 @@ static void InitBarrels()
             }
             else
             {
+                // 0. On annonce notre mort aux autres joueurs (pour le tableau des scores)
+                AnnoncerMaMort();
+
                 // 1. On réinitialise la vie du joueur
-                localPlayer.Respawn(); 
+                localPlayer.Respawn();
 
                 // 2. On choisit un index au hasard dans ta liste de spawns existante
                 int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
@@ -1089,7 +1573,8 @@ static void InitBarrels()
         // 1. On anticipe la vérification de l'arme pour savoir si on vise
         bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon); 
         bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee; 
+        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee;
+        Program.localIsAiming = isAiming; // pour que les autres voient notre arme centrée en visée
 
         // 2. LA REDUCTION DE SENSIBILITÉ (Le secret professionnel)
         if (isAiming)
@@ -1140,7 +1625,8 @@ static void InitBarrels()
         // ==========================================
         // MODE CONSTRUCTION (Touche F)
         // ==========================================
-        couleurMurTransparent = new Color(255, 130, 50, 150);
+        // Alpha bas (70) : on doit voir les joueurs/ennemis À TRAVERS la préview du mur !
+        couleurMurTransparent = new Color(255, 130, 50, 70);
         modeConstruction = false;
         if (KeyBinds.IsBuildWallPressed())
         {
@@ -1176,10 +1662,11 @@ static void InitBarrels()
                 {
                     Program.PlaySound3D(wallSound, positionPrevueMur, 20f);
                     wallChrono = 0;
-                    StaticDescription description = new StaticDescription(positionPrevueMur, rotationPrevueMur, formeMurIndex);
-                    StaticHandle handle = simulation.Statics.Add(description);
-                
-                    listeMur.Add(new MurPose(positionPrevueMur, rotationPrevueMur, handle));
+                    PoserMur(positionPrevueMur, rotationPrevueMur);
+
+                    // En ligne : on annonce le mur pour qu'il existe chez TOUT le monde
+                    // (visuel + physique), sinon les autres passent au travers !
+                    if (isOnline) AnnoncerMurPose(positionPrevueMur, rotationPrevueMur);
                 }
                 else
                 {
@@ -1335,7 +1822,7 @@ static void InitBarrels()
             float SpeedCoef = IsSprinting ? 1.7f : 1f;
             float vMax = 8f * SpeedCoef; 
             float fAcceleration = 0.2f; 
-            float rollActuel = 0f;
+            float rollCible = 0f;
 
             if (IsWallRunning)
             {
@@ -1354,10 +1841,15 @@ static void InitBarrels()
 
                 fAcceleration = 0.1f;
                 if (espionCube.Velocity.Linear.Y < 0) espionCube.Velocity.Linear.Y = -1f;
-                if (KeyBinds.IsMoveLeftPressed()) rollActuel = 0.25f;
-                else if (KeyBinds.IsMoveRightPressed()) rollActuel = -0.25f;
-            } 
-            else { rollActuel = 0f; fAcceleration = 0.2f; }
+                // La caméra se penche du côté OPPOSÉ au mur sur lequel on court.
+                // (Program.rollActuel positif = penche à droite, négatif = penche à gauche)
+                if (capteurMurDroit.toucheMur) rollCible = -0.25f;       // mur à droite -> on se penche à gauche
+                else if (capteurMurGauche.toucheMur) rollCible = 0.25f;  // mur à gauche -> on se penche à droite
+            }
+            else { rollCible = 0f; fAcceleration = 0.2f; }
+
+            // Inclinaison douce de la caméra vers la cible (lue plus bas par camera.Up, ligne ~1140)
+            Program.rollActuel += (rollCible - Program.rollActuel) * MathF.Min(1f, deltaTime * 10f);
 
             // Accroupir & Glissade
 
@@ -1583,6 +2075,15 @@ static void InitBarrels()
         camera.Up = Vector3.Transform(new Vector3(0, 1f, 0), Matrix4x4.CreateFromAxisAngle(CamFroward, rollActuel));
         camera.Target = camera.Position + CamFroward;
 
+        // ==========================================
+        // LE BATTEMENT DE COEUR DU MULTIJOUEUR :
+        // On envoie notre position et on lisse celle des autres
+        // ==========================================
+        if (isOnline)
+        {
+            MettreAJourReseauEnJeu(deltaTime, espionCube.Pose.Position, CameraYaw, CameraPitch);
+        }
+
 
 
         if (Raylib.IsKeyPressed(KeyBinds.DebugToggleInfo)){
@@ -1605,7 +2106,8 @@ static void InitBarrels()
             enemySpawnTimer -= deltaTime;
 
             // Si le temps est écoulé, et qu'il n'y a pas déjà trop de zombies (ex: limite de 30)
-            if (enemySpawnTimer <= 0f && enemiesList.Count < 40)
+            // EN LIGNE : pas de zombies, c'est du PvP !
+            if (!isOnline && enemySpawnTimer <= 0f && enemiesList.Count < 40)
             {
                 // On choisit un point de spawn au hasard
                 int randomSpawnIndex = random.Next(enemySpawnPoints.Count);
@@ -1688,10 +2190,15 @@ static void InitBarrels()
                 }
             }
 
-            //dessiner le model du joueur
+            //dessiner le model du joueur (avec la couleur de son skin !)
             Vector3 PointHaut = new Vector3(posCube.X, posCube.Y + 0.5f, posCube.Z);
             Vector3 PointBas = new Vector3(posCube.X, posCube.Y - 0.5f, posCube.Z);
-            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8,Color.White); 
+            Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8, Program.couleursSkin[Program.skinCouleur]);
+
+            // ==========================================
+            // DESSINER LES AUTRES JOUEURS (Multijoueur LAN)
+            // ==========================================
+            if (isOnline) DessinerJoueursDistants();
 
 
 
@@ -1795,9 +2302,16 @@ static void InitBarrels()
 
                 float angleDegresPreview = angleRadians * (180.0f / MathF.PI);
                 Raylib.DrawModelEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, couleurMurTransparent);
+                // Le contour rend la préview lisible malgré la forte transparence
+                Raylib.DrawModelWiresEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, new Color(255, 130, 50, 200));
             }
             
         Raylib.EndMode3D();
+
+        // ==========================================
+        // PSEUDOS + VIE DES AUTRES JOUEURS (Multijoueur LAN)
+        // ==========================================
+        if (isOnline) DessinerNomsJoueursDistants(camera, CamFroward);
 
         // 1. LES BARRES DE VIE
         // 1. LES BARRES DE VIE (Affichage ciblé)
@@ -1975,10 +2489,36 @@ static void InitBarrels()
                 // Combiner le recul avec l'inclinaison du rechargement
                 float reloadRotation = currentWeapon.GetReloadRotationAngle();
                 float totalRotation = recoilAngle + reloadRotation;
-                
+
+                // ==========================================
+                // LA LUMIÈRE DYNAMIQUE DU VIEWMODEL
+                // ==========================================
+                // L'arme vit dans sa propre mini-scène (weaponCamera fixe), donc le soleil
+                // "monde" ne bouge jamais par rapport à elle : elle était toujours éclairée pareil.
+                // L'astuce : exprimer la direction du soleil DANS le repère de la caméra du joueur.
+                // Quand on tourne sur soi-même, cette direction change, et l'arme réagit à la lumière !
+                Vector3 dirSoleil = Vector3.Normalize(soleilPosition - camera.Position);
+                Vector3 axeAvant = CamFroward;
+                Vector3 axeHaut = camera.Up;
+                Vector3 axeDroite = Vector3.Normalize(Vector3.Cross(axeHaut, axeAvant));
+                // La weaponCamera regarde vers +Z avec up +Y : son repère est l'identité,
+                // donc les composantes (droite, haut, avant) se réutilisent telles quelles.
+                Vector3 soleilVueArme = new Vector3(
+                    Vector3.Dot(dirSoleil, axeDroite),
+                    Vector3.Dot(dirSoleil, axeHaut),
+                    Vector3.Dot(dirSoleil, axeAvant)
+                ) * 100f; // loin, pour un éclairage quasi directionnel
+
+                Raylib.SetShaderValue(lightShader, lightPosLoc, soleilVueArme, ShaderUniformDataType.Vec3);
+                Raylib.SetShaderValue(lightShader, viewPosLoc, weaponCamera.Position, ShaderUniformDataType.Vec3);
+
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 0 }, ShaderUniformDataType.Int);
                 Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, totalRotation, weaponScale, Color.White);
                 Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
+
+                // On remet la lumière "monde" pour tout ce qui sera dessiné ensuite
+                Raylib.SetShaderValue(lightShader, lightPosLoc, soleilPosition, ShaderUniformDataType.Vec3);
+                Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
 
             Raylib.EndMode3D();
             
@@ -2032,6 +2572,12 @@ static void InitBarrels()
                 recoilAngle = -15.0f;
                 laserStart = startL;
                 laserEnd = endL;
+
+                // ==========================================
+                // MULTIJOUEUR : on annonce le tir aux autres
+                // et on vérifie si on a touché un joueur !
+                // ==========================================
+                if (isOnline) TraiterTirLocalReseau(currentWeapon, camera.Position, direction, startL, endL);
             }
         }
 
@@ -2752,7 +3298,7 @@ partial class Program
         // REMARQUE : Remplace "textureMap1", etc. par tes vraies variables de textures préchargées
         // Pour l'instant, je mets ton "Logo" comme placeholder pour que ça compile sans erreur.
         Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2 }; 
-        string[] nomsMap = { "Tutoriel", "La Ville", "SandBox" };
+        string[] nomsMap = { "Tutoriel", "La Ville", "Chantier" };
         string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
         string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb"};
         //attention si on ajoute une map ne pas oublier de mettre 
@@ -2803,66 +3349,9 @@ partial class Program
 
                     mapModel = Raylib.LoadModel(ModelMapPath[n]);
 
-
-                    Console.WriteLine($"[DEBUG] Extraction des triangles de la map ({mapModel.MeshCount} parties détectées)...");
-
-                    unsafe 
-                    {
-                        int totalTriangles = 0;
-                        for (int i = 0; i < mapModel.MeshCount; i++) totalTriangles += mapModel.Meshes[i].TriangleCount;
-
-                        pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
-                        int triangleActuel = 0;
-
-                        for (int m = 0; m < mapModel.MeshCount; m++)
-                        {
-                            Raylib_cs.Mesh raylibMesh = mapModel.Meshes[m];
-                            float* vertices = raylibMesh.Vertices;
-                            ushort* indices = raylibMesh.Indices; 
-
-                            for (int t = 0; t < raylibMesh.TriangleCount; t++)
-                            {
-                                int index1, index2, index3;
-
-                                // Si Blender a bien fait son travail (Mesh indexé)
-                                if (indices != null)
-                                {
-                                    index1 = indices[t * 3 + 0];
-                                    index2 = indices[t * 3 + 1];
-                                    index3 = indices[t * 3 + 2];
-                                }
-                                // Si Blender a exporté "en vrac" (Vertices purs)
-                                else
-                                {
-                                    index1 = t * 3 + 0;
-                                    index2 = t * 3 + 1;
-                                    index3 = t * 3 + 2;
-                                }
-
-                                Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
-                                Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
-                                Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
-
-                                bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
-                                triangleActuel++;
-                            }
-                        }
-
-                        // On utilise notre variable globale au lieu de "var"
-                        bepuMapMesh = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
-                        TypedIndex ticketCarte = simulation.Shapes.Add(bepuMapMesh);
-                        
-                        // CORRECTION : On SAUVEGARDE le handle dans notre variable globale
-                        mapStaticHandle = simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
-                        
-                        // On valide qu'une map est en mémoire pour le prochain nettoyage !
-                        mapDejaChargee = true;
-
-                        Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
-                    }
-
-
-
+                    // L'extraction des triangles BEPU vit maintenant dans ExtraireTrianglesMap()
+                    // (partagée avec le mode réseau pour éviter le code dupliqué)
+                    ExtraireTrianglesMap();
 
 
 
@@ -3410,24 +3899,27 @@ partial class Program
             Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
             isPaused = false;
             Raylib.EnableCursor();
-            
+
             // Grand nettoyage avant de retourner au menu principal
             foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
             enemiesList.Clear();
             activeExplosions.Clear();
             activeDamageTexts.Clear();
-            
+
+            // NOUVEAU : On coupe le réseau proprement (sinon l'hôte continue de tourner en fantôme !)
+            Program.CouperReseau();
+
             Program.currentState = Program.GameState.MainMenu;
         }
 
         // ==========================================
-        // 3. LE TABLEAU DES SCORES (À droite)
+        // 3. LE TABLEAU DES SCORES (À droite) - LES VRAIS JOUEURS !
         // ==========================================
         int scoreWidth = 600;
         int scoreHeight = 400;
-        
+
         // Position X à 50% de l'écran (sur la droite)
-        int scoreX = (LargeurFenetre / 2); 
+        int scoreX = (LargeurFenetre / 2);
         int scoreY = posY_resume; // Aligné sur le haut du bouton RESUME pour faire propre
 
         // Fond du tableau (Gris très foncé transparent)
@@ -3435,7 +3927,7 @@ partial class Program
 
         // En-tête (Gris moyen opaque)
         Raylib.DrawRectangle(scoreX, scoreY, scoreWidth, 50, new Color(80, 80, 80, 255));
-        
+
         // --- Titres des colonnes ---
         int textY = scoreY + 15;
         Raylib.DrawText("name", scoreX + 20, textY, 25, Color.White);
@@ -3443,19 +3935,35 @@ partial class Program
         Raylib.DrawText("death", scoreX + 420, textY, 25, Color.White);
         Raylib.DrawText("ping", scoreX + 520, textY, 25, Color.White);
 
-        // --- FAUSSE LIGNE 1 : TOI (Mockup) ---
-        int row1Y = scoreY + 70;
-        Raylib.DrawText("CamPitaine", scoreX + 20, row1Y, 30, Color.White);
-        Raylib.DrawText(Program.killCount.ToString(), scoreX + 300, row1Y, 30, Color.White);
-        Raylib.DrawText(Program.deathCount.ToString(), scoreX + 420, row1Y, 30, Color.White);
-        Raylib.DrawText("10", scoreX + 520, row1Y, 30, Color.Green); // Ping excellent = Vert
+        // --- LIGNE 1 : NOUS ---
+        int rowY = scoreY + 70;
+        string monNom = string.IsNullOrEmpty(Program.myLobbyName) ? "Moi" : Program.myLobbyName;
+        int monPing = (!Program.isServer && Program.netManager != null && Program.netManager.FirstPeer != null) ? Program.netManager.FirstPeer.Ping : 0;
+        Raylib.DrawText(monNom, scoreX + 20, rowY, 30, Color.White);
+        Raylib.DrawText(Program.killCount.ToString(), scoreX + 300, rowY, 30, Color.White);
+        Raylib.DrawText(Program.deathCount.ToString(), scoreX + 420, rowY, 30, Color.White);
+        Raylib.DrawText(monPing.ToString(), scoreX + 520, rowY, 30, monPing < 80 ? Color.Green : Color.Red);
+        rowY += 50;
 
-        // --- FAUSSE LIGNE 2 : L'ENNEMI (Mockup) ---
-        int row2Y = scoreY + 120;
-        Raylib.DrawText("NoobSucker99", scoreX + 20, row2Y, 30, Color.LightGray);
-        Raylib.DrawText("5", scoreX + 300, row2Y, 30, Color.LightGray);
-        Raylib.DrawText("12", scoreX + 420, row2Y, 30, Color.LightGray);
-        Raylib.DrawText("150", scoreX + 520, row2Y, 30, Color.Red); // Ping mauvais = Rouge
+        // --- LES AUTRES JOUEURS (Synchronisés par le réseau) ---
+        foreach (Program.RemotePlayer rp in Program.remotePlayers.Values)
+        {
+            string pingTexte = "-";
+            Color pingCouleur = Color.LightGray;
+            if (Program.isServer && Program.peersParId.TryGetValue(rp.Id, out NetPeer sonPeer))
+            {
+                pingTexte = sonPeer.Ping.ToString();
+                pingCouleur = sonPeer.Ping < 80 ? Color.Green : Color.Red;
+            }
+
+            Raylib.DrawText(rp.Name, scoreX + 20, rowY, 30, Color.LightGray);
+            Raylib.DrawText(rp.Kills.ToString(), scoreX + 300, rowY, 30, Color.LightGray);
+            Raylib.DrawText(rp.Deaths.ToString(), scoreX + 420, rowY, 30, Color.LightGray);
+            Raylib.DrawText(pingTexte, scoreX + 520, rowY, 30, pingCouleur);
+            rowY += 50;
+
+            if (rowY > scoreY + scoreHeight - 40) break; // On déborde pas du tableau
+        }
     }
 
 
@@ -3593,6 +4101,10 @@ partial class Program
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.NetworkHub;
                 }
+                if (DrawButton(centerX - 150, centerY + 120, 300, 60, "SKIN")) {
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                    Program.currentState = Program.GameState.Customization;
+                }
                 if (DrawButton(50, 50, 150, 60, "RETOUR")) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.MainMenu;
@@ -3601,7 +4113,12 @@ partial class Program
 
             case Program.GameState.ChoiceMap:
                 // --- 4. TA SÉLECTION DE MAP ---
-                ChoiceMap(); 
+                ChoiceMap();
+                break;
+
+            case Program.GameState.Customization:
+                // --- LE VESTIAIRE : personnalisation du personnage ---
+                Program.MenuCustomization();
                 break;
 
             case Program.GameState.NetworkHub:
@@ -3695,18 +4212,18 @@ partial class Program
                     Raylib.DrawRectangle((int)ipTextBox.X + 20 + (Program.directIPInput.Length > 0 ? Raylib.MeasureText(Program.directIPInput, 26) : 0) + 5, (int)ipTextBox.Y + 10, 3, 30, Color.White);
 
                 // --- BOUTON VALIDER ---
-                if (DrawButton(centerC - 120, centerCY + 80, 240, 50, "REJOINDRE")) 
+                if (DrawButton(centerC - 120, centerCY + 80, 240, 50, "REJOINDRE"))
                 {
-                    Program.PlaySoundWithPriority(select, Program.SoundPriority.High); 
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
                     try
                     {
                         IPAddress ipCible = IPAddress.Parse(Program.directIPInput);
-                        IPEndPoint endPointCible = new IPEndPoint(ipCible, 7777); 
+                        IPEndPoint endPointCible = new IPEndPoint(ipCible, 7777);
 
                         Console.WriteLine($"[RÉSEAU] Tentative de connexion directe Unicast vers {endPointCible}");
-                        Program.netManager.Connect(endPointCible, "GoofyFPS_SecretKey"); 
+                        Program.netManager.Connect(endPointCible, "GoofyFPS_SecretKey");
                         lock (Program._lobbyLock) { Program.currentLobbyPlayers.Clear(); }
-                        Program.currentState = Program.GameState.Lobby; 
+                        Program.currentState = Program.GameState.Lobby;
                     }
                     catch
                     {
@@ -3715,10 +4232,34 @@ partial class Program
                     }
                 }
 
+                // ==========================================
+                // NOUVEAU : LA LISTE DES SALONS DÉTECTÉS PAR LE RADAR
+                // (Le broadcast tourne déjà dans la boucle principale, ici on AFFICHE enfin le résultat !)
+                // ==========================================
+                int listeY = centerCY + 160;
+                string titreListe = serveursDisponibles.Count > 0 ? "SALONS DÉTECTÉS SUR LE RÉSEAU :" : "Recherche de salons sur le réseau...";
+                Raylib.DrawText(titreListe, centerC - Raylib.MeasureText(titreListe, 22) / 2, listeY, 22, Color.White);
+                listeY += 35;
+
+                var salons = serveursDisponibles.Values.ToList();
+                for (int s = 0; s < salons.Count && s < 4; s++)
+                {
+                    var salon = salons[s];
+                    string ligneSalon = $"{salon.NomDuSalon}  ({salon.JoueursActuels}/{salon.JoueursMax})  -  {salon.EndPoint.Address}";
+                    if (DrawButton(centerC - 300, listeY + s * 60, 600, 50, ligneSalon))
+                    {
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
+                        Console.WriteLine($"[RÉSEAU] Connexion au salon '{salon.NomDuSalon}' sur {salon.EndPoint}");
+                        Program.netManager.Connect(new IPEndPoint(salon.EndPoint.Address, 7777), "GoofyFPS_SecretKey");
+                        lock (Program._lobbyLock) { Program.currentLobbyPlayers.Clear(); }
+                        Program.currentState = Program.GameState.Lobby;
+                    }
+                }
+
                 // --- BOUTON RETOUR ---
-                if (DrawButton(50, 50, 150, 60, "RETOUR")) { 
+                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
-                    Program.netManager.Stop();
+                    Program.CouperReseau();
                     Program.currentState = Program.GameState.NetworkHub;
                 }
                 break;
@@ -3800,35 +4341,37 @@ partial class Program
                         Raylib.DrawCircle((int)zoneJoueurs.X + 360, playerY + 12, 8, couleurPastille);
 
                         playerY += 50;
-
-                        // ==========================================
-                        // BOUTON DE SÉCURITÉ : AFFICHER / CACHER L'IP (D'après ton design)
-                        // ==========================================
-                        if (Program.isServer)
-                        {
-                            int ipBtnX = (int)zoneJoueurs.X + ((int)zoneJoueurs.Width / 2) - 100; // Centré sous le bloc droit
-                            int ipBtnY = (int)zoneJoueurs.Y + (int)zoneJoueurs.Height + 20;
-
-                            // Le texte du bouton s'adapte dynamiquement
-                            string texteBoutonIP = Program.afficherIPDuServeur ? "MASQUER L'IP" : "IP SERVER";
-
-                            if (DrawButton(ipBtnX, ipBtnY, 200, 40, texteBoutonIP))
-                            {
-                                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                                // Inversion de l'état : si c'était vrai ça devient faux, et inversement
-                                Program.afficherIPDuServeur = !Program.afficherIPDuServeur; 
-                            }
-
-                            // Si le joueur a cliqué pour révéler, on affiche le texte en blanc brillant en dessous
-                            if (Program.afficherIPDuServeur)
-                            {
-                                int ipTxtW = Raylib.MeasureText(Program.adresseIPLocaleServeur, 26);
-                                Raylib.DrawText(Program.adresseIPLocaleServeur, ((int)zoneJoueurs.X + (int)zoneJoueurs.Width / 2) - ipTxtW / 2, ipBtnY + 55, 26, Color.White);
-                            }
-                        }
                     }
                 }
-                
+
+                // ==========================================
+                // BOUTON DE SÉCURITÉ : AFFICHER / CACHER L'IP
+                // (CORRECTION : sorti de la boucle des joueurs ! Avant, il était dessiné
+                // une fois PAR joueur au même endroit : un clic le basculait plusieurs fois)
+                // ==========================================
+                if (Program.isServer)
+                {
+                    int ipBtnX = (int)zoneJoueurs.X + ((int)zoneJoueurs.Width / 2) - 100; // Centré sous le bloc droit
+                    int ipBtnY = (int)zoneJoueurs.Y + (int)zoneJoueurs.Height + 20;
+
+                    // Le texte du bouton s'adapte dynamiquement
+                    string texteBoutonIP = Program.afficherIPDuServeur ? "MASQUER L'IP" : "IP SERVER";
+
+                    if (DrawButton(ipBtnX, ipBtnY, 200, 40, texteBoutonIP))
+                    {
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                        // Inversion de l'état : si c'était vrai ça devient faux, et inversement
+                        Program.afficherIPDuServeur = !Program.afficherIPDuServeur;
+                    }
+
+                    // Si le joueur a cliqué pour révéler, on affiche le texte en blanc brillant en dessous
+                    if (Program.afficherIPDuServeur)
+                    {
+                        int ipTxtW = Raylib.MeasureText(Program.adresseIPLocaleServeur, 26);
+                        Raylib.DrawText(Program.adresseIPLocaleServeur, ((int)zoneJoueurs.X + (int)zoneJoueurs.Width / 2) - ipTxtW / 2, ipBtnY + 55, 26, Color.White);
+                    }
+                }
+
 
                 // ==========================================
                 // LES BOUTONS D'ACTION (En bas)
@@ -3872,7 +4415,10 @@ partial class Program
                 else
                 {
                     // Code Client : Trouver notre propre état Prêt
-                    var moi = Program.currentLobbyPlayers.Find(p => p.Name.StartsWith("Joueur_")); // Ton pattern de pseudo temporaire
+                    // CORRECTION : on se cherche par notre ID unique (l'ancien code cherchait
+                    // un pseudo commençant par "Joueur_" qui n'existe plus -> bouton cassé)
+                    Program.LobbyPlayer moi;
+                    lock (Program._lobbyLock) { moi = Program.currentLobbyPlayers.Find(p => p.Id == Program.myPlayerId); }
                     bool monEtatPret = moi != null ? moi.IsReady : false;
                     
                     string texteBoutonPret = monEtatPret ? "PRÊT (ANNULER)" : "METTRE PRÊT";
@@ -3899,7 +4445,7 @@ partial class Program
                 if (DrawButton(50, 50, 150, 60, "RETOUR"))
                 {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
-                    Program.netManager.Stop(); // Coupe la carte réseau proprement
+                    Program.CouperReseau(); // Coupe la carte réseau proprement
                     Program.currentState = Program.GameState.NetworkHub;
                 }
 
@@ -3976,13 +4522,20 @@ partial class Program
                 {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
                     Program.hostMatchName = string.IsNullOrEmpty(Program.matchNameInput) ? "Partie sans nom" : Program.matchNameInput;
-                    
+
                     string pseudoFinal = string.IsNullOrEmpty(Program.playerNameInput) ? "Hôte_" + Raylib.GetRandomValue(10, 99) : Program.playerNameInput;
-                    
+                    // Sécurité : la virgule et le point-virgule servent de séparateurs réseau
+                    pseudoFinal = pseudoFinal.Replace(",", "").Replace(";", "");
+                    Program.myLobbyName = pseudoFinal;
+
                     Program.AllumerMoteurReseau(true);
-                    Program.currentLobbyPlayers.Clear();
-                    Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = pseudoFinal + " (Hôte)", IsHost = true, IsReady = true, Peer = null });
-                    
+                    lock (Program._lobbyLock)
+                    {
+                        Program.currentLobbyPlayers.Clear();
+                        // L'hôte porte TOUJOURS l'ID 0 (myPlayerId est déjà mis à 0 par AllumerMoteurReseau)
+                        Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = pseudoFinal, IsHost = true, IsReady = true, Id = 0, Peer = null });
+                    }
+
                     Program.currentState = Program.GameState.Lobby;
                 }
 
@@ -4016,57 +4569,806 @@ partial class Program
 
 ========
 
+Network.cs
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Raylib_cs;
+using System.Numerics;
+
+// Physique (pour poser les murs reçus du réseau)
+using BepuPhysics;
+
+// Réseau
+using LiteNetLib;
+using LiteNetLib.Utils;
+
+// ========================================================
+// LA SYNCHRONISATION EN JEU (Le coeur du multijoueur LAN)
+// ========================================================
+// Pendant la partie :
+//  - Chaque joueur envoie sa position 60x/s au serveur (paquet non fiable, c'est ok d'en perdre)
+//  - Le serveur relaie chaque position à tous les autres joueurs
+//  - Les tirs et les dégâts passent en fiable (ReliableOrdered) pour ne jamais les perdre
+partial class Program
+{
+    // La représentation d'un AUTRE joueur sur notre écran (pas de physique BEPU, juste du visuel)
+    public class RemotePlayer
+    {
+        public int Id;
+        public string Name = "???";
+        public Vector3 Position;        // Position affichée (lissée pour éviter les téléportations)
+        public Vector3 TargetPosition;  // Dernière position reçue du réseau
+        public float Yaw;
+        public float Pitch;
+        public int Health = 100;
+        public bool HasState;           // Tant qu'on n'a reçu aucune position, on ne le dessine pas
+        public int Kills;
+        public int Deaths;
+        // Son skin (reçu via PlayerStatePacket)
+        public int SkinColor;
+        public int SkinHat = -1;
+        public int SkinFace = -1;
+        // Son arme tenue + animations
+        public int WeaponIndex;
+        public bool IsReloading;
+        public float ReloadStartTime;   // Heure locale du début du rechargement (pour l'animation)
+        public float BobSpeed;          // Vitesse de déplacement lissée (pour le balancement de l'arme)
+        public float Lean;              // Penchement wall-run (roll caméra reçu)
+        public bool IsAiming;           // En visée -> arme centrée
+    }
+
+    // Un trait de tir d'un AUTRE joueur (purement visuel)
+    public class RemoteShotVisual
+    {
+        public Vector3 Start;
+        public Vector3 End;
+        public float Timer;
+    }
+
+    public static int myPlayerId = 0;                 // Notre numéro unique (0 = l'hôte)
+    public static int nextPlayerId = 1;               // Compteur d'IDs (utilisé par le serveur uniquement)
+    public static string myLobbyName = "";            // Notre pseudo tel qu'il apparaît dans le lobby
+    public static bool localIsAiming = false;          // Sommes-nous en train de viser ? (rempli par BouclePrincipale)
+    public static Dictionary<int, RemotePlayer> remotePlayers = new Dictionary<int, RemotePlayer>();
+    public static Dictionary<int, NetPeer> peersParId = new Dictionary<int, NetPeer>(); // Serveur : pour router les paquets
+    public static List<RemoteShotVisual> remoteShots = new List<RemoteShotVisual>();
+
+    static NetDataWriter reusableWriter = new NetDataWriter();
+
+    // ==========================================
+    // ABONNEMENTS DES PAQUETS EN JEU
+    // (Appelé par AllumerMoteurReseau)
+    // ==========================================
+    public static void EnregistrerPaquetsEnJeu()
+    {
+        netProcessor.SubscribeReusable<Packets.YourIdPacket, NetPeer>(OnYourIdReceived);
+        netProcessor.SubscribeReusable<Packets.PlayerStatePacket, NetPeer>(OnPlayerStateReceived);
+        netProcessor.SubscribeReusable<Packets.ShootPacket, NetPeer>(OnShootReceived);
+        netProcessor.SubscribeReusable<Packets.PlayerHitPacket, NetPeer>(OnPlayerHitReceived);
+        netProcessor.SubscribeReusable<Packets.PlayerDiedPacket, NetPeer>(OnPlayerDiedReceived);
+        netProcessor.SubscribeReusable<Packets.PlayerLeftPacket, NetPeer>(OnPlayerLeftReceived);
+        netProcessor.SubscribeReusable<Packets.WallPlacedPacket, NetPeer>(OnWallPlacedReceived);
+    }
+
+    // Remise à zéro de la session réseau (au moment d'allumer le moteur)
+    public static void ReinitialiserSessionReseau(bool host)
+    {
+        remotePlayers.Clear();
+        peersParId.Clear();
+        remoteShots.Clear();
+        myPlayerId = host ? 0 : -1; // Le client recevra son vrai ID via YourIdPacket
+        nextPlayerId = 1;
+    }
+
+    // Petit utilitaire : envoyer un paquet au serveur (client) ou à tout le monde (serveur)
+    static void EnvoyerAuServeur<T>(T packet, DeliveryMethod method) where T : class, new()
+    {
+        reusableWriter.Reset();
+        netProcessor.Write(reusableWriter, packet);
+        if (netManager.FirstPeer != null)
+            netManager.FirstPeer.Send(reusableWriter, method);
+    }
+
+    static void DiffuserATous<T>(T packet, DeliveryMethod method, NetPeer saufLui = null) where T : class, new()
+    {
+        reusableWriter.Reset();
+        netProcessor.Write(reusableWriter, packet);
+        if (saufLui != null) netManager.SendToAll(reusableWriter, method, saufLui);
+        else netManager.SendToAll(reusableWriter, method);
+    }
+
+    // Récupère (ou crée) le joueur distant correspondant à un ID
+    static RemotePlayer ObtenirJoueurDistant(int id)
+    {
+        if (!remotePlayers.TryGetValue(id, out RemotePlayer rp))
+        {
+            rp = new RemotePlayer { Id = id };
+            // On essaie de retrouver son pseudo grâce à la liste du lobby
+            var lobbyInfo = currentLobbyPlayers.FirstOrDefault(p => p.Id == id);
+            if (lobbyInfo != null) rp.Name = lobbyInfo.Name;
+            remotePlayers[id] = rp;
+        }
+        return rp;
+    }
+
+    // ==========================================
+    // RÉCEPTION DES PAQUETS
+    // ==========================================
+    public static void OnYourIdReceived(Packets.YourIdPacket packet, NetPeer peer)
+    {
+        if (!isServer)
+        {
+            myPlayerId = packet.PlayerId;
+            Console.WriteLine($"[RÉSEAU] Le serveur m'a donné l'ID {myPlayerId}");
+        }
+    }
+
+    public static void OnPlayerStateReceived(Packets.PlayerStatePacket packet, NetPeer peer)
+    {
+        if (packet.PlayerId == myPlayerId) return; // C'est notre propre écho, on ignore
+
+        RemotePlayer rp = ObtenirJoueurDistant(packet.PlayerId);
+        rp.TargetPosition = new Vector3(packet.X, packet.Y, packet.Z);
+        rp.Yaw = packet.Yaw;
+        rp.Pitch = packet.Pitch;
+        rp.Health = packet.Health;
+        rp.SkinColor = packet.SkinColor;
+        rp.SkinHat = packet.SkinHat;
+        rp.SkinFace = packet.SkinFace;
+        rp.WeaponIndex = packet.WeaponIndex;
+        // Détection du DÉBUT d'un rechargement (front montant) -> on lance l'animation localement
+        if (packet.IsReloading && !rp.IsReloading)
+            rp.ReloadStartTime = (float)Raylib.GetTime();
+        rp.IsReloading = packet.IsReloading;
+        rp.Lean = packet.Lean;
+        rp.IsAiming = packet.IsAiming;
+        if (!rp.HasState)
+        {
+            // Première nouvelle : on téléporte directement (pas de glissement depuis (0,0,0))
+            rp.Position = rp.TargetPosition;
+            rp.HasState = true;
+        }
+
+        // Le serveur fait le facteur : il relaie la position aux autres clients
+        if (isServer)
+        {
+            reusableWriter.Reset();
+            netProcessor.Write(reusableWriter, packet);
+            netManager.SendToAll(reusableWriter, DeliveryMethod.Sequenced, peer);
+        }
+    }
+
+    // Chaque arme a sa "portée sonore" cohérente : un coup de couteau ne s'entend
+    // pas à 20 mètres, alors qu'un sniper résonne dans toute la map.
+    public static float DistanceAudibleArme(string nomArme)
+    {
+        switch (nomArme)
+        {
+            case "Karambit": return 12f;   // le couteau : quasi silencieux
+            case "Pistol":   return 60f;
+            case "Revolver": return 80f;
+            case "Shotgun":  return 90f;
+            case "Sword":    return 90f;   // attention : la "Sword" est en réalité un fusil type SCAR
+            case "Sniper":   return 160f;
+            case "Bazooka":  return 130f;
+            default:         return 80f;
+        }
+    }
+
+    public static void OnShootReceived(Packets.ShootPacket packet, NetPeer peer)
+    {
+        if (packet.PlayerId == myPlayerId) return;
+
+        Vector3 origin = new Vector3(packet.OriginX, packet.OriginY, packet.OriginZ);
+        Vector3 dir = new Vector3(packet.DirX, packet.DirY, packet.DirZ);
+
+        // 1. Le visuel du tir (le trait)
+        remoteShots.Add(new RemoteShotVisual
+        {
+            Start = origin,
+            End = origin + dir * packet.Distance,
+            Timer = 1.0f
+        });
+
+        // 2. Le son 3D de l'arme, entendu depuis la position du tireur
+        Weapon armeDuTireur = weapons.FirstOrDefault(w => w.name == packet.WeaponName);
+        if (armeDuTireur != null && currentState == GameState.Playing)
+        {
+            PlaySound3D(armeDuTireur.soundname, origin, DistanceAudibleArme(packet.WeaponName));
+        }
+
+        // 3. Relais serveur
+        if (isServer)
+        {
+            reusableWriter.Reset();
+            netProcessor.Write(reusableWriter, packet);
+            netManager.SendToAll(reusableWriter, DeliveryMethod.ReliableOrdered, peer);
+        }
+    }
+
+    // Le dernier joueur qui nous a fait mal (pour savoir QUI nous a tués, même en tombant)
+    public static int lastDamagerId = -1;
+
+    public static void OnPlayerHitReceived(Packets.PlayerHitPacket packet, NetPeer peer)
+    {
+        if (packet.TargetId == myPlayerId)
+        {
+            // C'est NOUS qui sommes touchés !
+            lastDamagerId = packet.ShooterId;
+            localPlayer.TakeDamage(packet.Damage);
+            // (L'annonce de la mort se fait dans AnnoncerMaMort, appelée par la boucle de respawn)
+        }
+        else if (isServer && peersParId.TryGetValue(packet.TargetId, out NetPeer cible))
+        {
+            // Le serveur route le paquet vers la victime
+            reusableWriter.Reset();
+            netProcessor.Write(reusableWriter, packet);
+            cible.Send(reusableWriter, DeliveryMethod.ReliableOrdered);
+        }
+    }
+
+    public static void OnPlayerDiedReceived(Packets.PlayerDiedPacket packet, NetPeer peer)
+    {
+        // Mise à jour des scores locaux
+        if (packet.VictimId == myPlayerId)
+        {
+            // (deathCount est déjà incrémenté par Player.Die(), rien à faire ici)
+        }
+        else
+        {
+            ObtenirJoueurDistant(packet.VictimId).Deaths++;
+        }
+
+        if (packet.KillerId == myPlayerId)
+        {
+            killCount++;
+            TriggerHitmarker(true); // Le son et la croix de kill !
+        }
+        else if (packet.KillerId >= 0 && packet.KillerId != packet.VictimId)
+        {
+            ObtenirJoueurDistant(packet.KillerId).Kills++;
+        }
+
+        // Le serveur diffuse l'info à TOUT le monde, y compris la victime.
+        // (Important : sans ça, la victime ne verrait jamais le kill de son tueur
+        //  monter sur le tableau des scores, car elle n'applique pas la logique en local.)
+        if (isServer)
+        {
+            DiffuserATous(packet, DeliveryMethod.ReliableOrdered);
+        }
+    }
+
+    public static void OnPlayerLeftReceived(Packets.PlayerLeftPacket packet, NetPeer peer)
+    {
+        remotePlayers.Remove(packet.PlayerId);
+    }
+
+    // ==========================================
+    // ANNONCER NOTRE MORT (Appelé par la boucle de respawn en ligne)
+    // Couvre TOUTES les morts : tirs ennemis, chute dans le vide...
+    // ==========================================
+    public static void AnnoncerMaMort()
+    {
+        if (netManager == null) return;
+
+        Packets.PlayerDiedPacket mort = new Packets.PlayerDiedPacket
+        {
+            VictimId = myPlayerId,
+            KillerId = lastDamagerId // -1 si on est mort tout seul (chute...)
+        };
+        lastDamagerId = -1;
+
+        if (isServer)
+        {
+            OnPlayerDiedReceived(mort, null); // Le serveur s'applique la logique et diffuse
+        }
+        else
+        {
+            EnvoyerAuServeur(mort, DeliveryMethod.ReliableOrdered);
+        }
+    }
+
+    // ==========================================
+    // MISE À JOUR PAR FRAME (Appelé par BouclePrincipale)
+    // ==========================================
+    public static void MettreAJourReseauEnJeu(float deltaTime, Vector3 maPosition, float monYaw, float monPitch)
+    {
+        if (netManager == null) return;
+
+        // 1. ENVOYER notre position (non fiable : si un paquet se perd, le suivant corrige)
+        Packets.PlayerStatePacket etat = new Packets.PlayerStatePacket
+        {
+            PlayerId = myPlayerId,
+            X = maPosition.X,
+            Y = maPosition.Y,
+            Z = maPosition.Z,
+            Yaw = monYaw,
+            Pitch = monPitch,
+            Health = localPlayer.Health,
+            SkinColor = skinCouleur,
+            SkinHat = skinHat,
+            SkinFace = skinFace,
+            WeaponIndex = weapons.IndexOf(currentWeapon),
+            IsReloading = currentWeapon.isReloading,
+            Lean = rollActuel, // le penchement wall-run (roll caméra)
+            IsAiming = localIsAiming
+        };
+
+        if (isServer)
+        {
+            DiffuserATous(etat, DeliveryMethod.Sequenced);
+        }
+        else
+        {
+            EnvoyerAuServeur(etat, DeliveryMethod.Sequenced);
+        }
+
+        // 2. LISSER les positions des joueurs distants (interpolation)
+        foreach (RemotePlayer rp in remotePlayers.Values)
+        {
+            if (!rp.HasState) continue;
+            float lerp = Math.Clamp(15f * deltaTime, 0f, 1f);
+            Vector3 avant = rp.Position;
+            rp.Position += (rp.TargetPosition - rp.Position) * lerp;
+
+            // On estime sa vitesse horizontale (pour le balancement de son arme)
+            float deplaceHoriz = new Vector2(rp.Position.X - avant.X, rp.Position.Z - avant.Z).Length();
+            float vitesseInst = deltaTime > 0f ? deplaceHoriz / deltaTime : 0f;
+            rp.BobSpeed += (vitesseInst - rp.BobSpeed) * 0.15f; // lissage
+        }
+
+        // 3. FAIRE VIEILLIR les traits de tir distants
+        for (int i = remoteShots.Count - 1; i >= 0; i--)
+        {
+            remoteShots[i].Timer -= deltaTime;
+            if (remoteShots[i].Timer <= 0) remoteShots.RemoveAt(i);
+        }
+    }
+
+    // ==========================================
+    // RENDU 3D DES JOUEURS DISTANTS (Dans BeginMode3D)
+    // ==========================================
+    public static void DessinerJoueursDistants()
+    {
+        foreach (RemotePlayer rp in remotePlayers.Values)
+        {
+            if (!rp.HasState) continue;
+
+            // Le personnage complet avec son skin : couleur, chapeau et tête !
+            // (+ le penchement wall-run, purement visuel)
+            DessinerPersonnageComplet(rp.Position, rp.Yaw, rp.Pitch, rp.SkinColor, rp.SkinHat, rp.SkinFace, rp.Lean);
+
+            // Son arme tenue (le bon modèle 3D, orienté + animé)
+            DessinerArmeJoueurDistant(rp);
+        }
+
+        // Les traits de tir des autres joueurs
+        foreach (RemoteShotVisual shot in remoteShots)
+        {
+            int alpha = (int)(Math.Clamp(shot.Timer, 0f, 1f) * 255);
+            Raylib.DrawLine3D(shot.Start, shot.End, new Color(255, 200, 80, alpha));
+        }
+    }
+
+    // ==========================================
+    // L'ARME D'UN JOUEUR DISTANT : bon modèle 3D, orienté selon son regard,
+    // avec balancement (vitesse) et animation de rechargement.
+    // ==========================================
+    // --- Constantes d'ajustement visuel (à régler à l'œil si besoin) ---
+    const float ARME_ECHELLE = 1.0f;         // les modèles 3D sont en 1:1 (1 unité = 1 mètre)
+    const float ARME_OFFSET_DROITE = 0.50f;  // décalage vers la main droite
+    const float ARME_OFFSET_AVANT = 0.60f;   // décalage vers l'avant
+    const float ARME_OFFSET_HAUT = 0.22f;    // hauteur (épaules)
+    const float ARME_ROT_BASE = 0f;          // orientation de base du modèle (selon l'export Blender)
+    // Bornes du pitch de l'arme : on bloque la rotation pour qu'elle ne traverse
+    // jamais le corps quand le joueur regarde le sol ou le ciel.
+    const float ARME_PITCH_MIN = -0.55f;     // ~-31° (vers le bas)
+    const float ARME_PITCH_MAX = 0.75f;      // ~+43° (vers le haut)
+    // --- Pose de VISÉE (clic droit) ---
+    const float ARME_VISEE_HAUT = 0.48f;     // hauteur (yeux)
+    const float ARME_VISEE_COTE = 0.70f;     // décalage latéral en visée (signe à inverser si mauvais côté)
+    const float ARME_VISEE_AVANT = 0.40f;    // distance devant le visage (plus petit = plus proche)
+
+    public static void DessinerArmeJoueurDistant(RemotePlayer rp)
+    {
+        if (rp.WeaponIndex < 0 || rp.WeaponIndex >= weapons.Count) return;
+        Weapon arme = weapons[rp.WeaponIndex];
+
+        // Repère horizontal du joueur (même convention que CamFroward : facing = (sin yaw, *, cos yaw))
+        Vector3 forwardH = new Vector3(MathF.Sin(rp.Yaw), 0f, MathF.Cos(rp.Yaw));
+        Vector3 right = new Vector3(MathF.Cos(rp.Yaw), 0f, -MathF.Sin(rp.Yaw));
+
+        Vector3 mainPos;
+        float pitchArme;
+
+        if (rp.IsAiming)
+        {
+            // VISÉE : l'arme remonte devant le visage (pose "épaulée" que voit l'adversaire).
+            // ARME_VISEE_COTE recadre le côté (le modèle a son origine sur la crosse) ;
+            // ARME_VISEE_AVANT la rapproche du visage. Inverser le signe de COTE si du mauvais côté.
+            mainPos = rp.Position
+                    + new Vector3(0f, ARME_VISEE_HAUT, 0f)
+                    + right * ARME_VISEE_COTE
+                    + forwardH * ARME_VISEE_AVANT;
+            pitchArme = Math.Clamp(rp.Pitch, -0.9f, 0.9f); // pitch complet : on vise droit
+        }
+        else
+        {
+            // HANCHE : à hauteur d'épaule, côté droit, un peu en avant, avec balancement
+            mainPos = rp.Position
+                    + new Vector3(0f, ARME_OFFSET_HAUT, 0f)
+                    + right * ARME_OFFSET_DROITE
+                    + forwardH * ARME_OFFSET_AVANT;
+            float ampliBob = Math.Clamp(rp.BobSpeed * 0.006f, 0f, 0.06f);
+            mainPos.Y += MathF.Sin((float)Raylib.GetTime() * 10f) * ampliBob;
+            // Pitch borné hors visée : l'arme ne balaye pas le torse aux angles extrêmes.
+            pitchArme = Math.Clamp(rp.Pitch, ARME_PITCH_MIN, ARME_PITCH_MAX);
+        }
+
+        // Animation de rechargement (l'arme bascule puis se redresse)
+        float reloadTilt = 0f;
+        if (rp.IsReloading)
+        {
+            float elapsed = (float)Raylib.GetTime() - rp.ReloadStartTime;
+            reloadTilt = AngleRechargement(elapsed, arme.reloadtime);
+        }
+
+        // On empile une matrice : translation -> orientation -> dessin du modèle à l'origine
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(mainPos.X, mainPos.Y, mainPos.Z);
+        Rlgl.Rotatef(rp.Yaw * RadVersDeg + ARME_ROT_BASE, 0f, 1f, 0f); // orientation horizontale
+        Rlgl.Rotatef(-pitchArme * RadVersDeg, 1f, 0f, 0f);             // visée haut/bas (bornée)
+        Rlgl.Rotatef(reloadTilt, 1f, 0f, 0f);                          // inclinaison de rechargement
+        Raylib.DrawModel(arme.modelname, Vector3.Zero, ARME_ECHELLE, Color.White);
+        Rlgl.PopMatrix();
+    }
+
+    // ==========================================
+    // LES MURS CONSTRUITS (Touche F) EN MULTIJOUEUR
+    // Un mur posé doit exister chez TOUT le monde : en visuel ET en physique,
+    // sinon les autres passent au travers sans même le voir !
+    // ==========================================
+    public static void PoserMur(Vector3 position, Quaternion rotation)
+    {
+        StaticDescription description = new StaticDescription(position, rotation, formeMurIndex);
+        StaticHandle handle = simulation.Statics.Add(description);
+        listeMur.Add(new MurPose(position, rotation, handle));
+    }
+
+    public static void AnnoncerMurPose(Vector3 position, Quaternion rotation)
+    {
+        Packets.WallPlacedPacket paquet = new Packets.WallPlacedPacket
+        {
+            PlayerId = myPlayerId,
+            X = position.X, Y = position.Y, Z = position.Z,
+            QX = rotation.X, QY = rotation.Y, QZ = rotation.Z, QW = rotation.W
+        };
+        if (isServer) DiffuserATous(paquet, DeliveryMethod.ReliableOrdered);
+        else EnvoyerAuServeur(paquet, DeliveryMethod.ReliableOrdered);
+    }
+
+    public static void OnWallPlacedReceived(Packets.WallPlacedPacket packet, NetPeer peer)
+    {
+        if (packet.PlayerId == myPlayerId) return; // notre propre écho
+
+        Vector3 pos = new Vector3(packet.X, packet.Y, packet.Z);
+        Quaternion rot = new Quaternion(packet.QX, packet.QY, packet.QZ, packet.QW);
+        PoserMur(pos, rot);
+        PlaySound3D(wallSound, pos, 20f);
+
+        // Le serveur relaie le mur aux autres clients
+        if (isServer)
+        {
+            reusableWriter.Reset();
+            netProcessor.Write(reusableWriter, packet);
+            netManager.SendToAll(reusableWriter, DeliveryMethod.ReliableOrdered, peer);
+        }
+    }
+
+    // L'angle d'inclinaison de l'arme pendant le rechargement (copie de Weapon.GetReloadRotationAngle,
+    // mais piloté par le temps réseau local pour rester synchrone visuellement).
+    static float AngleRechargement(float elapsed, float reloadtime)
+    {
+        if (elapsed < 0f || elapsed >= reloadtime) return 0f;
+        float thirdTime = reloadtime / 5f;
+        float twoThirdTime = 3f * reloadtime / 5f;
+        if (elapsed <= thirdTime) return -45f * (elapsed / thirdTime);
+        if (elapsed <= twoThirdTime) return -45f;
+        float p = (elapsed - twoThirdTime) / thirdTime;
+        float a = -45f + 45f * p;
+        return a >= 0f ? 0f : a;
+    }
+
+    // ==========================================
+    // RENDU 2D : PSEUDOS + BARRES DE VIE AU-DESSUS DES TÊTES (Après EndMode3D)
+    // ==========================================
+    public static void DessinerNomsJoueursDistants(Camera3D cam, Vector3 camForward)
+    {
+        foreach (RemotePlayer rp in remotePlayers.Values)
+        {
+            if (!rp.HasState) continue;
+
+            Vector3 tete = rp.Position + new Vector3(0, 1.4f, 0);
+            Vector3 versJoueur = tete - cam.Position;
+            if (Vector3.Dot(versJoueur, camForward) <= 0) continue; // Derrière nous : on n'affiche pas
+
+            Vector2 screenPos = Raylib.GetWorldToScreen(tete, cam);
+
+            // Le pseudo centré
+            int taille = 20;
+            int largeur = Raylib.MeasureText(rp.Name, taille);
+            Raylib.DrawText(rp.Name, (int)screenPos.X - largeur / 2 + 1, (int)screenPos.Y - 24 + 1, taille, Color.Black);
+            Raylib.DrawText(rp.Name, (int)screenPos.X - largeur / 2, (int)screenPos.Y - 24, taille, Color.White);
+
+            // Sa barre de vie
+            int barWidth = 60;
+            int barHeight = 6;
+            float hpPercent = Math.Clamp(rp.Health / 100f, 0f, 1f);
+            int posX = (int)screenPos.X - barWidth / 2;
+            int posY = (int)screenPos.Y;
+            Raylib.DrawRectangle(posX, posY, barWidth, barHeight, Color.Red);
+            Raylib.DrawRectangle(posX, posY, (int)(barWidth * hpPercent), barHeight, Color.Green);
+            Raylib.DrawRectangleLines(posX, posY, barWidth, barHeight, Color.Black);
+        }
+    }
+
+    // ==========================================
+    // QUAND ON TIRE EN LIGNE : envoyer le tir + tester si on touche un joueur
+    // ==========================================
+    public static void TraiterTirLocalReseau(Weapon arme, Vector3 origine, Vector3 direction, Vector3 startLaser, Vector3 endLaser)
+    {
+        if (netManager == null) return;
+
+        // La distance réellement parcourue par la balle (elle s'arrête au premier mur/ennemi)
+        float distanceTir = (endLaser - startLaser).Length();
+
+        // 1. ANNONCER le tir à tout le monde (visuel + son chez les autres)
+        Packets.ShootPacket tir = new Packets.ShootPacket
+        {
+            PlayerId = myPlayerId,
+            OriginX = startLaser.X,
+            OriginY = startLaser.Y,
+            OriginZ = startLaser.Z,
+            DirX = direction.X,
+            DirY = direction.Y,
+            DirZ = direction.Z,
+            Distance = distanceTir,
+            WeaponName = arme.name
+        };
+        if (isServer) DiffuserATous(tir, DeliveryMethod.ReliableOrdered);
+        else EnvoyerAuServeur(tir, DeliveryMethod.ReliableOrdered);
+
+        bool isBazooka = string.Equals(arme.name, "Bazooka", StringComparison.OrdinalIgnoreCase);
+
+        // 2. EST-CE QU'ON A TOUCHÉ UN JOUEUR ? (Même hitbox virtuelle que les ennemis)
+        if (arme.range >= 10 && !isBazooka)
+        {
+            Ray rayonTir = new Ray(origine, direction);
+            RemotePlayer meilleureCible = null;
+            float meilleureDistance = distanceTir + 0.75f; // Petite marge : la balle s'arrête sur la capsule
+
+            foreach (RemotePlayer rp in remotePlayers.Values)
+            {
+                if (!rp.HasState || rp.Health <= 0) continue;
+
+                Vector3 minBox = rp.Position - new Vector3(0.5f, 1f, 0.5f);
+                Vector3 maxBox = rp.Position + new Vector3(0.5f, 1.5f, 0.5f);
+                BoundingBox hitbox = new BoundingBox(minBox, maxBox);
+
+                RayCollision collision = Raylib.GetRayCollisionBox(rayonTir, hitbox);
+                if (collision.Hit && collision.Distance < meilleureDistance)
+                {
+                    meilleureDistance = collision.Distance;
+                    meilleureCible = rp;
+                }
+            }
+
+            if (meilleureCible != null)
+            {
+                EnvoyerDegats(meilleureCible.Id, arme.damage);
+                TriggerHitmarker(false);
+            }
+        }
+
+        // 3. LA MÊLÉE (Couteau, Épée) : distance + angle
+        if (arme.range < 10)
+        {
+            foreach (RemotePlayer rp in remotePlayers.Values)
+            {
+                if (!rp.HasState || rp.Health <= 0) continue;
+
+                Vector3 centre = rp.Position + new Vector3(0, 0.25f, 0);
+                float dist = Vector3.Distance(origine, centre);
+                if (dist <= arme.range)
+                {
+                    Vector3 versLui = Vector3.Normalize(centre - origine);
+                    if (Vector3.Dot(direction, versLui) > 0.5f)
+                    {
+                        EnvoyerDegats(rp.Id, arme.damage);
+                        TriggerHitmarker(false);
+                    }
+                }
+            }
+        }
+
+        // 4. LE BAZOOKA : dégâts de zone autour du point d'impact
+        if (isBazooka)
+        {
+            Vector3 impact = origine + direction * distanceTir;
+            float explosionRadius = 6f;
+            foreach (RemotePlayer rp in remotePlayers.Values)
+            {
+                if (!rp.HasState || rp.Health <= 0) continue;
+                if (Vector3.Distance(impact, rp.Position) <= explosionRadius)
+                {
+                    EnvoyerDegats(rp.Id, arme.damage);
+                    TriggerHitmarker(false);
+                }
+            }
+        }
+    }
+
+    static void EnvoyerDegats(int targetId, int damage)
+    {
+        Packets.PlayerHitPacket hit = new Packets.PlayerHitPacket
+        {
+            TargetId = targetId,
+            ShooterId = myPlayerId,
+            Damage = damage
+        };
+
+        if (isServer)
+        {
+            // Le serveur envoie directement à la victime
+            if (peersParId.TryGetValue(targetId, out NetPeer cible))
+            {
+                reusableWriter.Reset();
+                netProcessor.Write(reusableWriter, hit);
+                cible.Send(reusableWriter, DeliveryMethod.ReliableOrdered);
+            }
+        }
+        else
+        {
+            // Le client passe par le serveur qui routera
+            EnvoyerAuServeur(hit, DeliveryMethod.ReliableOrdered);
+        }
+    }
+
+    // ==========================================
+    // FERMETURE PROPRE DU RÉSEAU (Retour menu, déconnexion serveur...)
+    // ==========================================
+    public static void CouperReseau()
+    {
+        if (netManager != null) netManager.Stop();
+        isOnline = false;
+        remotePlayers.Clear();
+        peersParId.Clear();
+        remoteShots.Clear();
+        lock (_lobbyLock) { currentLobbyPlayers.Clear(); }
+    }
+}
+
+
+========
+
 Packets.cs
 
 using System;
 
-// Ce fichier contient uniquement les "Colis" de données qui vont voyager sur le réseau
+// Ce fichier contient uniquement les "Colis" de données qui vont voyager sur le réseau.
+// IMPORTANT : NetPacketProcessor (LiteNetLib) ne sérialise QUE les propriétés publiques { get; set; },
+// jamais les champs. Tous les paquets doivent donc utiliser des propriétés !
 public class Packets
 {
     // 1. LE PASSEPORT D'ENTRÉE (Envoyé quand on rejoint le lobby)
-    public class JoinPacket // <-- CORRECTION ICI
+    public class JoinPacket
     {
-        public string PlayerName;
+        public string PlayerName { get; set; } = "";
+    }
+
+    // 1bis. LA CARTE D'IDENTITÉ (Le serveur répond au client avec son numéro unique)
+    public class YourIdPacket
+    {
+        public int PlayerId { get; set; }
     }
 
     // 2. LA POSITION DU JOUEUR (Envoyé 60 fois par seconde !)
-    public class PlayerStatePacket // <-- CORRECTION ICI
+    public class PlayerStatePacket
     {
-        public int PlayerId; 
-        public float X, Y, Z;
-        public float Pitch, Yaw;
+        public int PlayerId { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+        public float Z { get; set; }
+        public float Pitch { get; set; }
+        public float Yaw { get; set; }
+        public int Health { get; set; }
+        // Le skin du joueur (pour que les autres voient nos cosmétiques en jeu)
+        public int SkinColor { get; set; }
+        public int SkinHat { get; set; } = -1;
+        public int SkinFace { get; set; } = -1;
+        // L'arme tenue (index dans la liste weapons) + état de rechargement,
+        // pour que les autres voient le bon modèle 3D et son animation.
+        public int WeaponIndex { get; set; }
+        public bool IsReloading { get; set; }
+        // Le penchement wall-run (roll caméra), pour incliner le modèle chez les autres
+        public float Lean { get; set; }
+        // En visée ? (clic droit) -> l'arme est centrée devant le visage côté adversaire
+        public bool IsAiming { get; set; }
+    }
+
+    // 2bis. UN MUR CONSTRUIT (Touche F) — diffusé pour que TOUT le monde
+    // ait le mur en visuel ET en physique (sinon on passe à travers !)
+    public class WallPlacedPacket
+    {
+        public int PlayerId { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+        public float Z { get; set; }
+        public float QX { get; set; }
+        public float QY { get; set; }
+        public float QZ { get; set; }
+        public float QW { get; set; }
     }
 
     // 3. LES ACTIONS PONCTUELLES (Tirer)
-    public class ShootPacket // <-- CORRECTION ICI
+    public class ShootPacket
     {
-        public int PlayerId;
-        public float OriginX, OriginY, OriginZ;
-        public float DirX, DirY, DirZ;
-        public string WeaponName; 
+        public int PlayerId { get; set; }
+        public float OriginX { get; set; }
+        public float OriginY { get; set; }
+        public float OriginZ { get; set; }
+        public float DirX { get; set; }
+        public float DirY { get; set; }
+        public float DirZ { get; set; }
+        public float Distance { get; set; }
+        public string WeaponName { get; set; } = "";
+    }
+
+    // 3bis. UN JOUEUR EN A TOUCHÉ UN AUTRE (Tireur -> Serveur -> Victime)
+    public class PlayerHitPacket
+    {
+        public int TargetId { get; set; }
+        public int ShooterId { get; set; }
+        public int Damage { get; set; }
+    }
+
+    // 3ter. UN JOUEUR EST MORT (Victime -> Serveur -> Tout le monde, pour le score)
+    public class PlayerDiedPacket
+    {
+        public int VictimId { get; set; }
+        public int KillerId { get; set; }
+    }
+
+    // 3quater. UN JOUEUR A QUITTÉ LA PARTIE
+    public class PlayerLeftPacket
+    {
+        public int PlayerId { get; set; }
     }
 
     // 4. SYNCHRONISATION DU LOBBY (Envoyé par le Serveur à tout le monde à chaque changement)
     public class LobbyStatePacket
     {
-        public string MatchName;
-        public int MapIndex;
-        // CORRECTION : On remplace les tableaux par une seule chaîne de texte
-        public string SerializedPlayers; 
+        public string MatchName { get; set; } = "";
+        public int MapIndex { get; set; }
+        // Les joueurs fusionnés en une seule chaîne : "Nom,Pret,Id;Nom,Pret,Id;..."
+        public string SerializedPlayers { get; set; } = "";
     }
 
     // 5. SIGNAL "JE SUIS PRÊT" (Envoyé par un Client au Serveur)
     public class ToggleReadyPacket
     {
-        public bool IsReady;
+        public bool IsReady { get; set; }
     }
 
     // 6. SIGNAL DE LANCEMENT DE PARTIE (Envoyé par le Serveur à tous les Clients)
     public class StartGamePacket
     {
-        public int MapIndex;
+        public int MapIndex { get; set; }
     }
 }
+
 
 ========
 
@@ -4361,8 +5663,7 @@ using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuUtilities.Memory;
 
-//reseau 
-using LiteNetLib;
+//reseau (LiteNetLib est déjà en global using en haut du fichier)
 using LiteNetLib.Utils;
 
 
@@ -4411,7 +5712,12 @@ public partial class Program
         
         
         // Map 2 : Sandbox
-        [new Vector3(0, 5, 0)]
+        [
+        new Vector3(-30f, 0.12f,  70f), new Vector3(90f, 0.12f,  70f),
+        new Vector3( 90f, 0.12f,-130f), new Vector3(-40f,0.12f,-128f),
+        new Vector3( 28f, 0.12f,  -2f), new Vector3(-38f,18.1f, -24f),  // plateforme P2
+        new Vector3( 20f, 20.1f, -32f), new Vector3(78f, 6.2f,  47f)   // PE / landing couloir
+        ]
     };
     
     // 2. La liste active (qui sera remplie par le jeu)
@@ -4643,7 +5949,8 @@ public partial class Program
         Lobby,              // La salle d'attente
         Playing,             // En jeu
         ServerBrowser,
-        CreateMatch
+        CreateMatch,
+        Customization       // Le menu de personnalisation du personnage (skins)
 
     }
     public static GameState currentState = GameState.MainMenu;
@@ -4689,6 +5996,7 @@ public partial class Program
         public string Name;
         public bool IsReady;
         public bool IsHost;
+        public int Id; // Numéro unique attribué par le serveur (0 = l'hôte)
         public NetPeer Peer; // Null si c'est Toi (l'hôte local)
     }
     public static List<LobbyPlayer> currentLobbyPlayers = new List<LobbyPlayer>();
@@ -4697,11 +6005,26 @@ public partial class Program
 
     public static void AllumerMoteurReseau(bool host)
     {
+        // Si un ancien moteur tournait encore, on le coupe proprement avant d'en créer un neuf
+        if (netManager != null && netManager.IsRunning) netManager.Stop();
+
         netProcessor = new NetPacketProcessor();
 
         netListener = new EventBasedNetListener();
         netManager = new NetManager(netListener);
         isServer = host;
+
+        // ==========================================
+        // CORRECTION CRUCIALE : SANS CES DEUX FLAGS, LE RADAR LAN EST SOURD !
+        // - BroadcastReceiveEnabled : le serveur doit pouvoir ENTENDRE les broadcasts "GOOFY_REQ"
+        // - UnconnectedMessagesEnabled : le client doit pouvoir RECEVOIR la réponse "GOOFY_RES"
+        // ==========================================
+        netManager.BroadcastReceiveEnabled = true;
+        netManager.UnconnectedMessagesEnabled = true;
+
+        // Remise à zéro de la session (IDs, joueurs distants, etc.)
+        ReinitialiserSessionReseau(host);
+        serveursDisponibles.Clear();
 
         // ==========================================
         // LES OREILLES DU RADAR (Unconnected Messages)
@@ -4718,7 +6041,9 @@ public partial class Program
                     NetDataWriter writer = new NetDataWriter();
                     writer.Put("GOOFY_RES"); // Je suis une réponse GoofyFPS
                     writer.Put(Program.hostMatchName); // On utilise le VRAI nom de la partie !
-                    writer.Put(1); // Joueurs actuels
+                    int nbJoueurs;
+                    lock (_lobbyLock) { nbJoueurs = currentLobbyPlayers.Count; }
+                    writer.Put(nbJoueurs); // Joueurs actuels (le vrai nombre !)
                     writer.Put(4); // Joueurs max
                     
                     // On renvoie la réponse directement à l'IP qui a posé la question !
@@ -4786,15 +6111,18 @@ public partial class Program
             if (!isServer)
             {
                 Packets.JoinPacket passeport = new Packets.JoinPacket();
-                
+
                 // CORRECTION : On utilise le pseudo tapé dans le menu (Avec une sécurité s'il est vide)
                 string pseudoFinal = string.IsNullOrEmpty(Program.playerNameInput) ? "Anonyme_" + Raylib.GetRandomValue(10, 99) : Program.playerNameInput;
-                passeport.PlayerName = pseudoFinal; 
+                // Sécurité : la virgule et le point-virgule servent de séparateurs réseau, on les interdit
+                pseudoFinal = pseudoFinal.Replace(",", "").Replace(";", "");
+                passeport.PlayerName = pseudoFinal;
+                myLobbyName = pseudoFinal; // On mémorise NOTRE pseudo pour se retrouver dans la liste
 
                 NetDataWriter writer = new NetDataWriter();
-                netProcessor.Write(writer, passeport); 
-                peer.Send(writer, DeliveryMethod.ReliableOrdered); 
-                
+                netProcessor.Write(writer, passeport);
+                peer.Send(writer, DeliveryMethod.ReliableOrdered);
+
                 currentState = GameState.Lobby;
             }
         };
@@ -4804,14 +6132,44 @@ public partial class Program
             Console.WriteLine($"[RÉSEAU] Déconnexion de {peer.Address}");
             if (isServer)
             {
-                // On retire le joueur de la liste
-                lock (_lobbyLock) {currentLobbyPlayers.RemoveAll(p => p.Peer == peer);}
-                // On prévient les survivants
+                // On retrouve QUI vient de partir pour prévenir tout le monde
+                int idParti = -1;
+                lock (_lobbyLock)
+                {
+                    var partant = currentLobbyPlayers.Find(p => p.Peer == peer);
+                    if (partant != null) idParti = partant.Id;
+                    currentLobbyPlayers.RemoveAll(p => p.Peer == peer);
+                }
+
+                if (idParti >= 0)
+                {
+                    peersParId.Remove(idParti);
+                    remotePlayers.Remove(idParti);
+
+                    // On prévient les survivants que ce joueur n'existe plus (utile en pleine partie)
+                    Packets.PlayerLeftPacket depart = new Packets.PlayerLeftPacket { PlayerId = idParti };
+                    NetDataWriter writerDepart = new NetDataWriter();
+                    netProcessor.Write(writerDepart, depart);
+                    netManager.SendToAll(writerDepart, DeliveryMethod.ReliableOrdered);
+                }
+
+                // On prévient les survivants (mise à jour du lobby)
                 MettreAJourEtDiffuserLobby();
             }
             else
             {
-                // Si le serveur a fermé, le client retourne au hub
+                // Si le serveur a fermé, le client retourne au menu réseau
+                if (currentState == GameState.Playing)
+                {
+                    // On était en pleine partie : on coupe tout proprement et on rend la souris
+                    CouperReseau();
+                    Raylib.EnableCursor();
+                    isPaused = false;
+                }
+                else
+                {
+                    remotePlayers.Clear();
+                }
                 currentState = GameState.NetworkHub;
             }
         };
@@ -4833,6 +6191,8 @@ public partial class Program
         netProcessor.SubscribeReusable<Packets.ToggleReadyPacket, NetPeer>(OnReadyPacketReceived);
         netProcessor.SubscribeReusable<Packets.LobbyStatePacket, NetPeer>(OnLobbyStateReceived);
         netProcessor.SubscribeReusable<Packets.StartGamePacket, NetPeer>(OnStartGameReceived);
+        // Abonnements aux paquets de la partie en cours (positions, tirs, dégâts...)
+        EnregistrerPaquetsEnJeu();
 
 
         // Lancement effectif de la carte réseau
@@ -4876,20 +6236,38 @@ public partial class Program
         if (isServer)
         {
             string adresseIP = (peer != null) ? peer.Address.ToString() : "127.0.0.1 (SIMULATION)";
-            Console.WriteLine($"[SERVEUR] Le joueur '{passeport.PlayerName}' rejoint le salon ({adresseIP})");
-            
+
+            // Sécurité : pseudo vide ou avec séparateurs réseau interdits
+            string nomPropre = string.IsNullOrEmpty(passeport.PlayerName) ? "Anonyme_" + Raylib.GetRandomValue(10, 99) : passeport.PlayerName;
+            nomPropre = nomPropre.Replace(",", "").Replace(";", "");
+
+            // NOUVEAU : Le serveur attribue un numéro unique à ce joueur
+            int nouvelId = nextPlayerId++;
+
+            Console.WriteLine($"[SERVEUR] Le joueur '{nomPropre}' (ID {nouvelId}) rejoint le salon ({adresseIP})");
+
             // CORRECTION : On ajoute le vrai joueur à la liste du serveur !
             lock (_lobbyLock)
             {
                 currentLobbyPlayers.Add(new LobbyPlayer {
-                Name = passeport.PlayerName,
-                IsReady = false,
-                IsHost = false,
-                Peer = peer
-            });
-
+                    Name = nomPropre,
+                    IsReady = false,
+                    IsHost = false,
+                    Id = nouvelId,
+                    Peer = peer
+                });
             }
-            
+
+            // On envoie au nouveau venu sa carte d'identité (son numéro unique)
+            if (peer != null)
+            {
+                peersParId[nouvelId] = peer;
+                Packets.YourIdPacket carte = new Packets.YourIdPacket { PlayerId = nouvelId };
+                NetDataWriter writerId = new NetDataWriter();
+                netProcessor.Write(writerId, carte);
+                peer.Send(writerId, DeliveryMethod.ReliableOrdered);
+            }
+
             // On diffuse la mise à jour à tout le monde
             MettreAJourEtDiffuserLobby();
         }
@@ -4920,24 +6298,28 @@ public partial class Program
             mapChoisieIndex = packet.MapIndex;
 
             lock (_lobbyLock) {currentLobbyPlayers.Clear();}
-            
-            // CORRECTION : On décode la phrase envoyée par le serveur
+
+            // CORRECTION : On décode la phrase envoyée par le serveur (Format : "Nom,Pret,Id")
             if (!string.IsNullOrEmpty(packet.SerializedPlayers))
             {
                 string[] joueurs = packet.SerializedPlayers.Split(';');
                 for (int i = 0; i < joueurs.Length; i++)
                 {
                     string[] data = joueurs[i].Split(',');
-                    if (data.Length == 2)
+                    if (data.Length >= 2)
                     {
+                        int idJoueur = i; // Sécurité si l'ID manque
+                        if (data.Length >= 3) int.TryParse(data[2], out idJoueur);
+
                         lock (_lobbyLock) {
                             currentLobbyPlayers.Add(new LobbyPlayer {
                             Name = data[0],
                             IsReady = data[1] == "1",
-                            IsHost = (i == 0) // Le premier de la liste est toujours l'hôte
+                            IsHost = (i == 0), // Le premier de la liste est toujours l'hôte
+                            Id = idJoueur
                         });
                         }
-                        
+
                     }
                 }
             }
@@ -4966,12 +6348,16 @@ public partial class Program
         pack.MatchName = hostMatchName;
         pack.MapIndex = mapChoisieIndex;
         
-        // CORRECTION : On fusionne tous les joueurs en une seule phrase (ex: "Moi,1;Joueur_123,0")
+        // CORRECTION : On fusionne tous les joueurs en une seule phrase (ex: "Moi,1,0;Joueur_123,0,1")
         List<string> joueursData = new List<string>();
-        foreach (var p in currentLobbyPlayers)
+        lock (_lobbyLock)
         {
-            int pret = p.IsReady ? 1 : 0;
-            joueursData.Add($"{p.Name},{pret}");
+            foreach (var p in currentLobbyPlayers)
+            {
+                int pret = p.IsReady ? 1 : 0;
+                string nomSain = p.Name.Replace(",", "").Replace(";", "");
+                joueursData.Add($"{nomSain},{pret},{p.Id}");
+            }
         }
         pack.SerializedPlayers = string.Join(";", joueursData);
 
@@ -4994,7 +6380,9 @@ public partial class Program
     enemiesList.Clear();
     activeExplosions.Clear();
     activeDamageTexts.Clear();
+    remoteShots.Clear();
     killCount = 0; deathCount = 0;
+    localPlayer.Respawn(); // On repart avec toute sa vie
 
     if (mapDejaChargee)
     {
@@ -5008,7 +6396,10 @@ public partial class Program
     string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb" };
     mapModel = Raylib.LoadModel(ModelMapPath[mapIndex]);
 
-    // ... extraction triangles BEPU (copie le bloc unsafe existant de ChoiceMap) ...
+    // CORRECTION DU "CRASH 2" : avant, la map réseau n'avait AUCUNE collision physique
+    // (le bloc d'extraction manquait), donc les joueurs tombaient dans le vide et
+    // mapStaticHandle restait invalide pour le nettoyage suivant.
+    ExtraireTrianglesMap();
 
     unsafe { for (int j = 0; j < mapModel.MaterialCount; j++) mapModel.Materials[j].Shader = lightShader; }
 
@@ -5022,9 +6413,114 @@ public partial class Program
     joueur.Velocity.Linear = Vector3.Zero;
     joueur.Velocity.Angular = Vector3.Zero;
     Raylib.DisableCursor();
-    mapDejaChargee = true;
 }
 
+    // ========================================================
+    // LE PONT RAYLIB -> BEPU : transforme le modèle 3D de la map (mapModel)
+    // en mesh de collision physique. Utilisé par le mode SOLO (ChoiceMap)
+    // ET par le mode RÉSEAU (ChargerMapReseau).
+    // Remplit : bepuMapMesh, mapStaticHandle, mapDejaChargee.
+    // ========================================================
+    public static void ExtraireTrianglesMap()
+    {
+        Console.WriteLine($"[DEBUG] Extraction des triangles de la map ({mapModel.MeshCount} parties détectées)...");
+
+        unsafe
+        {
+            int totalTriangles = 0;
+            for (int i = 0; i < mapModel.MeshCount; i++) totalTriangles += mapModel.Meshes[i].TriangleCount;
+
+            pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
+            int triangleActuel = 0;
+
+            for (int m = 0; m < mapModel.MeshCount; m++)
+            {
+                Raylib_cs.Mesh raylibMesh = mapModel.Meshes[m];
+                float* vertices = raylibMesh.Vertices;
+                ushort* indices = raylibMesh.Indices;
+
+                for (int t = 0; t < raylibMesh.TriangleCount; t++)
+                {
+                    int index1, index2, index3;
+
+                    // Si Blender a bien fait son travail (Mesh indexé)
+                    if (indices != null)
+                    {
+                        index1 = indices[t * 3 + 0];
+                        index2 = indices[t * 3 + 1];
+                        index3 = indices[t * 3 + 2];
+                    }
+                    // Si Blender a exporté "en vrac" (Vertices purs)
+                    else
+                    {
+                        index1 = t * 3 + 0;
+                        index2 = t * 3 + 1;
+                        index3 = t * 3 + 2;
+                    }
+
+                    Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
+                    Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
+                    Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
+
+                    bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
+                    triangleActuel++;
+                }
+            }
+
+            // On utilise notre variable globale au lieu de "var"
+            bepuMapMesh = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
+            TypedIndex ticketCarte = simulation.Shapes.Add(bepuMapMesh);
+
+            // CORRECTION : On SAUVEGARDE le handle dans notre variable globale
+            mapStaticHandle = simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+
+            // On valide qu'une map est en mémoire pour le prochain nettoyage !
+            mapDejaChargee = true;
+
+            Console.WriteLine($"[DEBUG] Map chargée avec {totalTriangles} triangles ! (Vérifie que ce chiffre n'est pas zéro)");
+        }
+    }
+
+
+    
+public static void GenererPhysiqueMap(Model modele)
+{
+    Console.WriteLine($"[DEBUG] Extraction des triangles de la map ({modele.MeshCount} parties détectées)...");
+    unsafe 
+    {
+        int totalTriangles = 0;
+        for (int i = 0; i < modele.MeshCount; i++) totalTriangles += modele.Meshes[i].TriangleCount;
+
+        pool.Take<Triangle>(totalTriangles, out var bepuTriangles);
+        int triangleActuel = 0;
+
+        for (int m = 0; m < modele.MeshCount; m++)
+        {
+            Raylib_cs.Mesh raylibMesh = modele.Meshes[m];
+            float* vertices = raylibMesh.Vertices;
+            ushort* indices = raylibMesh.Indices; 
+
+            for (int t = 0; t < raylibMesh.TriangleCount; t++)
+            {
+                int index1 = (indices != null) ? indices[t * 3 + 0] : t * 3 + 0;
+                int index2 = (indices != null) ? indices[t * 3 + 1] : t * 3 + 1;
+                int index3 = (indices != null) ? indices[t * 3 + 2] : t * 3 + 2;
+
+                Vector3 point1 = new Vector3(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2]) * mapScale;
+                Vector3 point2 = new Vector3(vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2]) * mapScale;
+                Vector3 point3 = new Vector3(vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2]) * mapScale;
+
+                bepuTriangles[triangleActuel] = new Triangle(point1, point3, point2);
+                triangleActuel++;
+            }
+        }
+
+        bepuMapMesh = new BepuPhysics.Collidables.Mesh(bepuTriangles, Vector3.One, pool);
+        TypedIndex ticketCarte = simulation.Shapes.Add(bepuMapMesh);
+        mapStaticHandle = simulation.Statics.Add(new StaticDescription(mapPosition, ticketCarte));
+        mapDejaChargee = true;
+    }
+}
 
 
 
@@ -5285,11 +6781,45 @@ public partial class Program
         
         
 
-        UpdateAllVolumes();        
+        UpdateAllVolumes();
 
-        Raylib.SetTargetFPS(FPS); 
+        ChargerSkin(); // On recharge le skin sauvegardé (couleur, chapeau, tête)
+
+        Raylib.SetTargetFPS(FPS);
         X_carre = Raylib.GetScreenWidth()/2;
         Y_carre = Raylib.GetScreenHeight()/2;
+
+        // ==========================================
+        // MODE TEST AUTOMATIQUE (réservé au debug réseau)
+        // Lancer avec la variable d'environnement GOOFY_AUTOHOST=1 pour
+        // héberger un salon instantanément sans cliquer dans les menus.
+        // Aucun impact en usage normal.
+        // ==========================================
+        bool modeTestAuto = Environment.GetEnvironmentVariable("GOOFY_AUTOHOST") == "1";
+        if (modeTestAuto)
+        {
+            hostMatchName = "Salon de Test Auto";
+            myLobbyName = "HoteTest";
+            AllumerMoteurReseau(true);
+            lock (_lobbyLock)
+            {
+                currentLobbyPlayers.Clear();
+                currentLobbyPlayers.Add(new LobbyPlayer { Name = "HoteTest", IsHost = true, IsReady = true, Id = 0, Peer = null });
+            }
+            currentState = GameState.Lobby;
+            Console.WriteLine("[TEST-AUTO] Salon hébergé automatiquement sur le port 7777");
+        }
+
+        // GOOFY_AUTOJOIN=1 : l'inverse, on cherche un salon sur le réseau et on le rejoint tout seul
+        bool modeTestJoin = Environment.GetEnvironmentVariable("GOOFY_AUTOJOIN") == "1";
+        bool testReadyEnvoye = false;
+        if (modeTestJoin)
+        {
+            playerNameInput = "ClientTest";
+            AllumerMoteurReseau(false);
+            currentState = GameState.ServerBrowser;
+            Console.WriteLine("[TEST-AUTO] Mode client auto : recherche d'un salon...");
+        }
 
         // --- BOUCLE DE JEU ---
         while (!Raylib.WindowShouldClose())
@@ -5306,8 +6836,45 @@ public partial class Program
             lancerPartieEnAttente = false;
             mapChoisieIndex = mapIndexEnAttente;
             isOnline = true;
-            ChargerMapReseau(mapChoisieIndex); // voir crash 2
+            ChargerMapReseau(mapChoisieIndex); // Le "crash 2" est corrigé : la map a maintenant sa physique !
             currentState = GameState.Playing;
+        }
+
+        // [TEST-AUTO] En mode autojoin : on se connecte au premier salon découvert
+        if (modeTestJoin && currentState == GameState.ServerBrowser && serveursDisponibles.Count > 0)
+        {
+            var salonTest = serveursDisponibles.Values.First();
+            Console.WriteLine($"[TEST-AUTO] Salon '{salonTest.NomDuSalon}' trouvé, connexion à {salonTest.EndPoint.Address}...");
+            netManager.Connect(new IPEndPoint(salonTest.EndPoint.Address, 7777), "GoofyFPS_SecretKey");
+            lock (_lobbyLock) { currentLobbyPlayers.Clear(); }
+            currentState = GameState.Lobby;
+        }
+
+        // [TEST-AUTO] En mode autojoin : on se met "PRÊT" dès que le serveur nous a donné un ID
+        if (modeTestJoin && currentState == GameState.Lobby && myPlayerId > 0 && !testReadyEnvoye)
+        {
+            testReadyEnvoye = true;
+            Packets.ToggleReadyPacket readyTest = new Packets.ToggleReadyPacket { IsReady = true };
+            NetDataWriter writerReady = new NetDataWriter();
+            netProcessor.Write(writerReady, readyTest);
+            if (netManager.FirstPeer != null) netManager.FirstPeer.Send(writerReady, DeliveryMethod.ReliableOrdered);
+            Console.WriteLine("[TEST-AUTO] PRÊT envoyé !");
+        }
+
+        // [TEST-AUTO] En mode autohost, on lance la partie dès qu'un client est prêt
+        if (modeTestAuto && isServer && currentState == GameState.Lobby)
+        {
+            bool unClientPret;
+            lock (_lobbyLock) { unClientPret = currentLobbyPlayers.Count >= 2 && currentLobbyPlayers.Where(p => !p.IsHost).All(p => p.IsReady); }
+            if (unClientPret)
+            {
+                Console.WriteLine("[TEST-AUTO] Client prêt détecté : lancement de la partie !");
+                Packets.StartGamePacket startPack = new Packets.StartGamePacket { MapIndex = mapChoisieIndex };
+                NetDataWriter writerStart = new NetDataWriter();
+                netProcessor.Write(writerStart, startPack);
+                netManager.SendToAll(writerStart, DeliveryMethod.ReliableOrdered);
+                OnStartGameReceived(startPack, null);
+            }
         }
 
         // 2. LA LOGIQUE DU CLIENT : Crier périodiquement et Nettoyer

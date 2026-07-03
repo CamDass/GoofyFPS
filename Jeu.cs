@@ -93,8 +93,14 @@ partial class Program
 
         // Map 2 : Sandbox
         [
-            new Vector3(10f, 1.5f, 10f), 
-            new Vector3(-10f, 1.5f, -10f)
+        new Vector3(24f,1.02f,-18f), new Vector3(28f,1.02f,-18f), new Vector3(26f,1.02f,-22f), // grappe centrale
+        new Vector3(70f,1.02f,-20f), new Vector3(74f,1.02f,-20f),                               // grappe est
+        new Vector3(60f,1.02f, 47f), new Vector3( 0f,1.02f, 47f),                               // pièges couloir wall-run
+        new Vector3(-38f,1.02f,40f),                                                            // base ascension ouest
+        new Vector3(-6f,21f,-32f), new Vector3(20f,21f,-32f),                                   // sur hub / PE (récompense hauteur)
+        new Vector3(90f,1.02f,-32f),                                                            // bas de rampe
+        new Vector3(-6f,23f,-78f),                                                              // plateforme nord
+        new Vector3(45f,1.02f,-40f), new Vector3(10f,1.02f,20f), new Vector3(88f,21.7f,-100f)
         ]
     };
 
@@ -131,8 +137,10 @@ partial class Program
 
         // Map 2 : Sandbox
         [
-            new Vector3(20f, 2f, 20f), 
-            new Vector3(-20f, 2f, -20f)
+        new Vector3(-44f,0.12f, 80f), new Vector3(96f,0.12f,  80f),
+        new Vector3( 96f,0.12f,-145f), new Vector3(-44f,0.12f,-145f),
+        new Vector3( 28f,0.12f,-146f), new Vector3(-44f,0.12f, -30f),
+        new Vector3( 96f,0.12f, -60f), new Vector3(28f,0.12f,  83f)
         ]
     };
 

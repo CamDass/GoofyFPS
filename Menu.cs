@@ -362,7 +362,7 @@ partial class Program
         // REMARQUE : Remplace "textureMap1", etc. par tes vraies variables de textures préchargées
         // Pour l'instant, je mets ton "Logo" comme placeholder pour que ça compile sans erreur.
         Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2 }; 
-        string[] nomsMap = { "Tutoriel", "La Ville", "SandBox" };
+        string[] nomsMap = { "Tutoriel", "La Ville", "Chantier" };
         string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
         string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb"};
         //attention si on ajoute une map ne pas oublier de mettre 
