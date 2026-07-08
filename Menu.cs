@@ -426,6 +426,7 @@ partial class Program
                             mapModel.Materials[j].Shader = lightShader;
                         }
                     }
+                    ApplyMapTextures();
 
                     LoadMapSpawns(n);
                     InitBarrels();

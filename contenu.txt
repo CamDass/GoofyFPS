@@ -1,7 +1,9 @@
 Structure du dossier pour le volume Windows
-Le numéro de série du volume est 000000C4 A6CB:64E7
+Le numéro de série du volume est 00000044 A6CB:64E7
 C:.
 |   .gitignore
+|   blockmap.blend1
+|   blockmap.glb
 |   contenu.txt
 |   Cosmetics.cs
 |   EffetClic.cs
@@ -24,10 +26,14 @@ C:.
 |   README.md
 |   sandbox.glb
 |   Settings.cs
+|   SHADER_BRIEF.md
 |   skin.cfg
 |   test.glb
 |   Weapon.cs
 |   
++---.claude
+|       settings.local.json
+|       
 +---assets
 |   +---2D
 |   |       cible.png
@@ -39,6 +45,7 @@ C:.
 |   |       bazooka.glb
 |   |       ennemy.glb
 |   |       karambit.glb
+|   |       newmap.blend
 |   |       pistol.glb
 |   |       revolver.glb
 |   |       shotgun.glb
@@ -102,30 +109,184 @@ C:.
 |       |   |   GoofyFPS.exe
 |       |   |   GoofyFPS.pdb
 |       |   |   GoofyFPS.runtimeconfig.json
+|       |   |   Humanizer.dll
 |       |   |   LiteNetLib.dll
 |       |   |   Raylib-cs.dll
 |       |   |   
-|       |   \---runtimes
-|       |       +---linux-x64
-|       |       |   \---native
-|       |       |           libraylib.so
-|       |       |           
-|       |       +---osx-arm64
-|       |       |   \---native
-|       |       |           libraylib.dylib
-|       |       |           
-|       |       +---osx-x64
-|       |       |   \---native
-|       |       |           libraylib.dylib
-|       |       |           
-|       |       +---win-x64
-|       |       |   \---native
-|       |       |           raylib.dll
-|       |       |           
-|       |       \---win-x86
-|       |           \---native
-|       |                   raylib.dll
-|       |                   
+|       |   +---af
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ar
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---az
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---bg
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---bn
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ca
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---cs
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---da
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---de
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---el
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---es
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---fa
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---fi
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---fil
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---fr
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---he
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---hr
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---hu
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---hy
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---id
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---is
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---it
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ja
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ko
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ku
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---lb
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---lt
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---lv
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ms
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---mt
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---nb
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---nl
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---pl
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---pt
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---pt-BR
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ro
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---ru
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---runtimes
+|       |   |   +---linux-x64
+|       |   |   |   \---native
+|       |   |   |           libraylib.so
+|       |   |   |           
+|       |   |   +---osx-arm64
+|       |   |   |   \---native
+|       |   |   |           libraylib.dylib
+|       |   |   |           
+|       |   |   +---osx-x64
+|       |   |   |   \---native
+|       |   |   |           libraylib.dylib
+|       |   |   |           
+|       |   |   +---win-x64
+|       |   |   |   \---native
+|       |   |   |           raylib.dll
+|       |   |   |           
+|       |   |   \---win-x86
+|       |   |       \---native
+|       |   |               raylib.dll
+|       |   |               
+|       |   +---sk
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---sl
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---sr
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---sr-Latn
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---sv
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---th
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---tr
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---uk
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---uz-Cyrl-UZ
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---uz-Latn-UZ
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---vi
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---zh-CN
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   +---zh-Hans
+|       |   |       Humanizer.resources.dll
+|       |   |       
+|       |   \---zh-Hant
+|       |           Humanizer.resources.dll
+|       |           
 |       \---net11.0
 |           |   BepuPhysics.dll
 |           |   BepuUtilities.dll
@@ -246,6 +407,7 @@ C:.
     |   Background.png
     |   Background2.png
     |   Background3.png
+    |   blockmap.png
     |   GoofyFPS-small.ico
     |   GoofyFPS-small.png
     |   GoofyFPS.png
@@ -1021,6 +1183,20 @@ partial class Program
         new Vector3(90f,1.02f,-32f),                                                            // bas de rampe
         new Vector3(-6f,23f,-78f),                                                              // plateforme nord
         new Vector3(45f,1.02f,-40f), new Vector3(10f,1.02f,20f), new Vector3(88f,21.7f,-100f)
+        ],
+
+
+        // Map 3 : Blocs — barils au sol + quelques-uns sur les plateformes (dérivé de blockmap.glb)
+        [
+        new Vector3( 90.2f, 1.02f, -36.7f), new Vector3(-39.4f,1.02f,  21.3f),
+        new Vector3( 38.6f, 1.02f,  21.3f), new Vector3(-1.4f, 1.02f, -36.7f),
+        new Vector3( 88.6f, 1.02f,  15.3f), new Vector3(44.6f, 1.02f, -24.7f),
+        new Vector3( -1.4f, 1.02f,  13.3f), new Vector3(-39.4f,1.02f, -32.7f),
+        new Vector3( 72.6f, 1.02f, -10.7f), new Vector3(-19.4f,1.02f, -10.7f),
+        new Vector3( 18.6f, 1.02f,  -8.7f), new Vector3(62.6f, 1.02f,  15.3f),
+        new Vector3( 66.8f, 9.31f,  -6.7f), new Vector3(-7.4f, 9.31f, -12.2f),  // hautes plateformes
+        new Vector3( 62.7f,11.34f,  -4.6f), new Vector3(-3.3f,11.34f, -14.4f),
+        new Vector3( 40.7f, 8.60f,   4.9f), new Vector3(18.7f, 8.60f, -23.9f)
         ]
     };
 
@@ -1061,6 +1237,15 @@ partial class Program
         new Vector3( 96f,0.12f,-145f), new Vector3(-44f,0.12f,-145f),
         new Vector3( 28f,0.12f,-146f), new Vector3(-44f,0.12f, -30f),
         new Vector3( 96f,0.12f, -60f), new Vector3(28f,0.12f,  83f)
+        ],
+
+
+        // Map 3 : Blocs — à l'écart des spawns joueurs (dérivé de blockmap.glb)
+        [
+        new Vector3(-39.4f, 1f,  21.4f), new Vector3(52.6f, 1f, -10.7f),
+        new Vector3( 56.6f, 1f, -36.7f), new Vector3( 6.6f, 1f, -12.7f),
+        new Vector3( 78.6f, 1f, -12.7f), new Vector3(-13.4f,1f,  19.3f),
+        new Vector3( 32.6f, 1f,   1.3f), new Vector3(66.6f, 1f,  11.3f)
         ]
     };
 
@@ -3297,18 +3482,18 @@ partial class Program
         // ========================================================
         // REMARQUE : Remplace "textureMap1", etc. par tes vraies variables de textures préchargées
         // Pour l'instant, je mets ton "Logo" comme placeholder pour que ça compile sans erreur.
-        Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2 }; 
-        string[] nomsMap = { "Tutoriel", "La Ville", "Chantier" };
-        string[] destinationsMap = { "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
-        string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb"};
-        //attention si on ajoute une map ne pas oublier de mettre 
+        Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs };
+        string[] nomsMap = { "Tutoriel", "La Ville", "Chantier", "Blocs" };
+        string[] destinationsMap = { "boucle", "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
+        string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb","blockmap.glb"};
+        //attention si on ajoute une map ne pas oublier de mettre
         //les spawnpoint a jour dans jeu.cs
 
         // Paramètres de taille et d'espacement
         int largeurMap = 350;
         int hauteurMap = 220;
         int espacement = 80;
-        int nbMaps = 3;
+        int nbMaps = 4;
 
         // Calcul mathématique pour centrer le tout parfaitement
         int largeurTotale = (largeurMap * nbMaps) + (espacement * (nbMaps - 1));
@@ -3362,6 +3547,7 @@ partial class Program
                             mapModel.Materials[j].Shader = lightShader;
                         }
                     }
+                    ApplyMapTextures();
 
                     LoadMapSpawns(n);
                     InitBarrels();
@@ -4281,14 +4467,14 @@ partial class Program
                 Raylib.DrawRectangleLinesEx(zoneMap, 3, Color.Black);
                 Raylib.DrawText("CHOIX MAP", (int)zoneMap.X + (int)zoneMap.Width/2 - 60, (int)zoneMap.Y + 20, 24, Color.White);
 
-                // Rendu des vignettes de tes 3 maps préchargées
-                Texture2D[] vignettes = { ImageMapTest, ImageMapVille, Imageville2 }; // [cite: 572]
-                int vignetteW = 220;
-                int vignetteH = 140;
+                // Rendu des vignettes de tes maps préchargées
+                Texture2D[] vignettes = { ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs };
+                int vignetteW = 160;
+                int vignetteH = 110;
                 int startVignetteX = (int)zoneMap.X + 40;
                 int startVignetteY = (int)zoneMap.Y + 80;
 
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < vignettes.Length; i++)
                 {
                     Rectangle boxVignette = new Rectangle(startVignetteX + (i * (vignetteW + 30)), startVignetteY, vignetteW, vignetteH);
                     
@@ -5717,6 +5903,15 @@ public partial class Program
         new Vector3( 90f, 0.12f,-130f), new Vector3(-40f,0.12f,-128f),
         new Vector3( 28f, 0.12f,  -2f), new Vector3(-38f,18.1f, -24f),  // plateforme P2
         new Vector3( 20f, 20.1f, -32f), new Vector3(78f, 6.2f,  47f)   // PE / landing couloir
+        ],
+
+
+        // Map 3 : Blocs (sol Y=0, X:[-43.4..94.3] Z:[-40.7..25.4]) — dérivé de blockmap.glb
+        [
+        new Vector3(-21.4f, 1f,  -4.7f), new Vector3(88.6f, 1f, -36.7f),
+        new Vector3( 46.6f, 1f,  21.3f), new Vector3(28.6f, 1f, -32.7f),
+        new Vector3( 88.6f, 1f,  15.3f), new Vector3(-39.4f,1f, -36.7f),
+        new Vector3( 10.6f, 1f,  13.3f), new Vector3(-5.4f, 1f, -36.7f)
         ]
     };
     
@@ -5746,7 +5941,7 @@ public partial class Program
     }
     
     // Images & HUD
-    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, cibleTexture, ImageMapTest, ImageMapVille, Imageville2;
+    static Texture2D Logo, startimg, clic1, clic2, clic3, sniperaim, cibleTexture, ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs;
     static Texture2D play_button, play_active, option_button, option_active, quit_button, quit_active, background, BlurBackground, imageexplosion;
     static float tempsAffichage = 3.0f; 
     static float opaciteImage = 255.0f; 
@@ -6393,7 +6588,7 @@ public partial class Program
     }
 
     // Les chemins de tes maps
-    string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb" };
+    string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb", "blockmap.glb" };
     mapModel = Raylib.LoadModel(ModelMapPath[mapIndex]);
 
     // CORRECTION DU "CRASH 2" : avant, la map réseau n'avait AUCUNE collision physique
@@ -6402,6 +6597,7 @@ public partial class Program
     ExtraireTrianglesMap();
 
     unsafe { for (int j = 0; j < mapModel.MaterialCount; j++) mapModel.Materials[j].Shader = lightShader; }
+    ApplyMapTextures();
 
     LoadMapSpawns(mapIndex);
     InitBarrels();
@@ -6414,6 +6610,26 @@ public partial class Program
     joueur.Velocity.Angular = Vector3.Zero;
     Raylib.DisableCursor();
 }
+
+    // ========================================================
+    // MIPMAPS + FILTRAGE TRILINÉAIRE sur les textures de la map.
+    // Sans mipmaps, les textures tuilées scintillent et donnent un effet de
+    // "répétition à l'infini" vues de loin. On génère les mips puis on passe en
+    // trilinéaire pour un rendu propre à toutes les distances.
+    // ========================================================
+    static unsafe void ApplyMapTextures()
+    {
+        for (int i = 0; i < mapModel.MaterialCount; i++)
+        {
+            Texture2D tex = mapModel.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture;
+            if (tex.Id > 0 && tex.Width > 1) // on ignore la texture blanche 1x1 par défaut
+            {
+                Raylib.GenTextureMipmaps(ref tex);
+                Raylib.SetTextureFilter(tex, TextureFilter.Trilinear);
+                mapModel.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture = tex;
+            }
+        }
+    }
 
     // ========================================================
     // LE PONT RAYLIB -> BEPU : transforme le modèle 3D de la map (mapModel)
@@ -6564,6 +6780,7 @@ public static void GenererPhysiqueMap(Model modele)
         ImageMapTest = Raylib.LoadTexture("src\\testMap.png");
         ImageMapVille = Raylib.LoadTexture("src\\ville.png");
         Imageville2 = Raylib.LoadTexture("src\\ville2.png");
+        ImageMapBlocs = Raylib.LoadTexture("src\\blockmap.png");
 
 
         ennemiModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");

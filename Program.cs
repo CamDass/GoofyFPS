@@ -69,12 +69,12 @@ public partial class Program
         ],
 
 
-        // Map 3 : Blocs (arène symétrique, sol Y=0, X:[-36..67] Z:[-38..38])
+        // Map 3 : Blocs (sol Y=0, X:[-43.4..94.3] Z:[-40.7..25.4]) — dérivé de blockmap.glb
         [
-        new Vector3(-33.6f, 1f, -34.6f), new Vector3(62.4f, 1f,  33.4f),
-        new Vector3( -9.6f, 1f,  33.4f), new Vector3(40.4f, 1f, -34.6f),
-        new Vector3( 28.4f, 1f,   7.4f), new Vector3(-33.6f, 1f,  3.4f),
-        new Vector3(  4.4f, 1f, -22.6f), new Vector3(62.4f, 1f, -4.6f)
+        new Vector3(-21.4f, 1f,  -4.7f), new Vector3(88.6f, 1f, -36.7f),
+        new Vector3( 46.6f, 1f,  21.3f), new Vector3(28.6f, 1f, -32.7f),
+        new Vector3( 88.6f, 1f,  15.3f), new Vector3(-39.4f,1f, -36.7f),
+        new Vector3( 10.6f, 1f,  13.3f), new Vector3(-5.4f, 1f, -36.7f)
         ]
     };
     
@@ -760,6 +760,7 @@ public partial class Program
     ExtraireTrianglesMap();
 
     unsafe { for (int j = 0; j < mapModel.MaterialCount; j++) mapModel.Materials[j].Shader = lightShader; }
+    ApplyMapTextures();
 
     LoadMapSpawns(mapIndex);
     InitBarrels();
@@ -772,6 +773,26 @@ public partial class Program
     joueur.Velocity.Angular = Vector3.Zero;
     Raylib.DisableCursor();
 }
+
+    // ========================================================
+    // MIPMAPS + FILTRAGE TRILINÉAIRE sur les textures de la map.
+    // Sans mipmaps, les textures tuilées scintillent et donnent un effet de
+    // "répétition à l'infini" vues de loin. On génère les mips puis on passe en
+    // trilinéaire pour un rendu propre à toutes les distances.
+    // ========================================================
+    static unsafe void ApplyMapTextures()
+    {
+        for (int i = 0; i < mapModel.MaterialCount; i++)
+        {
+            Texture2D tex = mapModel.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture;
+            if (tex.Id > 0 && tex.Width > 1) // on ignore la texture blanche 1x1 par défaut
+            {
+                Raylib.GenTextureMipmaps(ref tex);
+                Raylib.SetTextureFilter(tex, TextureFilter.Trilinear);
+                mapModel.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture = tex;
+            }
+        }
+    }
 
     // ========================================================
     // LE PONT RAYLIB -> BEPU : transforme le modèle 3D de la map (mapModel)

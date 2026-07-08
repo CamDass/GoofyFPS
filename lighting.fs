@@ -49,8 +49,8 @@ void main()
     // AMÉLIORATION : SPÉCULAIRE (Blinn-Phong) -> reflets et volume sur les surfaces.
     // Utilise ta couleur de soleil existante, donc aucune nouvelle couleur introduite.
     vec3 halfDir = normalize(lightDir + viewDir);
-    float spec = pow(max(dot(N, halfDir), 0.0), 32.0); // 32 = taille du reflet (plus grand = plus net)
-    vec3 specular = spec * lightLin * 0.35;            // 0.35 = intensité du reflet
+    float spec = pow(max(dot(N, halfDir), 0.0), 48.0); // reflet plus resserré (moins d'effet "plastique")
+    vec3 specular = spec * lightLin * 0.08;            // intensité fortement réduite : surfaces mates (bois/béton non brillants)
     specular *= diff;                                  // pas de reflet sur une face dans l'ombre
 
     // L'objet éclairé (avant le brouillard), en espace linéaire

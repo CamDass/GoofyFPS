@@ -104,16 +104,17 @@ partial class Program
         ],
 
 
-        // Map 3 : Blocs (barils au sol + quelques-uns sur les plateformes)
+        // Map 3 : Blocs — barils au sol + quelques-uns sur les plateformes (dérivé de blockmap.glb)
         [
-        new Vector3(-31.6f, 1.02f,  -0.6f), new Vector3(62.4f, 1.02f, -34.6f),
-        new Vector3( 34.4f, 1.02f,  33.4f), new Vector3( 8.4f, 1.02f, -34.6f),
-        new Vector3( -7.6f, 1.02f,  33.4f), new Vector3(62.4f, 1.02f,   5.4f),
-        new Vector3( 12.4f, 1.02f,   5.4f), new Vector3(-27.6f,1.02f, -34.6f),
-        new Vector3( 34.4f, 1.02f, -16.6f), new Vector3(62.4f, 1.02f,  33.4f),
-        new Vector3( -3.5f, 6.56f,  -6.7f), new Vector3(46.0f, 6.56f,  -5.9f),  // hautes plateformes
-        new Vector3( 12.4f, 6.09f, -15.9f), new Vector3(27.1f, 6.09f,   3.3f),
-        new Vector3( 16.3f, 5.58f, -26.5f)
+        new Vector3( 90.2f, 1.02f, -36.7f), new Vector3(-39.4f,1.02f,  21.3f),
+        new Vector3( 38.6f, 1.02f,  21.3f), new Vector3(-1.4f, 1.02f, -36.7f),
+        new Vector3( 88.6f, 1.02f,  15.3f), new Vector3(44.6f, 1.02f, -24.7f),
+        new Vector3( -1.4f, 1.02f,  13.3f), new Vector3(-39.4f,1.02f, -32.7f),
+        new Vector3( 72.6f, 1.02f, -10.7f), new Vector3(-19.4f,1.02f, -10.7f),
+        new Vector3( 18.6f, 1.02f,  -8.7f), new Vector3(62.6f, 1.02f,  15.3f),
+        new Vector3( 66.8f, 9.31f,  -6.7f), new Vector3(-7.4f, 9.31f, -12.2f),  // hautes plateformes
+        new Vector3( 62.7f,11.34f,  -4.6f), new Vector3(-3.3f,11.34f, -14.4f),
+        new Vector3( 40.7f, 8.60f,   4.9f), new Vector3(18.7f, 8.60f, -23.9f)
         ]
     };
 
@@ -157,12 +158,12 @@ partial class Program
         ],
 
 
-        // Map 3 : Blocs
+        // Map 3 : Blocs — à l'écart des spawns joueurs (dérivé de blockmap.glb)
         [
-        new Vector3( 32.4f, 1f,  15.4f), new Vector3(-33.6f, 1f, -34.6f),
-        new Vector3(-33.6f, 1f,  33.4f), new Vector3( 62.4f, 1f, -34.6f),
-        new Vector3( 14.4f, 1f, -30.6f), new Vector3(-11.6f, 1f,  -0.6f),
-        new Vector3(  2.4f, 1f,  33.4f), new Vector3( 62.4f, 1f,  33.4f)
+        new Vector3(-39.4f, 1f,  21.4f), new Vector3(52.6f, 1f, -10.7f),
+        new Vector3( 56.6f, 1f, -36.7f), new Vector3( 6.6f, 1f, -12.7f),
+        new Vector3( 78.6f, 1f, -12.7f), new Vector3(-13.4f,1f,  19.3f),
+        new Vector3( 32.6f, 1f,   1.3f), new Vector3(66.6f, 1f,  11.3f)
         ]
     };
 
