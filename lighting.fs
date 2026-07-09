@@ -41,7 +41,13 @@ void main()
     vec3 viewDir = normalize(viewPos - fragPosition);
 
     // 2. LUMIÈRE
-    vec3 ambient = pow(vec3(0.3, 0.3, 0.3), vec3(2.2)); // même valeur qu'avant (juste linéarisée)
+    // AMÉLIORATION : ambient HÉMISPHÉRIQUE (gris) — remplit les faces à l'ombre pour qu'elles
+    // ne soient plus quasi-noires (sinon une face avant sombre ressemble à un "trou" et le bloc
+    // paraît creux). Gris pur => ne change pas ta palette ; juste plus clair, le haut un peu plus
+    // éclairé que le bas -> les blocs se lisent comme des volumes pleins, plus proche d'Eevee.
+    float hemi = N.y * 0.5 + 0.5;                 // 0 = face vers le bas, 1 = face vers le haut
+    float ambStrength = mix(0.42, 0.62, hemi);    // avant : 0.30 plat -> nettement plus lumineux
+    vec3 ambient = pow(vec3(ambStrength), vec3(2.2));
     vec3 lightDir = normalize(lightPos - fragPosition);
     float diff = max(dot(N, lightDir), 0.0);
     vec3 diffuse = diff * lightLin;

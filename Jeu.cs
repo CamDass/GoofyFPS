@@ -67,7 +67,28 @@ partial class Program
     {
         // Map 0 : Tutoriel
         [
-            new Vector3(5f, 1f, 5f)
+            new Vector3(-45.5f, 12.35f, -22.5f),   // Plateforme de départ Ouest (West_Catwalk_S)
+            new Vector3(-35.16f, 4.55f, -9.23f),   // Passerelle Ouest .001
+            new Vector3(-47.74f, 3.95f, -4.03f),   // Passerelle Ouest .002[cite: 1]
+            new Vector3(-30.85f, 2.95f, 47.76f),   // Passerelle haute tournante Ouest .003[cite: 2]
+            new Vector3(-22.51f, 10.40f, 17.70f),  // Petite plateforme suspendue .014
+        
+            new Vector3(15.2f, 2.65f, -25.0f),     // Bloc Cyan 1 (décalé vers le centre du couloir)
+            new Vector3(11.0f, 2.75f, -20.25f),    // Bloc Cyan 2 (décalé vers l'espace vide)
+            new Vector3(6.79f, 3.25f, -26.0f),     // Bloc Cyan 3 (monté et avancé pour ne pas bugger)
+            new Vector3(8.5f, 4.25f, -15.25f),     // Grand bloc Cyan 4 (centré sur la surface du bloc)
+            new Vector3(17.29f, 2.05f, -11.5f),    // Bloc au sol Cyan 5 (rehaussé et éloigné du mur)
+            new Vector3(4.73f, 2.70f, -7.0f),      // Bloc Cyan 8 (avancé vers la zone de jeu)
+
+            new Vector3(9.71f, 5.15f, -42.5f),     // Structure Cyan massive 9 (posé sur le rebord)
+            new Vector3(17.43f, 7.55f, -43.73f),   // Au sommet de l'arche en bloc Cyan 11
+
+            // --- ARÈNE ET RAMPES (EST / NORD) ---
+            new Vector3(-35.0f, 2.55f, 2.15f),     // Juste au sommet du tremplin de saut (Arena_JumpRamp)
+            new Vector3(-44.5f, 7.65f, -39.44f),   // Haut de la rampe de descente (Descent_Ramp)
+            new Vector3(44.76f, 4.85f, -10.42f),   // Palier d'atterrissage Est (Ramp_Landing.001)
+            new Vector3(44.76f, 4.85f, 0.11f)      // Deuxième palier d'atterrissage (Ramp_Landing)
+        
         ],
 
 
@@ -434,7 +455,7 @@ static void InitBarrels()
         // ========================================================
         // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
         // ========================================================
-        if (Raylib.IsKeyPressed(KeyBinds.ToggleGameMenu))
+        if (KeyBinds.IsPauseTogglePressed())
         {
             isPaused = !isPaused; // On bascule le mode pause (Vrai/Faux)
             
@@ -461,9 +482,9 @@ static void InitBarrels()
                 Raylib.DrawText("Appuyez sur ENTREE pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
                 Raylib.EndDrawing();
 
-                if (Raylib.IsKeyPressed(KeyboardKey.Enter))
+                if (KeyBinds.IsMenuConfirmPressed())
                 {
-                    localPlayer.Respawn(); 
+                    localPlayer.Respawn();
 
                     BodyReference joueurMort = simulation.Bodies.GetBodyReference(PlayerId);
                     joueurMort.Pose.Position = new Vector3(0, 50, 0); 
@@ -676,7 +697,7 @@ static void InitBarrels()
         // 1. On anticipe la vérification de l'arme pour savoir si on vise
         bool isMelee = (currentWeapon == karambitknife || currentWeapon == bazookaWeapon); 
         bool isScopedWeapon = (currentWeapon == sniperrifle || currentWeapon == pistolWeapon); 
-        bool isAiming = Raylib.IsMouseButtonDown(MouseButton.Right) && hasWeapon && !isMelee;
+        bool isAiming = KeyBinds.IsAimingHeld() && hasWeapon && !isMelee;
         Program.localIsAiming = isAiming; // pour que les autres voient notre arme centrée en visée
 
         // 2. LA REDUCTION DE SENSIBILITÉ (Le secret professionnel)
@@ -688,10 +709,19 @@ static void InitBarrels()
                 sensi *= 0.5f; // Les armes normales divisent la sensi par 2 (50%)
         }
 
-        // 3. On tourne la caméra avec la bonne sensibilité
+        // 3. On tourne la caméra avec la bonne sensibilité (SOURIS)
         Vector2 mouseDelta = Raylib.GetMouseDelta();
-        CameraYaw -= mouseDelta.X * sensi; 
-        CameraPitch -= mouseDelta.Y * sensi; 
+        CameraYaw -= mouseDelta.X * sensi;
+        CameraPitch -= mouseDelta.Y * sensi;
+
+        // 3bis. MANETTE : rotation de la caméra au stick droit.
+        // La sensibilité manette est en radians/seconde -> on multiplie par deltaTime pour
+        // être indépendant du framerate (la souris, elle, donne déjà un delta en pixels).
+        Vector2 padLook = isPaused ? Vector2.Zero : KeyBinds.GetGamepadLook();
+        float padSensi = Settings.GamepadLookSensitivity;
+        if (isAiming) padSensi *= isScopedWeapon ? 0.4f : 0.6f; // visée = plus précis (comme la souris)
+        CameraYaw   -= padLook.X * padSensi * deltaTime;
+        CameraPitch -= (Settings.GamepadInvertY ? -padLook.Y : padLook.Y) * padSensi * deltaTime;
 
         float PitchLimit = 1.55f;
         if (CameraPitch > PitchLimit) CameraPitch = PitchLimit;
@@ -759,7 +789,7 @@ static void InitBarrels()
 
             // 4. Poser le mur au Clic Gauche
             
-            if (Raylib.IsMouseButtonPressed(MouseButton.Left))
+            if (KeyBinds.IsShootingPressed())
             {
                 if (wallChrono >= FPS * 10)
                 {
@@ -863,7 +893,7 @@ static void InitBarrels()
         {
             // Saut
 
-            if (Raylib.IsKeyPressed(KeyBinds.Jump))
+            if (KeyBinds.IsJumpingPressed())
             {
                 if (NbJump > NbJumpMax)
                 {
@@ -929,7 +959,7 @@ static void InitBarrels()
 
             if (IsWallRunning)
             {
-                if (Raylib.IsKeyPressed(KeyBinds.Jump))
+                if (KeyBinds.IsJumpingPressed())
                 {
                     espionCube.Velocity.Linear.Y += 2f;
                     if (capteurMurDroit.toucheMur) deplacementVoulu -= GroundRight*20;
@@ -956,7 +986,7 @@ static void InitBarrels()
 
             // Accroupir & Glissade
 
-            if (KeyBinds.IsCrouchingPressed() && !Raylib.IsKeyDown(KeyBinds.Jump))
+            if (KeyBinds.IsCrouchingPressed() && !KeyBinds.IsJumpHeld())
             {
                 espionCube.SetShape(PlayerTicketAccroupi);
                 hauteurVoulue = 0.5f;
@@ -978,7 +1008,7 @@ static void InitBarrels()
                     // ==========================================
                     
                     // Boost d'entrée (Uniquement si on lance la glissade depuis un sprint)
-                    if (Raylib.IsKeyPressed(KeyBinds.Crouch) && vitesseHorizontale > 6f) 
+                    if (KeyBinds.IsCrouchPressedEdge() && vitesseHorizontale > 6f)
                     {
                         espionCube.Velocity.Linear += GroundForward * 3f; 
                         //Raylib.PlaySound(swoosh); 
@@ -1072,7 +1102,7 @@ static void InitBarrels()
             espionCube.Velocity.Linear.Z += (targetVelocity.Z - espionCube.Velocity.Linear.Z) * fAcceleration;
 
 
-            if (capteurSol.toucheSol && !Raylib.IsKeyDown(KeyBinds.Jump))
+            if (capteurSol.toucheSol && !KeyBinds.IsJumpHeld())
             {
                 if (targetVelocity.Y > 0) 
                 {
@@ -1661,7 +1691,7 @@ static void InitBarrels()
         // [ZONE ILIAN] 5. LOGIQUE DES TIRS
         // ========================================================
         // Si on a une arme et qu'on clique
-        if (hasWeapon && Raylib.IsMouseButtonDown(MouseButton.Left) && !modeConstruction && !isPaused)
+        if (hasWeapon && KeyBinds.IsShootingHeld() && !modeConstruction && !isPaused)
         {
             Vector3 direction = CamFroward;
             

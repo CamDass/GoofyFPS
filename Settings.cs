@@ -17,6 +17,12 @@ public static class Settings
     public static float BaseFOV = 60f;        // Base field of view
     public static float MouseSensitivity = 0.003f;
 
+    // ===== CONTROLLER / MANETTE SETTINGS =====
+    // Vitesse de rotation de la caméra au stick droit, en radians/seconde à pleine poussée.
+    // (La souris est en radians/pixel ; la manette est indépendante du framerate via deltaTime.)
+    public static float GamepadLookSensitivity = 3.0f;
+    public static bool GamepadInvertY = false;   // Inverser l'axe vertical du stick droit
+
     // ===== CUSTOMIZABLE KEYBINDS (Mutable) =====
     // Movement
     public static KeyboardKey KEY_MoveForward = KeyboardKey.W;

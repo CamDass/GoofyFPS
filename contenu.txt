@@ -1,5 +1,5 @@
 Structure du dossier pour le volume Windows
-Le numéro de série du volume est 00000044 A6CB:64E7
+Le numéro de série du volume est 0000004D A6CB:64E7
 C:.
 |   .gitignore
 |   blockmap.blend1
@@ -24,11 +24,13 @@ C:.
 |   player.cs
 |   Program.cs
 |   README.md
+|   Rendu.cs
 |   sandbox.glb
 |   Settings.cs
 |   SHADER_BRIEF.md
 |   skin.cfg
 |   test.glb
+|   tutomap.glb
 |   Weapon.cs
 |   
 +---.claude
@@ -51,6 +53,7 @@ C:.
 |   |       shotgun.glb
 |   |       sniper.glb
 |   |       sword.glb
+|   |       tutomap.blend
 |   |       
 |   \---sounds
 |       |   awp_02.mp3
@@ -2309,22 +2312,20 @@ static void InitBarrels()
         // ========================================================
         // [ZONE MIXTE] 3. RENDU GRAPHIQUE (RAYLIB)
         // ========================================================
-        Vector3 soleilPosition = new Vector3(50.0f, 100.0f, 50.0f);
-        Vector4 soleilCouleur = new Vector4(1.0f, 0.9f, 0.8f, 1.0f); 
+        // Eclairage de la passe MONDE : soleil directionnel + ambient
+        // hemispherique + fog, tout parametre par la config de la map courante
+        // (voir Rendu.cs / MapRenderConfig).
+        Program.PushWorldLighting(camera.Position);
 
-        Raylib.SetShaderValue(lightShader, lightPosLoc, soleilPosition, ShaderUniformDataType.Vec3);
-        Raylib.SetShaderValue(lightShader, lightColorLoc, soleilCouleur, ShaderUniformDataType.Vec4);
-        
-        // On envoie la position de la caméra pour le brouillard 
-        Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
-        Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
-        
+        // Plan lointain adapte a la map (le Chantier fait ~2 km).
+        Program.ApplyWorldClipPlanes();
+
+        Program.MapRenderConfig rc = Program.CurrentRenderConfig();
+
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Color.SkyBlue);
-        Color couleurZenith = new Color(20, 25, 45, 255);   // Bleu très sombre en haut
-        Color couleurHorizon = new Color(120, 60, 50, 255); // Orange/Rouge sale à l'horizon
-        
-        Raylib.DrawRectangleGradientV(0, 0, LargeurFenetre, HauteurFenetre, couleurZenith, couleurHorizon);
+        // Degrade de ciel 2D par map (zenith -> horizon), coherent avec le fog.
+        Raylib.DrawRectangleGradientV(0, 0, LargeurFenetre, HauteurFenetre, rc.SkyZenith, rc.SkyHorizon);
 
         Raylib.BeginMode3D(camera);
 
@@ -2682,28 +2683,14 @@ static void InitBarrels()
                 // "monde" ne bouge jamais par rapport à elle : elle était toujours éclairée pareil.
                 // L'astuce : exprimer la direction du soleil DANS le repère de la caméra du joueur.
                 // Quand on tourne sur soi-même, cette direction change, et l'arme réagit à la lumière !
-                Vector3 dirSoleil = Vector3.Normalize(soleilPosition - camera.Position);
                 Vector3 axeAvant = CamFroward;
                 Vector3 axeHaut = camera.Up;
                 Vector3 axeDroite = Vector3.Normalize(Vector3.Cross(axeHaut, axeAvant));
-                // La weaponCamera regarde vers +Z avec up +Y : son repère est l'identité,
-                // donc les composantes (droite, haut, avant) se réutilisent telles quelles.
-                Vector3 soleilVueArme = new Vector3(
-                    Vector3.Dot(dirSoleil, axeDroite),
-                    Vector3.Dot(dirSoleil, axeHaut),
-                    Vector3.Dot(dirSoleil, axeAvant)
-                ) * 100f; // loin, pour un éclairage quasi directionnel
 
-                Raylib.SetShaderValue(lightShader, lightPosLoc, soleilVueArme, ShaderUniformDataType.Vec3);
-                Raylib.SetShaderValue(lightShader, viewPosLoc, weaponCamera.Position, ShaderUniformDataType.Vec3);
-
-                Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 0 }, ShaderUniformDataType.Int);
+                // Fog off + soleil exprimé dans le repère de la weaponCamera + boost léger
+                // (met en valeur le métal des armes, contraste avec les surfaces mates).
+                Program.PushViewmodelLighting(axeDroite, axeHaut, axeAvant);
                 Raylib.DrawModelEx(actualWeapon, weaponPos, Vector3.UnitX, totalRotation, weaponScale, Color.White);
-                Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
-
-                // On remet la lumière "monde" pour tout ce qui sera dessiné ensuite
-                Raylib.SetShaderValue(lightShader, lightPosLoc, soleilPosition, ShaderUniformDataType.Vec3);
-                Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
 
             Raylib.EndMode3D();
             
@@ -3485,7 +3472,7 @@ partial class Program
         Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs };
         string[] nomsMap = { "Tutoriel", "La Ville", "Chantier", "Blocs" };
         string[] destinationsMap = { "boucle", "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
-        string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb","blockmap.glb"};
+        string[] ModelMapPath = {"tutomap.glb","map.glb","sandbox.glb","blockmap.glb"};
         //attention si on ajoute une map ne pas oublier de mettre
         //les spawnpoint a jour dans jeu.cs
 
@@ -3540,14 +3527,9 @@ partial class Program
 
 
 
-                    unsafe
-                    {
-                        for (int j = 0; j < mapModel.MaterialCount; j++)
-                        {
-                            mapModel.Materials[j].Shader = lightShader;
-                        }
-                    }
-                    ApplyMapTextures();
+                    // Setup PBR complet de la map (matériaux classés, facteurs,
+                    // normal maps, mipmaps, shader) + mémorisation de l'index.
+                    SetupMapModel(n, ModelMapPath[n]);
 
                     LoadMapSpawns(n);
                     InitBarrels();
@@ -5885,8 +5867,8 @@ public partial class Program
     // 1. La base de données de tous les spawns de joueur selon la map
     static Vector3[][] mapPlayerSpawns = new Vector3[][]
     {
-        // Map 0 : Tutoriel
-        [new Vector3(0, 5, 0)],
+        // Map 0 : Tutoriel — L'Usine de Jouets Défectueux (spawn Zone 1, catwalk Y+12)
+        [new Vector3(45f, 13.5f, -45f)],
 
 
         // Map 1 : La Ville (Tes anciennes coordonnées)
@@ -5966,10 +5948,7 @@ public partial class Program
     static float musicVolume = 0.4f;
     static ActiveMusic currentMusicState = ActiveMusic.None;
     static Shader lightShader;
-    static int lightPosLoc;
-    static int lightColorLoc;
-    static int viewPosLoc;
-    public static int applyFogLoc;
+    // Les locations d'uniforms + la config de rendu par map vivent dans Rendu.cs.
 
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
@@ -6588,7 +6567,7 @@ public partial class Program
     }
 
     // Les chemins de tes maps
-    string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb", "blockmap.glb" };
+    string[] ModelMapPath = { "tutomap.glb", "map.glb", "sandbox.glb", "blockmap.glb" };
     mapModel = Raylib.LoadModel(ModelMapPath[mapIndex]);
 
     // CORRECTION DU "CRASH 2" : avant, la map réseau n'avait AUCUNE collision physique
@@ -6596,8 +6575,9 @@ public partial class Program
     // mapStaticHandle restait invalide pour le nettoyage suivant.
     ExtraireTrianglesMap();
 
-    unsafe { for (int j = 0; j < mapModel.MaterialCount; j++) mapModel.Materials[j].Shader = lightShader; }
-    ApplyMapTextures();
+    // Setup PBR complet de la map (classification materiaux, facteurs, normal
+    // maps, mipmaps, shader) + memorisation de l'index pour la config de rendu.
+    SetupMapModel(mapIndex, ModelMapPath[mapIndex]);
 
     LoadMapSpawns(mapIndex);
     InitBarrels();
@@ -6610,26 +6590,6 @@ public partial class Program
     joueur.Velocity.Angular = Vector3.Zero;
     Raylib.DisableCursor();
 }
-
-    // ========================================================
-    // MIPMAPS + FILTRAGE TRILINÉAIRE sur les textures de la map.
-    // Sans mipmaps, les textures tuilées scintillent et donnent un effet de
-    // "répétition à l'infini" vues de loin. On génère les mips puis on passe en
-    // trilinéaire pour un rendu propre à toutes les distances.
-    // ========================================================
-    static unsafe void ApplyMapTextures()
-    {
-        for (int i = 0; i < mapModel.MaterialCount; i++)
-        {
-            Texture2D tex = mapModel.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture;
-            if (tex.Id > 0 && tex.Width > 1) // on ignore la texture blanche 1x1 par défaut
-            {
-                Raylib.GenTextureMipmaps(ref tex);
-                Raylib.SetTextureFilter(tex, TextureFilter.Trilinear);
-                mapModel.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture = tex;
-            }
-        }
-    }
 
     // ========================================================
     // LE PONT RAYLIB -> BEPU : transforme le modèle 3D de la map (mapModel)
@@ -6858,66 +6818,22 @@ public static void GenererPhysiqueMap(Model modele)
         revolverWeapon.soundname = revolvershot;
         swordWeapon.soundname = swordslash;
 
-        lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
-        lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
-        lightColorLoc = Raylib.GetShaderLocation(lightShader, "lightColor");
-        viewPosLoc = Raylib.GetShaderLocation(lightShader, "viewPos");
-        applyFogLoc = Raylib.GetShaderLocation(lightShader, "applyFog");
-        
-        // APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE ET LES ARMES
-        unsafe
-        {
-            // 1. Pour la map
-            for (int i = 0; i < mapModel.MaterialCount; i++)
-            {
-                mapModel.Materials[i].Shader = lightShader;
-            }
+        // Shader d'eclairage PBR-lite + ses locations d'uniforms + textures partagees.
+        LoadLightingShader();
 
-            // 2. CORRECTION : Pour le sniper
-            for (int i = 0; i < sniper.MaterialCount; i++)
-            {
-                sniper.Materials[i].Shader = lightShader;
-            }
-
-            // 3. CORRECTION : Pour le karambit
-            for (int i = 0; i < karambit.MaterialCount; i++)
-            {
-                karambit.Materials[i].Shader = lightShader;
-            }
-            for (int i = 0; i < bazooka.MaterialCount; i++)
-            {
-                bazooka.Materials[i].Shader = lightShader;
-            }
-            for (int i = 0; i < sword.MaterialCount; i++)
-            {
-                sword.Materials[i].Shader = lightShader;
-            }
-            for (int i = 0; i < shotgun.MaterialCount; i++)
-            {
-                shotgun.Materials[i].Shader = lightShader;
-            }
-            for (int i = 0; i < pistol.MaterialCount; i++)
-            {
-                pistol.Materials[i].Shader = lightShader;
-            }
-            for (int i = 0; i < revolver.MaterialCount; i++)
-            {
-                revolver.Materials[i].Shader = lightShader;
-            }
-
-            // 4. (Bonus) Pour les ennemis si tu veux qu'ils réagissent aussi à la lumière
-            for (int i = 0; i < ennemiModel.MaterialCount; i++)
-            {
-                ennemiModel.Materials[i].Shader = lightShader;
-            }
-
-            // 5. Barreils
-            for (int i = 0; i < barrelModel.MaterialCount; i++)
-            {
-                barrelModel.Materials[i].Shader = lightShader;
-            }
-
-        }
+        // Setup PBR par modele (classification metal/bois/beton par nom de materiau,
+        // bake des facteurs metallic/roughness, normal maps, mipmaps, shader).
+        // La map elle-meme est preparee a son chargement (SetupMapModel), car elle
+        // n'est pas encore chargee a ce stade de l'initialisation.
+        SetupModelPbr(ref sniper,      "assets\\3D\\sniper.glb");
+        SetupModelPbr(ref karambit,    "assets\\3D\\karambit.glb");
+        SetupModelPbr(ref bazooka,     "assets\\3D\\bazooka.glb");
+        SetupModelPbr(ref sword,       "assets\\3D\\sword.glb");
+        SetupModelPbr(ref shotgun,     "assets\\3D\\shotgun.glb");
+        SetupModelPbr(ref pistol,      "assets\\3D\\pistol.glb");
+        SetupModelPbr(ref revolver,    "assets\\3D\\revolver.glb");
+        SetupModelPbr(ref ennemiModel, "assets\\3D\\ennemy.glb");
+        SetupModelPbr(ref barrelModel, "assets\\3D\\barril.glb");
 
         ListeTexture.Add(Logo);
         ListeTexture.Add(startimg);
@@ -6962,7 +6878,8 @@ public static void GenererPhysiqueMap(Model modele)
         // Le visuel Raylib (Un cube qu'on pourra faire tourner)
         visuelMur = Raylib.LoadModelFromMesh(Raylib.GenMeshCube(2.0f, 2.0f, 0.5f));
 
-        unsafe { visuelMur.Materials[0].Shader = lightShader; }
+        // Mur construit par le joueur : béton mat (pas de .glb -> setup procédural).
+        SetupProceduralModel(ref visuelMur, 0f, 0.85f);
 
 
 
@@ -7360,6 +7277,478 @@ public static void GenererPhysiqueMap(Model modele)
 
 
 }
+
+========
+
+Rendu.cs
+
+using System.Numerics;
+using System.Text.Json;
+using Raylib_cs;
+
+// ============================================================================
+// GoofyFPS - Systeme de rendu / shaders (Rendu.cs)
+// ----------------------------------------------------------------------------
+// Ce fichier regroupe TOUT ce qui concerne le shader d'eclairage PBR-lite :
+//   * les locations d'uniforms du shader (lighting.vs / lighting.fs) ;
+//   * la CONFIG DE RENDU PAR MAP (soleil, ambient, fog, ciel, exposition,
+//     far-plane) -> table indexee, avec un profil par defaut pour toute
+//     nouvelle map ajoutee plus tard (evolutif) ;
+//   * le SETUP PBR des modeles : classification metal/bois/beton par nom de
+//     materiau + facteurs glTF, bake des facteurs (metallic, roughness) dans
+//     une petite texture, normal map plate par defaut, mipmaps/trilineaire ;
+//   * l'envoi des uniforms pour la passe MONDE et la passe VUE-ARME.
+//
+// Pourquoi une texture de "params" plutot que des uniforms metallic/roughness ?
+//   Raylib n'upload PAS les facteurs metallicFactor/roughnessFactor au shader,
+//   et un DrawModel dessine tous les meshes d'un coup (impossible d'injecter un
+//   uniform par materiau sans reecrire le path de rendu). On encode donc
+//   (metallic, roughness) dans une texture 1x1 posee dans le slot Metalness
+//   (jamais utilise par le loader glTF) -> Raylib la bind automatiquement en
+//   texture1, et CHAQUE materiau garde ses propres valeurs. Zero changement
+//   dans les appels DrawModel/DrawModelEx existants.
+// ============================================================================
+public partial class Program
+{
+    // ------------------------------------------------------------------
+    // Locations des uniforms (remplies au chargement du shader)
+    // ------------------------------------------------------------------
+    static int locViewPos;
+    static int locSunDir, locSunColor, locSunIntensity;
+    static int locSkyColor, locGroundColor, locAmbient;
+    static int locApplyFog, locFogColor, locFogStart, locFogEnd;
+    static int locNormalStrength, locExposure;
+
+    // Index de la map actuellement chargee (partage solo + reseau).
+    // Sert a choisir la MapRenderConfig et le degrade de ciel.
+    public static int currentMapIndex = 1;
+
+    // Normale "plate" 1x1 partagee par tous les materiaux sans normal map.
+    // (UnloadModel ne libere pas les textures de materiaux -> partage sur.)
+    static Texture2D flatNormalTex;
+    static bool sharedTexReady = false;
+
+    // ==================================================================
+    // CONFIG DE RENDU PAR MAP
+    // ==================================================================
+    public struct MapRenderConfig
+    {
+        public Vector3 SunDir;         // direction MONDE surface->soleil (normalisee au push)
+        public Vector3 SunColor;       // couleur ecran 0..1
+        public float   SunIntensity;
+
+        public Vector3 SkyColor;       // ambient venant d'en haut
+        public Vector3 GroundColor;    // ambient venant d'en bas (rebond sol)
+        public float   AmbientStrength;
+
+        public bool    FogEnabled;
+        public float   FogStart;
+        public float   FogEnd;
+        public Vector3 FogColor;       // couleur ecran (idealement = horizon)
+
+        public float   Exposure;       // exposition avant tonemap
+        public float   FarPlane;       // plan lointain (m) ; grand pour les maps immenses
+
+        public Color   SkyZenith;      // degrade 2D : haut de l'ecran
+        public Color   SkyHorizon;     // degrade 2D : bas de l'ecran
+    }
+
+    static Vector3 Rgb(float r, float g, float b) => new Vector3(r / 255f, g / 255f, b / 255f);
+
+    // Profil par defaut : utilise pour toute map hors de la table (nouvelles maps).
+    // Crepuscule neutre, fog modere -> jamais casse, toujours lisible.
+    static MapRenderConfig DefaultRenderConfig() => new MapRenderConfig
+    {
+        SunDir = new Vector3(0.40f, 0.85f, 0.35f),
+        SunColor = Rgb(255, 236, 210),
+        SunIntensity = 3.4f,
+        SkyColor = Rgb(135, 155, 190),
+        GroundColor = Rgb(85, 74, 66),
+        AmbientStrength = 0.78f,
+        FogEnabled = true,
+        FogStart = 90f,
+        FogEnd = 380f,
+        FogColor = Rgb(130, 105, 92),
+        Exposure = 1.45f,
+        FarPlane = 1000f,
+        SkyZenith = new Color(30, 40, 70, 255),
+        SkyHorizon = new Color(130, 100, 88, 255),
+    };
+
+    // Table indexee sur l'index de map (0..3). Pour ajouter une map : ajouter
+    // une entree ici (ou laisser vide -> profil par defaut applique).
+    static MapRenderConfig[] mapRenderConfigs = new MapRenderConfig[]
+    {
+        // --- 0 : Tutoriel (test.glb) : blockout couleurs unies, petit espace ---
+        new MapRenderConfig
+        {
+            SunDir = new Vector3(0.45f, 0.80f, 0.40f),
+            SunColor = Rgb(255, 240, 220),
+            SunIntensity = 3.2f,
+            SkyColor = Rgb(140, 160, 195),
+            GroundColor = Rgb(80, 72, 66),
+            AmbientStrength = 0.62f,
+            FogEnabled = false,
+            FogStart = 120f, FogEnd = 400f,
+            FogColor = Rgb(120, 100, 90),
+            Exposure = 1.35f,
+            FarPlane = 1000f,
+            SkyZenith = new Color(40, 55, 95, 255),
+            SkyHorizon = new Color(135, 110, 95, 255),
+        },
+        // --- 1 : La Ville (map.glb) : verticale, texturee, normal maps -> crepuscule ---
+        new MapRenderConfig
+        {
+            SunDir = new Vector3(0.55f, 0.62f, 0.35f),
+            SunColor = Rgb(255, 220, 180),
+            SunIntensity = 3.5f,
+            SkyColor = Rgb(120, 145, 190),
+            GroundColor = Rgb(78, 62, 56),
+            AmbientStrength = 0.80f,
+            FogEnabled = true,
+            FogStart = 85f, FogEnd = 360f,
+            FogColor = Rgb(135, 85, 72),
+            Exposure = 1.48f,
+            FarPlane = 1000f,
+            SkyZenith = new Color(26, 34, 60, 255),
+            SkyHorizon = new Color(135, 82, 66, 255),
+        },
+        // --- 2 : Chantier (sandbox.glb) : IMMENSE (~2 km), couleurs unies, plein jour ---
+        //     Fog long + far-plane etendu pour voir loin sans clipping.
+        new MapRenderConfig
+        {
+            SunDir = new Vector3(0.35f, 0.90f, 0.25f),
+            SunColor = Rgb(255, 247, 230),
+            SunIntensity = 3.3f,
+            SkyColor = Rgb(150, 180, 220),
+            GroundColor = Rgb(95, 88, 78),
+            AmbientStrength = 0.70f,
+            FogEnabled = true,
+            FogStart = 500f, FogEnd = 2000f,
+            FogColor = Rgb(180, 185, 190),
+            Exposure = 1.25f,
+            FarPlane = 2400f,
+            SkyZenith = new Color(70, 105, 150, 255),
+            SkyHorizon = new Color(185, 180, 170, 255),
+        },
+        // --- 3 : Blocs (blockmap.glb) : port/chantier PBR, conteneurs metal teintes ---
+        new MapRenderConfig
+        {
+            SunDir = new Vector3(0.50f, 0.72f, 0.45f),
+            SunColor = Rgb(255, 232, 200),
+            SunIntensity = 3.5f,
+            SkyColor = Rgb(130, 150, 185),
+            GroundColor = Rgb(90, 78, 68),
+            AmbientStrength = 0.84f,
+            FogEnabled = true,
+            FogStart = 120f, FogEnd = 460f,
+            FogColor = Rgb(155, 122, 102),
+            Exposure = 1.50f,
+            FarPlane = 1000f,
+            SkyZenith = new Color(35, 45, 78, 255),
+            SkyHorizon = new Color(150, 115, 95, 255),
+        },
+    };
+
+    public static MapRenderConfig CurrentRenderConfig()
+    {
+        if (currentMapIndex >= 0 && currentMapIndex < mapRenderConfigs.Length)
+            return mapRenderConfigs[currentMapIndex];
+        return DefaultRenderConfig();
+    }
+
+    // ==================================================================
+    // CHARGEMENT DU SHADER + LOCATIONS
+    // ==================================================================
+    public static void LoadLightingShader()
+    {
+        lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
+
+        locViewPos        = Raylib.GetShaderLocation(lightShader, "viewPos");
+        locSunDir         = Raylib.GetShaderLocation(lightShader, "sunDirection");
+        locSunColor       = Raylib.GetShaderLocation(lightShader, "sunColor");
+        locSunIntensity   = Raylib.GetShaderLocation(lightShader, "sunIntensity");
+        locSkyColor       = Raylib.GetShaderLocation(lightShader, "skyColor");
+        locGroundColor    = Raylib.GetShaderLocation(lightShader, "groundColor");
+        locAmbient        = Raylib.GetShaderLocation(lightShader, "ambientStrength");
+        locApplyFog       = Raylib.GetShaderLocation(lightShader, "applyFog");
+        locFogColor       = Raylib.GetShaderLocation(lightShader, "fogColor");
+        locFogStart       = Raylib.GetShaderLocation(lightShader, "fogStart");
+        locFogEnd         = Raylib.GetShaderLocation(lightShader, "fogEnd");
+        locNormalStrength = Raylib.GetShaderLocation(lightShader, "normalStrength");
+        locExposure       = Raylib.GetShaderLocation(lightShader, "exposure");
+
+        BuildSharedTextures();
+    }
+
+    static void BuildSharedTextures()
+    {
+        if (sharedTexReady) return;
+        Image n = Raylib.GenImageColor(1, 1, new Color(128, 128, 255, 255)); // normale plate (0,0,1)
+        flatNormalTex = Raylib.LoadTextureFromImage(n);
+        Raylib.UnloadImage(n);
+        sharedTexReady = true;
+    }
+
+    // ------------------------------------------------------------------
+    // Petits wrappers de SetShaderValue (ignorent les locations absentes)
+    // ------------------------------------------------------------------
+    static void SetV3(int loc, Vector3 v)
+    {
+        if (loc >= 0) Raylib.SetShaderValue(lightShader, loc, v, ShaderUniformDataType.Vec3);
+    }
+    static void SetF(int loc, float f)
+    {
+        if (loc >= 0) Raylib.SetShaderValue(lightShader, loc, f, ShaderUniformDataType.Float);
+    }
+    static void SetI(int loc, int i)
+    {
+        if (loc >= 0) Raylib.SetShaderValue(lightShader, loc, new int[] { i }, ShaderUniformDataType.Int);
+    }
+
+    static void PushCommon(MapRenderConfig c)
+    {
+        SetV3(locSunColor, c.SunColor);
+        SetF(locSunIntensity, c.SunIntensity);
+        SetV3(locSkyColor, c.SkyColor);
+        SetV3(locGroundColor, c.GroundColor);
+        SetF(locAmbient, c.AmbientStrength);
+        SetV3(locFogColor, c.FogColor);
+        SetF(locFogStart, c.FogStart);
+        SetF(locFogEnd, c.FogEnd);
+        SetF(locNormalStrength, 1.0f);
+        SetF(locExposure, c.Exposure);
+    }
+
+    // Passe MONDE : soleil directionnel monde + fog selon la map.
+    public static void PushWorldLighting(Vector3 camPos)
+    {
+        MapRenderConfig c = CurrentRenderConfig();
+        PushCommon(c);
+        SetV3(locSunDir, Vector3.Normalize(c.SunDir));
+        SetV3(locViewPos, camPos);
+        SetI(locApplyFog, c.FogEnabled ? 1 : 0);
+    }
+
+    // Passe VUE-ARME (viewmodel) : fog off, soleil exprime dans le repere de la
+    // weaponCamera (a l'origine, regarde +Z, up +Y) -> l'arme reagit a la lumiere
+    // quand le joueur tourne, et on booste un peu ambient/exposition pour la faire
+    // ressortir (contraste avec les surfaces mates des maps).
+    public static void PushViewmodelLighting(Vector3 camRight, Vector3 camUp, Vector3 camForward)
+    {
+        // Eclairage "studio" FIXE (independant de la map) : l'arme doit toujours
+        // bien ressortir, avec un ciel clair qui fait briller le metal. On garde
+        // seulement la DIRECTION du soleil de la map (exprimee dans le repere de
+        // la weaponCamera) pour que l'arme reagisse quand le joueur tourne.
+        SetV3(locSunColor, Rgb(255, 244, 225));
+        SetF(locSunIntensity, 3.6f);
+        SetV3(locSkyColor, Rgb(205, 214, 230));    // ciel clair -> reflets metal
+        SetV3(locGroundColor, Rgb(95, 88, 80));
+        SetF(locAmbient, 1.05f);
+        SetF(locNormalStrength, 1.0f);
+        SetF(locExposure, 1.5f);
+
+        Vector3 s = Vector3.Normalize(CurrentRenderConfig().SunDir);
+        Vector3 sv = new Vector3(Vector3.Dot(s, camRight), Vector3.Dot(s, camUp), Vector3.Dot(s, camForward));
+        if (sv.LengthSquared() > 1e-6f) sv = Vector3.Normalize(sv);
+        else sv = new Vector3(0f, 0.6f, -0.8f);
+
+        SetV3(locSunDir, sv);
+        SetV3(locViewPos, Vector3.Zero);          // weaponCamera est a l'origine
+        SetI(locApplyFog, 0);
+    }
+
+    // Etend/reduit le plan lointain selon la map (profondeur du Chantier 2 km).
+    // A appeler juste avant BeginMode3D(camera) de la passe monde.
+    public static void ApplyWorldClipPlanes()
+    {
+        MapRenderConfig c = CurrentRenderConfig();
+        double far = c.FarPlane > 0f ? c.FarPlane : 1000.0;
+        Rlgl.SetClipPlanes(0.01, far);
+    }
+
+    // ==================================================================
+    // SETUP PBR D'UN MODELE
+    // ==================================================================
+    struct MatPbr { public float Metallic; public float Roughness; }
+
+    static bool HasAny(string n, params string[] keys)
+    {
+        foreach (string k in keys) if (n.Contains(k)) return true;
+        return false;
+    }
+
+    // Classe un materiau (metal/bois/beton/verre/...) a partir de son nom et,
+    // en secours, des facteurs PBR du glTF. Point d'extension principal pour de
+    // futurs materiaux : il suffit d'ajouter des mots-cles.
+    static MatPbr ClassifyMaterial(string name, float glbMetal, float glbRough)
+    {
+        string n = (name ?? "").ToLowerInvariant();
+
+        // --- Metaux (dans l'ordre : rouille -> tole -> metal lisse) ---
+        if (HasAny(n, "rust", "rouille", "rusty"))                       return new MatPbr { Metallic = 1f, Roughness = 0.62f };
+        if (HasAny(n, "corr", "tole", "corrugat", "iron", "ondul"))     return new MatPbr { Metallic = 1f, Roughness = 0.50f };
+        if (HasAny(n, "steel", "metal", "acier", "chrome", "alu",
+                       "brushed", "plate", "plaque", "gun", "blade"))    return new MatPbr { Metallic = 1f, Roughness = 0.32f };
+
+        // --- Verre / surfaces lisses dielectriques ---
+        if (HasAny(n, "glass", "verre", "vitre", "window"))             return new MatPbr { Metallic = 0f, Roughness = 0.08f };
+
+        // --- Bois ---
+        if (HasAny(n, "wood", "bois", "_wd", "wdark", "wweath", "plank",
+                       "crate", "caisse", "timber", "log"))             return new MatPbr { Metallic = 0f, Roughness = 0.80f };
+
+        // --- Beton / pierre / maconnerie / carrelage ---
+        if (HasAny(n, "concrete", "beton", "cpattern", "cdebris", "stone",
+                       "pierre", "brick", "brique", "slate", "tile",
+                       "tuile", "ceramic", "plaster", "cement", "wall", "mur")) return new MatPbr { Metallic = 0f, Roughness = 0.90f };
+
+        // --- Tissu / grip / caoutchouc ---
+        if (HasAny(n, "fabric", "cloth", "tissu", "bouclefabric", "grip",
+                       "rubber", "caoutch", "leather", "cuir"))         return new MatPbr { Metallic = 0f, Roughness = 0.95f };
+
+        // --- Sol naturel ---
+        if (HasAny(n, "grass", "herbe", "sand", "sable", "dirt",
+                       "terre", "ground", "gravel"))                    return new MatPbr { Metallic = 0f, Roughness = 1.00f };
+
+        // --- Secours : on honore le facteur metallic du glTF s'il est net ---
+        float m = Math.Clamp(glbMetal, 0f, 1f);
+        float r = glbRough > 0f ? glbRough : 0.6f;
+        if (m > 0.5f && r >= 0.99f) r = 0.35f;   // metal a roughness par defaut -> le rendre metallique
+        return new MatPbr { Metallic = m, Roughness = Math.Clamp(r, 0.05f, 1f) };
+    }
+
+    struct GlbMat { public string Name; public float Metallic; public float Roughness; }
+
+    // Lit les materiaux (nom + facteurs PBR) directement dans le JSON du .glb.
+    // Necessaire car la struct Material de Raylib ne conserve pas le nom au runtime.
+    // Tolerant : renvoie une liste vide si le fichier n'est pas un GLB exploitable.
+    static List<GlbMat> ReadGlbMaterials(string path)
+    {
+        var list = new List<GlbMat>();
+        try
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            if (bytes.Length < 20) return list;
+            // En-tete GLB : magic 'glTF'
+            if (bytes[0] != 0x67 || bytes[1] != 0x6C || bytes[2] != 0x54 || bytes[3] != 0x46) return list;
+            int jsonLen = BitConverter.ToInt32(bytes, 12);
+            if (jsonLen <= 0 || 20 + jsonLen > bytes.Length) return list;
+            string json = System.Text.Encoding.UTF8.GetString(bytes, 20, jsonLen);
+
+            using JsonDocument doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("materials", out JsonElement mArr)) return list;
+
+            foreach (JsonElement m in mArr.EnumerateArray())
+            {
+                var gm = new GlbMat { Name = "", Metallic = 0f, Roughness = 0.7f };
+                if (m.TryGetProperty("name", out JsonElement nm)) gm.Name = nm.GetString() ?? "";
+                if (m.TryGetProperty("pbrMetallicRoughness", out JsonElement pbr))
+                {
+                    gm.Metallic = pbr.TryGetProperty("metallicFactor", out JsonElement mf) ? (float)mf.GetDouble() : 1f;   // defaut glTF = 1
+                    gm.Roughness = pbr.TryGetProperty("roughnessFactor", out JsonElement rf) ? (float)rf.GetDouble() : 1f; // defaut glTF = 1
+                }
+                list.Add(gm);
+            }
+        }
+        catch { list.Clear(); }
+        return list;
+    }
+
+    // Prepare un modele pour le shader PBR :
+    //   - classe chaque materiau et bake (metallic, roughness) dans une texture
+    //     1x1 posee dans le slot Metalness (lue en texture1 par le shader) ;
+    //   - garantit une normal map dans le slot Normal (reelle si fournie, sinon
+    //     la normale plate partagee) ;
+    //   - mipmaps + trilineaire sur l'albedo tuile (anti-scintillement) ;
+    //   - assigne le shader d'eclairage.
+    // Le path .glb sert a recuperer les noms de materiaux pour la classification.
+    public static unsafe void SetupModelPbr(ref Model model, string glbPath)
+    {
+        BuildSharedTextures();
+        List<GlbMat> mats = ReadGlbMaterials(glbPath);
+
+        for (int i = 0; i < model.MaterialCount; i++)
+        {
+            // Alignement Raylib : model.Materials[i] <-> materiau glTF (i-1).
+            // L'index 0 est le materiau par defaut ajoute par Raylib.
+            int gltfIdx = i - 1;
+            string name = "";
+            float glbMetal, glbRough;
+
+            if (gltfIdx >= 0 && gltfIdx < mats.Count)
+            {
+                name = mats[gltfIdx].Name;
+                glbMetal = mats[gltfIdx].Metallic;
+                glbRough = mats[gltfIdx].Roughness;
+            }
+            else
+            {
+                // Secours : facteurs deja parses par Raylib dans les slots.
+                glbMetal = model.Materials[i].Maps[(int)MaterialMapIndex.Metalness].Value;
+                glbRough = model.Materials[i].Maps[(int)MaterialMapIndex.Roughness].Value;
+                if (glbRough <= 0f) glbRough = 0.7f;
+            }
+
+            MatPbr pbr = ClassifyMaterial(name, glbMetal, glbRough);
+
+            // 1) Texture de parametres (R=metallic, G=roughness) -> slot Metalness.
+            Color pcol = new Color(
+                (int)Math.Round(pbr.Metallic * 255f),
+                (int)Math.Round(pbr.Roughness * 255f),
+                0, 255);
+            Image pimg = Raylib.GenImageColor(1, 1, pcol);
+            Texture2D ptex = Raylib.LoadTextureFromImage(pimg);
+            Raylib.UnloadImage(pimg);
+            model.Materials[i].Maps[(int)MaterialMapIndex.Metalness].Texture = ptex;
+
+            // 2) Normal map : reelle si presente, sinon la normale plate partagee.
+            if (model.Materials[i].Maps[(int)MaterialMapIndex.Normal].Texture.Id == 0)
+                model.Materials[i].Maps[(int)MaterialMapIndex.Normal].Texture = flatNormalTex;
+
+            // 3) Albedo tuile : mipmaps + trilineaire (anti-aliasing au loin).
+            Texture2D alb = model.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture;
+            if (alb.Id > 0 && alb.Width > 1)
+            {
+                Raylib.GenTextureMipmaps(ref alb);
+                Raylib.SetTextureFilter(alb, TextureFilter.Trilinear);
+                model.Materials[i].Maps[(int)MaterialMapIndex.Albedo].Texture = alb;
+            }
+
+            // 4) Le shader d'eclairage.
+            model.Materials[i].Shader = lightShader;
+        }
+    }
+
+    // Variante pour les modeles PROCEDURAUX (sans .glb : ex. le cube de mur).
+    // Applique un materiau uniforme (metallic/roughness fixes) + shader.
+    public static unsafe void SetupProceduralModel(ref Model model, float metallic, float roughness)
+    {
+        BuildSharedTextures();
+        for (int i = 0; i < model.MaterialCount; i++)
+        {
+            Color pcol = new Color((int)Math.Round(metallic * 255f), (int)Math.Round(roughness * 255f), 0, 255);
+            Image pimg = Raylib.GenImageColor(1, 1, pcol);
+            Texture2D ptex = Raylib.LoadTextureFromImage(pimg);
+            Raylib.UnloadImage(pimg);
+            model.Materials[i].Maps[(int)MaterialMapIndex.Metalness].Texture = ptex;
+
+            if (model.Materials[i].Maps[(int)MaterialMapIndex.Normal].Texture.Id == 0)
+                model.Materials[i].Maps[(int)MaterialMapIndex.Normal].Texture = flatNormalTex;
+
+            model.Materials[i].Shader = lightShader;
+        }
+    }
+
+    // Prepare le modele de la map courante (setup PBR) et memorise l'index.
+    // Appele par les DEUX chemins de chargement (solo Menu + reseau).
+    public static void SetupMapModel(int mapIndex, string glbPath)
+    {
+        currentMapIndex = mapIndex;
+        SetupModelPbr(ref mapModel, glbPath);
+    }
+}
+
 
 ========
 

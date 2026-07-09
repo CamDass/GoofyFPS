@@ -49,7 +49,15 @@ public partial class Program
     static Vector3[][] mapPlayerSpawns = new Vector3[][]
     {
         // Map 0 : Tutoriel
-        [new Vector3(0, 5, 0)],
+        [new Vector3(-13, 2, -48),
+        new Vector3(-44, 13, 46),
+        new Vector3(-44, 13, -30),
+        new Vector3(46, 13, -45),
+        new Vector3(46, 13, 46),
+        new Vector3(15, 2, 33),
+        
+        
+        ],
 
 
         // Map 1 : La Ville (Tes anciennes coordonnées)
