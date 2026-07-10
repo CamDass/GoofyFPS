@@ -833,9 +833,17 @@ static void InitBarrels()
 
         if (espionCube.Pose.Position.Y < -50f)
         {
-            // 1. On modifie les coordonnées instantanément (ex: on le remet à 10m de haut au centre)
-                espionCube.Pose.Position = new Vector3(0, 10f, 0); 
-                
+            // 1. On le fait réapparaître sur un point de spawn ALÉATOIRE de la map
+                if (Program.listeSpawns.Count > 0)
+                {
+                    int idxRespawn = Raylib.GetRandomValue(0, Program.listeSpawns.Count - 1);
+                    espionCube.Pose.Position = Program.listeSpawns[idxRespawn];
+                }
+                else
+                {
+                    espionCube.Pose.Position = new Vector3(0, 10f, 0); // secours si aucun spawn chargé
+                }
+
                 // 2. On remet l'inertie et la vitesse à zéro pour un arrêt net !
                 espionCube.Velocity.Linear = Vector3.Zero;  // Stop le déplacement
                 espionCube.Velocity.Angular = Vector3.Zero; // Stop la rotation sur lui-même

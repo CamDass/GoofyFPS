@@ -82,8 +82,43 @@ public static class KeyBinds
     public static bool IsShootingPressed() => Raylib.IsMouseButtonPressed(MouseButton.Left)  || BtnPressed(GamepadButton.RightTrigger2);
 
     // Menus
-    public static bool IsPauseTogglePressed() => Raylib.IsKeyPressed(Settings.KEY_ToggleGameMenu) || BtnPressed(GamepadButton.MiddleRight); // Start / Menu
+    // TAB (touche configurable) OU ÉCHAP mettent en pause, comme dans la plupart des jeux.
+    public static bool IsPauseTogglePressed() => Raylib.IsKeyPressed(Settings.KEY_ToggleGameMenu) || Raylib.IsKeyPressed(KeyboardKey.Escape) || BtnPressed(GamepadButton.MiddleRight); // Start / Menu
     public static bool IsMenuConfirmPressed() => Raylib.IsKeyPressed(KeyboardKey.Enter)           || BtnPressed(GamepadButton.RightFaceDown); // Entrée / A
+
+    // ======================================================
+    // NAVIGATION DANS LES MENUS (front montant = 1 déclenchement par appui)
+    // Combine : les touches de DÉPLACEMENT que le joueur a configurées
+    // (avancer/reculer = haut/bas, gauche/droite), les FLÈCHES, la CROIX
+    // DIRECTIONNELLE et le STICK GAUCHE de la manette.
+    // ======================================================
+    static bool stickUpLatch, stickDownLatch, stickLeftLatch, stickRightLatch;
+
+    // Front montant du stick dans une direction : vrai une seule fois quand on
+    // le pousse au-delà du seuil (puis il faut relâcher pour redéclencher).
+    static bool StickEdge(GamepadAxis axis, float sign, ref bool latch)
+    {
+        bool active = GamepadConnected() && Axis(axis) * sign > 0.5f;
+        bool edge = active && !latch;
+        latch = active;
+        return edge;
+    }
+
+    public static bool IsMenuUpPressed() =>
+        Raylib.IsKeyPressed(Settings.KEY_MoveForward)  || Raylib.IsKeyPressed(Settings.KEY_MoveForwardAlt)  ||
+        Raylib.IsKeyPressed(KeyboardKey.Up)    || BtnPressed(GamepadButton.LeftFaceUp)    || StickEdge(GamepadAxis.LeftY, -1f, ref stickUpLatch);
+
+    public static bool IsMenuDownPressed() =>
+        Raylib.IsKeyPressed(Settings.KEY_MoveBackward) || Raylib.IsKeyPressed(Settings.KEY_MoveBackwardAlt) ||
+        Raylib.IsKeyPressed(KeyboardKey.Down)  || BtnPressed(GamepadButton.LeftFaceDown)  || StickEdge(GamepadAxis.LeftY,  1f, ref stickDownLatch);
+
+    public static bool IsMenuLeftPressed() =>
+        Raylib.IsKeyPressed(Settings.KEY_MoveLeft)     || Raylib.IsKeyPressed(Settings.KEY_MoveLeftAlt)     ||
+        Raylib.IsKeyPressed(KeyboardKey.Left)  || BtnPressed(GamepadButton.LeftFaceLeft)  || StickEdge(GamepadAxis.LeftX, -1f, ref stickLeftLatch);
+
+    public static bool IsMenuRightPressed() =>
+        Raylib.IsKeyPressed(Settings.KEY_MoveRight)    || Raylib.IsKeyPressed(Settings.KEY_MoveRightAlt)    ||
+        Raylib.IsKeyPressed(KeyboardKey.Right) || BtnPressed(GamepadButton.LeftFaceRight) || StickEdge(GamepadAxis.LeftX,  1f, ref stickRightLatch);
 
     /// <summary>
     /// Rotation caméra demandée au stick droit, déjà passée par la zone morte et une

@@ -79,10 +79,12 @@ public partial class Program
 
         // Map 3 : Blocs (sol Y=0, X:[-43.4..94.3] Z:[-40.7..25.4]) — dérivé de blockmap.glb
         [
-        new Vector3(-21.4f, 1f,  -4.7f), new Vector3(88.6f, 1f, -36.7f),
-        new Vector3( 46.6f, 1f,  21.3f), new Vector3(28.6f, 1f, -32.7f),
-        new Vector3( 88.6f, 1f,  15.3f), new Vector3(-39.4f,1f, -36.7f),
-        new Vector3( 10.6f, 1f,  13.3f), new Vector3(-5.4f, 1f, -36.7f)
+        new Vector3(-9, 1.1f,  -2f),
+        new Vector3(-30, 1.1f,  -19f),
+        new Vector3(20, 1.1f,  8f),
+        new Vector3(68, 1.1f,  -20f),
+        new Vector3(89, 1.1f,  3f),
+        new Vector3(39, 1.1f,  -36f),
         ]
     };
     
@@ -737,11 +739,8 @@ public partial class Program
 
     public static void ChargerMapReseau(int mapIndex)
 {
-    // Nettoyage (une seule fois, pas en double)
-    foreach (MurPose mur in listeMur) simulation.Statics.Remove(mur.handlePhysique);
-    listeMur.Clear();
-    foreach (BarrelSpot spot in barrelSpots)
-        if (spot.estSolide) { simulation.Statics.Remove(spot.handlePhysique); spot.estSolide = false; }
+    // Nettoyage (une seule fois, pas en double) — partagé avec le mode solo
+    DechargerMapActuelle();
     foreach (Enemy e in enemiesList) if (e.isAlive) simulation.Bodies.Remove(e.bodyId);
     enemiesList.Clear();
     activeExplosions.Clear();
@@ -750,16 +749,8 @@ public partial class Program
     killCount = 0; deathCount = 0;
     localPlayer.Respawn(); // On repart avec toute sa vie
 
-    if (mapDejaChargee)
-    {
-        simulation.Statics.Remove(mapStaticHandle);
-        Raylib.UnloadModel(mapModel);
-        bepuMapMesh.Dispose(pool);
-        mapDejaChargee = false;
-    }
-
     // Les chemins de tes maps
-    string[] ModelMapPath = { "test.glb", "map.glb", "sandbox.glb", "blockmap.glb" };
+    string[] ModelMapPath = { "assets/models/maps/test.glb", "assets/models/maps/map.glb", "assets/models/maps/sandbox.glb", "assets/models/maps/blockmap.glb" };
     mapModel = Raylib.LoadModel(ModelMapPath[mapIndex]);
 
     // CORRECTION DU "CRASH 2" : avant, la map réseau n'avait AUCUNE collision physique
@@ -803,6 +794,33 @@ public partial class Program
     }
 
     // ========================================================
+    // Décharge la map actuelle : modèle GPU, collision BEPU, murs posés
+    // et colliders de barils encore vivants. À appeler AVANT de charger
+    // une nouvelle map (solo ET réseau) — sinon les collisions de
+    // l'ancienne map restent actives (murs/sols fantômes invisibles).
+    // ========================================================
+    public static void DechargerMapActuelle()
+    {
+        // Murs posés par les joueurs (leur handle physique vit dans listeMur)
+        foreach (MurPose mur in listeMur) simulation.Statics.Remove(mur.handlePhysique);
+        listeMur.Clear();
+
+        // Barils : LoadMapSpawns fait barrelSpots.Clear(), donc si on ne
+        // retire pas leurs statics ICI, les handles sont perdus à jamais.
+        foreach (BarrelSpot spot in barrelSpots)
+            if (spot.estSolide) { simulation.Statics.Remove(spot.handlePhysique); spot.estSolide = false; }
+
+        // La map elle-même (visuel + collision)
+        if (mapDejaChargee)
+        {
+            simulation.Statics.Remove(mapStaticHandle);
+            Raylib.UnloadModel(mapModel);
+            bepuMapMesh.Dispose(pool);
+            mapDejaChargee = false;
+        }
+    }
+
+    // ========================================================
     // LE PONT RAYLIB -> BEPU : transforme le modèle 3D de la map (mapModel)
     // en mesh de collision physique. Utilisé par le mode SOLO (ChoiceMap)
     // ET par le mode RÉSEAU (ChargerMapReseau).
@@ -824,6 +842,15 @@ public partial class Program
             {
                 Raylib_cs.Mesh raylibMesh = mapModel.Meshes[m];
                 float* vertices = raylibMesh.Vertices;
+
+                // Raylib stocke les indices en 16 bits : au-delà de 65 535 sommets
+                // par mesh, le glTF est DÉJÀ tronqué au chargement (rendu et
+                // collisions faux). On prévient clairement au lieu de laisser
+                // la map se corrompre en silence.
+                if (raylibMesh.VertexCount > ushort.MaxValue)
+                    Console.WriteLine($"[ATTENTION] Mesh {m} : {raylibMesh.VertexCount} sommets > 65535. " +
+                        "Limite des indices 16 bits de Raylib dépassée, géométrie corrompue : " +
+                        "découpe cet objet en plusieurs meshes dans Blender.");
                 ushort* indices = raylibMesh.Indices;
 
                 for (int t = 0; t < raylibMesh.TriangleCount; t++)
@@ -922,54 +949,58 @@ public static void GenererPhysiqueMap(Model modele)
         //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
         Raylib.InitWindow(LargeurFenetre, HauteurFenetre, "GoofyFPS");
 
-        Image ico = Raylib.LoadImage("src\\GoofyFPS-small.png");
+        // Par défaut Raylib fait de ÉCHAP la touche qui FERME le jeu (WindowShouldClose).
+        // On la désactive : ÉCHAP sert maintenant à mettre en pause (comme TAB), pas à quitter.
+        Raylib.SetExitKey(KeyboardKey.Null);
+
+        Image ico = Raylib.LoadImage("assets/textures/icons/GoofyFPS-small.png");
         Raylib.SetWindowIcon(ico);
 
         // --- 1. CHARGEMENT COLLÈGUE (Assets) ---
-        Logo = Raylib.LoadTexture("src\\GoofyFPS.png");
-        clic1 = Raylib.LoadTexture("src\\img\\clic-blanc.png");
-        clic2 = Raylib.LoadTexture("src\\img\\clic2-blanc.png");
-        clic3 = Raylib.LoadTexture("src\\img\\clic3-blanc.png");
-        startimg = Raylib.LoadTexture("assets\\2D\\epsteintrump.png");
-        imageexplosion = Raylib.LoadTexture("assets\\2D\\exploimage.png");
+        Logo = Raylib.LoadTexture("assets/textures/ui/GoofyFPS.png");
+        clic1 = Raylib.LoadTexture("assets/textures/ui/click/clic-blanc.png");
+        clic2 = Raylib.LoadTexture("assets/textures/ui/click/clic2-blanc.png");
+        clic3 = Raylib.LoadTexture("assets/textures/ui/click/clic3-blanc.png");
+        startimg = Raylib.LoadTexture("assets/textures/hud/epsteintrump.png");
+        imageexplosion = Raylib.LoadTexture("assets/textures/hud/exploimage.png");
 
-        play_active = Raylib.LoadTexture("src\\boutons\\play-active.png");
-        play_button = Raylib.LoadTexture("src\\boutons\\play-base.png");
-        option_button = Raylib.LoadTexture("src\\boutons\\option-base.png");
-        option_active = Raylib.LoadTexture("src\\boutons\\option-active.png");
-        quit_active = Raylib.LoadTexture("src\\boutons\\quit-active.png");
-        quit_button = Raylib.LoadTexture("src\\boutons\\quit-base.png");
+        play_active = Raylib.LoadTexture("assets/textures/ui/buttons/play-active.png");
+        play_button = Raylib.LoadTexture("assets/textures/ui/buttons/play-base.png");
+        option_button = Raylib.LoadTexture("assets/textures/ui/buttons/option-base.png");
+        option_active = Raylib.LoadTexture("assets/textures/ui/buttons/option-active.png");
+        quit_active = Raylib.LoadTexture("assets/textures/ui/buttons/quit-active.png");
+        quit_button = Raylib.LoadTexture("assets/textures/ui/buttons/quit-base.png");
 
-        background = Raylib.LoadTexture("src\\Background3.png");
-        
-        Image BlurBackgroundImg = Raylib.LoadImage("src\\Background3.png");
+        background = Raylib.LoadTexture("assets/textures/ui/Background3.png");
+
+        Image BlurBackgroundImg = Raylib.LoadImage("assets/textures/ui/Background3.png");
         Raylib.ImageBlurGaussian(ref BlurBackgroundImg, 10);
         BlurBackground = Raylib.LoadTextureFromImage(BlurBackgroundImg);
         Raylib.UnloadImage(BlurBackgroundImg);
 
 
-        ImageMapTest = Raylib.LoadTexture("src\\testMap.png");
-        ImageMapVille = Raylib.LoadTexture("src\\ville.png");
-        Imageville2 = Raylib.LoadTexture("src\\ville2.png");
-        ImageMapBlocs = Raylib.LoadTexture("src\\blockmap.png");
+        ImageMapTest = Raylib.LoadTexture("assets/textures/maps/testMap.png");
+        ImageMapVille = Raylib.LoadTexture("assets/textures/maps/ville.png");
+        Imageville2 = Raylib.LoadTexture("assets/textures/maps/ville2.png");
+        ImageMapBlocs = Raylib.LoadTexture("assets/textures/maps/blockmap.png");
 
 
-        ennemiModel = Raylib.LoadModel("assets\\3D\\ennemy.glb");
-        sniper = Raylib.LoadModel("assets\\3D\\sniper.glb");
+        ennemiModel = Raylib.LoadModel("assets/models/entities/ennemy.glb");
+        sniper = Raylib.LoadModel("assets/models/weapons/sniper.glb");
         sniperrifle.modelname = sniper;
-        karambit = Raylib.LoadModel("assets\\3D\\karambit.glb");
+        karambit = Raylib.LoadModel("assets/models/weapons/karambit.glb");
         karambitknife.modelname = karambit;
-        bazooka = Raylib.LoadModel("assets\\3D\\bazooka.glb");
-        bazookaWeapon.modelname = bazooka; 
-        sword = Raylib.LoadModel("assets\\3D\\sword.glb");
+        bazooka = Raylib.LoadModel("assets/models/weapons/bazooka.glb");
+        bazookaWeapon.modelname = bazooka;
+        sword = Raylib.LoadModel("assets/models/weapons/sword.glb");
         swordWeapon.modelname = sword;
-        shotgun = Raylib.LoadModel("assets\\3D\\shotgun.glb");
+        shotgun = Raylib.LoadModel("assets/models/weapons/shotgun.glb");
         shotgunWeapon.modelname = shotgun;
-        pistol = Raylib.LoadModel("assets\\3D\\pistol.glb");
+        pistol = Raylib.LoadModel("assets/models/weapons/pistol.glb");
         pistolWeapon.modelname = pistol;
-        revolver = Raylib.LoadModel("assets\\3D\\revolver.glb");
+        revolver = Raylib.LoadModel("assets/models/weapons/revolver.glb");
         revolverWeapon.modelname = revolver;
-        barrelModel = Raylib.LoadModel("assets\\3D\\barril.glb");
+        barrelModel = Raylib.LoadModel("assets/models/entities/barril.glb");
         // Calculer la bounding box du modèle pour une hitbox précise et l'aligner sur le modèle
         BoundingBox barrelBB = Raylib.GetModelBoundingBox(barrelModel);
         Vector3 barrelSize = barrelBB.Max - barrelBB.Min;
@@ -977,8 +1008,8 @@ public static void GenererPhysiqueMap(Model modele)
         barrelPhysicsCenterOffset = (barrelBB.Max + barrelBB.Min) * 0.5f;
         float barrelHitboxInflation = 2f; // Agrandit la box de détection des tirs
         Box formeBaril = new Box(barrelHalfExtents.X * barrelHitboxInflation, barrelHalfExtents.Y * barrelHitboxInflation, barrelHalfExtents.Z * barrelHitboxInflation);
-        sniperaim = Raylib.LoadTexture("assets\\2D\\sniperaim.png");
-        cibleTexture = Raylib.LoadTexture("assets\\2D\\cible.png");
+        sniperaim = Raylib.LoadTexture("assets/textures/hud/sniperaim.png");
+        cibleTexture = Raylib.LoadTexture("assets/textures/hud/cible.png");
 
         Raylib.InitAudioDevice();
         menuMusic = Raylib.LoadMusicStream("assets\\sounds\\menuMusic.mp3");
@@ -1029,7 +1060,7 @@ public static void GenererPhysiqueMap(Model modele)
         revolverWeapon.soundname = revolvershot;
         swordWeapon.soundname = swordslash;
 
-        lightShader = Raylib.LoadShader("lighting.vs", "lighting.fs");
+        lightShader = Raylib.LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs");
         lightPosLoc = Raylib.GetShaderLocation(lightShader, "lightPos");
         lightColorLoc = Raylib.GetShaderLocation(lightShader, "lightColor");
         viewPosLoc = Raylib.GetShaderLocation(lightShader, "viewPos");

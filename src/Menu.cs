@@ -17,10 +17,15 @@ partial class Program
     // ===== BOUCLE MENU =====
 
 
-    static float echelle = 0.2f; 
+    static float echelle = 0.2f;
     static bool agrandissement = true;
     // 0 = Page Principale (Son/FOV), 1 = Page Raccourcis (Keybinds)
     public static int ongletOptionActif = 0;
+
+    // Index de sélection clavier/manette : menu principal (0=Jouer,1=Options,2=Quitter)
+    // et sélection de carte (0..nbMaps-1).
+    static int menuPrincipalIndex = 0;
+    static int choixCarteIndex = 0;
 
     // Variables pour le rebinding des touches
     private static bool isRebindingKey = false;
@@ -100,10 +105,30 @@ partial class Program
             Vector2 ajustement = new Vector2(0,20);
             Vector2 ajustement_draw = new Vector2(5,5);
             Vector2 ajustement_quit = new Vector2(10,5);
-            //collisions 
+            //collisions
             Rectangle boxPlay = new Rectangle(positionPlay+ajustement, 300,120);
             Rectangle boxOption = new Rectangle(positionOption+ajustement, 300,120);
             Rectangle boxQuit = new Rectangle(positionQuit+ajustement, 300,120);
+
+            // === NAVIGATION CLAVIER / MANETTE ===
+            // Haut/bas (ou avancer/reculer configurés) déplacent la sélection ; la souris
+            // qui survole un bouton met aussi la sélection dessus (les deux restent synchro).
+            if (KeyBinds.IsMenuDownPressed())
+            {
+                menuPrincipalIndex = (menuPrincipalIndex + 1) % 3;
+                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            }
+            if (KeyBinds.IsMenuUpPressed())
+            {
+                menuPrincipalIndex = (menuPrincipalIndex + 2) % 3;
+                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            }
+            if (Raylib.CheckCollisionPointRec(souris, boxPlay))   menuPrincipalIndex = 0;
+            if (Raylib.CheckCollisionPointRec(souris, boxOption)) menuPrincipalIndex = 1;
+            if (Raylib.CheckCollisionPointRec(souris, boxQuit))   menuPrincipalIndex = 2;
+
+            // Entrée / A valide le bouton sélectionné.
+            bool valider = KeyBinds.IsMenuConfirmPressed();
 
 
 
@@ -137,19 +162,17 @@ partial class Program
             //======= vrai boutons =======
             
             //play
-            if (Raylib.CheckCollisionPointRec(souris, boxPlay))
+            if (menuPrincipalIndex == 0)
             {
                 Raylib.DrawTextureEx(play_active, positionPlay-ajustement_draw, rotation, echelleBoutonActif, Color.White);
-                //Raylib.PlaySound(survole);
-                //Console.WriteLine("play");
 
-                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                if ((Raylib.CheckCollisionPointRec(souris, boxPlay) && Raylib.IsMouseButtonReleased(MouseButton.Left)) || valider)
                 {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.ChoiceMap;
                 }
             }
-            else 
+            else
             {
                 Raylib.DrawTextureEx(play_button, positionPlay, rotation, echelleBoutons, Color.White);
             }
@@ -157,18 +180,16 @@ partial class Program
 
 
             //option
-            if (Raylib.CheckCollisionPointRec(souris, boxOption))
+            if (menuPrincipalIndex == 1)
             {
                 Raylib.DrawTextureEx(option_active, positionOption-ajustement_draw, rotation, echelleBoutonActif, Color.White);
-                //Raylib.PlaySound(survole);
-                //Console.WriteLine("option");
 
-                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                if ((Raylib.CheckCollisionPointRec(souris, boxOption) && Raylib.IsMouseButtonReleased(MouseButton.Left)) || valider)
                 {
                     Program.currentState = Program.GameState.Options;
                 }
             }
-            else 
+            else
             {
                 Raylib.DrawTextureEx(option_button, positionOption, rotation, echelleBoutons, Color.White);
             }
@@ -176,25 +197,23 @@ partial class Program
 
 
             //quit
-            if (Raylib.CheckCollisionPointRec(souris, boxQuit))
+            if (menuPrincipalIndex == 2)
             {
                 //bouton quitter activé
                 Raylib.DrawTextureEx(quit_active, positionQuit+ajustement_quit, rotation, echelleQuit, Color.White);
-                //Raylib.PlaySound(survole);
-                //Console.WriteLine("quit");
 
-                if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+                if ((Raylib.CheckCollisionPointRec(souris, boxQuit) && Raylib.IsMouseButtonReleased(MouseButton.Left)) || valider)
                 {
                     //quitter le jeu
                     foreach(var texture in ListeTexture)
                     {
                         Raylib.UnloadTexture(texture);
                     }
-                    
+
                     Raylib.CloseWindow();
                 }
             }
-            else 
+            else
             {
                 Raylib.DrawTextureEx(quit_button, positionQuit, rotation, echelleBoutons, Color.White);
             }
@@ -364,7 +383,7 @@ partial class Program
         Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs };
         string[] nomsMap = { "Tutoriel", "La Ville", "Chantier", "Blocs" };
         string[] destinationsMap = { "boucle", "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
-        string[] ModelMapPath = {"test.glb","map.glb","sandbox.glb","blockmap.glb"};
+        string[] ModelMapPath = {"assets/models/maps/test.glb","assets/models/maps/map.glb","assets/models/maps/sandbox.glb","assets/models/maps/blockmap.glb"};
         //attention si on ajoute une map ne pas oublier de mettre
         //les spawnpoint a jour dans jeu.cs
 
@@ -381,6 +400,22 @@ partial class Program
 
         Vector2 souris = Raylib.GetMousePosition();
 
+        // === NAVIGATION CLAVIER / MANETTE ===
+        // Les cartes sont sur une seule ligne : droite OU bas = suivante, gauche OU haut = précédente
+        // (comme ça "avancer/reculer" configurés fonctionnent aussi, pas seulement gauche/droite).
+        if (KeyBinds.IsMenuRightPressed() || KeyBinds.IsMenuDownPressed())
+        {
+            choixCarteIndex = (choixCarteIndex + 1) % nbMaps;
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+        }
+        if (KeyBinds.IsMenuLeftPressed() || KeyBinds.IsMenuUpPressed())
+        {
+            choixCarteIndex = (choixCarteIndex + nbMaps - 1) % nbMaps;
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+        }
+        if (choixCarteIndex >= nbMaps) choixCarteIndex = nbMaps - 1; // sécurité si nbMaps change
+        bool validerCarte = KeyBinds.IsMenuConfirmPressed();
+
         // ========================================================
         // 5. AFFICHAGE DES CARTES
         // ========================================================
@@ -389,27 +424,33 @@ partial class Program
             // Position de cette carte
             int mapX = startX + n * (largeurMap + espacement);
             Rectangle mapBox = new Rectangle(mapX, startY, largeurMap, hauteurMap);
-            
+
             bool isHovered = Raylib.CheckCollisionPointRec(souris, mapBox);
+            if (isHovered) choixCarteIndex = n;        // la souris synchronise la sélection
+            bool isSelected = (n == choixCarteIndex);
 
             // A. DESSIN DE L'IMAGE (DrawTexturePro permet de forcer la taille à 350x220)
             Rectangle sourceRec = new Rectangle(0, 0, texturesMap[n].Width, texturesMap[n].Height);
             Raylib.DrawTexturePro(texturesMap[n], sourceRec, mapBox, Vector2.Zero, 0f, Color.White);
 
-            // B. EFFET DE SURVOL ET CLIC
-            if (isHovered)
+            // B. EFFET DE SÉLECTION ET LANCEMENT (souris OU clavier/manette)
+            if (isSelected)
             {
                 // Un contour rouge très épais pour montrer qu'on sélectionne
                 Raylib.DrawRectangleLinesEx(mapBox, 6, Color.Red);
-                
+
                 // On assombrit un peu l'image pour l'effet "sélectionné"
                 Raylib.DrawRectangleRec(mapBox, new Color(0, 0, 0, 50));
 
-
-                if (Raylib.IsMouseButtonPressed(MouseButton.Left))
+                bool lancer = (isHovered && Raylib.IsMouseButtonPressed(MouseButton.Left)) || validerCarte;
+                if (lancer)
                 {
                     Raylib.PlaySound(select);
                     Raylib.DisableCursor(); // Si on passe en mode FPS
+
+                    // On décharge d'abord l'ancienne map (modèle + collisions BEPU),
+                    // sinon ses murs/sols fantômes restent actifs sur la nouvelle.
+                    DechargerMapActuelle();
 
                     mapModel = Raylib.LoadModel(ModelMapPath[n]);
 
