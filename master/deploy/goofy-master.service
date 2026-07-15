@@ -1,0 +1,44 @@
+# ========================================================
+# Unité systemd pour GoofyMaster (annuaire + rendez-vous NAT)
+# À copier dans /etc/systemd/system/goofy-master.service
+#
+# Sécurité (S9) : utilisateur dédié non-root, système en lecture seule,
+# pas d'élévation de privilèges, /tmp privé, mémoire bornée. AUCUN recouvrement
+# avec le portfolio (chemins et ports strictement séparés).
+# ========================================================
+[Unit]
+Description=GoofyFPS Master Server (directory + NAT punch rendezvous)
+After=network.target
+
+[Service]
+Type=simple
+User=goofymaster
+Group=goofymaster
+WorkingDirectory=/opt/goofy-master
+ExecStart=/opt/goofy-master/GoofyMaster
+Restart=on-failure
+RestartSec=5
+
+# Kestrel n'écoute qu'en local ; nginx fait le TLS (S10)
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_gcServer=0
+
+# --- Durcissement (S9) ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# Le service n'écrit sur AUCUN dossier (tout est en RAM) :
+ReadWritePaths=
+MemoryMax=192M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

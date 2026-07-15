@@ -159,7 +159,8 @@ public class Weapon
             if (ennemiTouche != null && !isBazooka)
             {
                 bool etatAvant = ennemiTouche.isAlive;
-                ennemiTouche.TakeDamage(damage);
+                // On passe la position du tireur : le zombie blessé AGGRO vers l'origine du tir !
+                ennemiTouche.TakeDamage(damage, physiqueStart);
                 
                 if (etatAvant && !ennemiTouche.isAlive) Program.TriggerHitmarker(true); 
                 else if (etatAvant) Program.TriggerHitmarker(false);
@@ -205,10 +206,10 @@ public class Weapon
                     Vector3 toEnemy = Vector3.Normalize(enemyCenter - physiqueStart);
                     float dot = Vector3.Dot(direction, toEnemy);
 
-                    if (dot > 0.5f) 
+                    if (dot > 0.5f)
                     {
                         bool etatAvant = enemy.isAlive;
-                        enemy.TakeDamage(damage);
+                        enemy.TakeDamage(damage, physiqueStart);
                         if (etatAvant && !enemy.isAlive) Program.TriggerHitmarker(true);
                         else if (etatAvant) Program.TriggerHitmarker(false);
                     }
@@ -234,7 +235,9 @@ public class Weapon
             if (distToEnemy <= radius)
             {
                 bool etatAvant = enemy.isAlive;
-                enemy.TakeDamage(explosionDamage);
+                // Aggro vers le CENTRE de l'explosion : même touché hors de vue (splash du
+                // bazooka), le zombie part en chasse vers l'origine de l'attaque.
+                enemy.TakeDamage(explosionDamage, center);
                 
                 // Le Kill prime sur le Hit (Si l'explosion tue un ennemi mais en blesse un autre, on veut le son de Kill)
                 if (etatAvant && !enemy.isAlive) resultatExplosion = 2; 

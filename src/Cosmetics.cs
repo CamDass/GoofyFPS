@@ -343,6 +343,9 @@ partial class Program
             {
                 PlaySoundWithPriority(select, SoundPriority.Low);
                 ongletCustom = i;
+                // Valider une catégorie envoie le focus sur son 1er élément (couleur/chapeau/tête),
+                // pour pouvoir choisir directement à la flèche du bas.
+                MenuNav.SetFocus(onglets.Length);
             }
             if (ongletCustom == i) Raylib.DrawRectangle(tabX, tabY + 52, 160, 6, Color.Red);
         }
@@ -359,11 +362,11 @@ partial class Program
                 Rectangle swatch = new Rectangle(panelX + col * 110, itemY + row * 110, 90, 90);
                 Raylib.DrawRectangleRec(swatch, couleursSkin[i]);
 
-                bool hover = Raylib.CheckCollisionPointRec(souris, swatch);
+                bool hover = MenuNav.Item(swatch, out bool clicSwatch);
                 bool equipee = (skinCouleur == i);
                 Raylib.DrawRectangleLinesEx(swatch, equipee ? 6 : 2, equipee ? Color.Lime : (hover ? Color.Red : Color.Black));
 
-                if (hover && Raylib.IsMouseButtonReleased(MouseButton.Left))
+                if (clicSwatch)
                 {
                     PlaySoundWithPriority(select, SoundPriority.Low);
                     skinCouleur = i;
@@ -394,8 +397,8 @@ partial class Program
             Raylib.DrawText("Clique sur l'objet equipe [X] pour l'enlever", panelX, itemY + noms.Length * 75 + 10, 18, Color.DarkGray);
         }
 
-        // --- RETOUR (avec sauvegarde du skin) ---
-        if (DrawButton(50, 50, 150, 60, "RETOUR"))
+        // --- RETOUR (avec sauvegarde du skin) — bouton, ou Échap / B ---
+        if (DrawButton(50, 50, 150, 60, "RETOUR") || MenuNav.Back)
         {
             PlaySoundWithPriority(unselect, SoundPriority.Low);
             SauvegarderSkin();

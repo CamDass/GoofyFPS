@@ -82,9 +82,13 @@ public static class KeyBinds
     public static bool IsShootingPressed() => Raylib.IsMouseButtonPressed(MouseButton.Left)  || BtnPressed(GamepadButton.RightTrigger2);
 
     // Menus
-    // TAB (touche configurable) OU ÉCHAP mettent en pause, comme dans la plupart des jeux.
-    public static bool IsPauseTogglePressed() => Raylib.IsKeyPressed(Settings.KEY_ToggleGameMenu) || Raylib.IsKeyPressed(KeyboardKey.Escape) || BtnPressed(GamepadButton.MiddleRight); // Start / Menu
+    // Bascule du menu pause EN JEU. ÉCHAP est pris au RELÂCHEMENT : sinon le même appui
+    // serait aussi capté par le menu pause (bouton RESUME) et l'ouverture/fermeture
+    // s'annuleraient dans la même frame. TAB et Start restent au clic.
+    public static bool IsPauseToggleTriggered() => Raylib.IsKeyReleased(KeyboardKey.Escape) || Raylib.IsKeyPressed(Settings.KEY_ToggleGameMenu) || BtnPressed(GamepadButton.MiddleRight); // Échap (relâché) / Tab / Start
     public static bool IsMenuConfirmPressed() => Raylib.IsKeyPressed(KeyboardKey.Enter)           || BtnPressed(GamepadButton.RightFaceDown); // Entrée / A
+    // Retour / annuler dans les menus : ÉCHAP ou B (rond) de la manette.
+    public static bool IsMenuBackPressed()    => Raylib.IsKeyPressed(KeyboardKey.Escape)          || BtnPressed(GamepadButton.RightFaceRight); // Échap / B
 
     // ======================================================
     // NAVIGATION DANS LES MENUS (front montant = 1 déclenchement par appui)

@@ -381,7 +381,7 @@ partial class Program
         // REMARQUE : Remplace "textureMap1", etc. par tes vraies variables de textures préchargées
         // Pour l'instant, je mets ton "Logo" comme placeholder pour que ça compile sans erreur.
         Texture2D[] texturesMap = { ImageMapTest, ImageMapVille, Imageville2, ImageMapBlocs };
-        string[] nomsMap = { "Tutoriel", "La Ville", "Chantier", "Blocs" };
+        string[] nomsMap = { "Le Cube", "La Ville", "Chantier", "Blocs" };
         string[] destinationsMap = { "boucle", "boucle", "boucle", "boucle" }; // Ce qu'on va mettre dans 'endroit'
         string[] ModelMapPath = {"assets/models/maps/test.glb","assets/models/maps/map.glb","assets/models/maps/sandbox.glb","assets/models/maps/blockmap.glb"};
         //attention si on ajoute une map ne pas oublier de mettre
@@ -400,124 +400,124 @@ partial class Program
 
         Vector2 souris = Raylib.GetMousePosition();
 
-        // === NAVIGATION CLAVIER / MANETTE ===
-        // Les cartes sont sur une seule ligne : droite OU bas = suivante, gauche OU haut = précédente
-        // (comme ça "avancer/reculer" configurés fonctionnent aussi, pas seulement gauche/droite).
-        if (KeyBinds.IsMenuRightPressed() || KeyBinds.IsMenuDownPressed())
-        {
-            choixCarteIndex = (choixCarteIndex + 1) % nbMaps;
-            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-        }
-        if (KeyBinds.IsMenuLeftPressed() || KeyBinds.IsMenuUpPressed())
-        {
-            choixCarteIndex = (choixCarteIndex + nbMaps - 1) % nbMaps;
-            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-        }
-        if (choixCarteIndex >= nbMaps) choixCarteIndex = nbMaps - 1; // sécurité si nbMaps change
-        bool validerCarte = KeyBinds.IsMenuConfirmPressed();
+        // === NAVIGATION : chaque carte est un item focalisable (flèches / stick / souris) ===
+        // La carte focalisée EST la sélection ; on la lance avec Entrée / A / clic.
 
         // ========================================================
         // 5. AFFICHAGE DES CARTES
         // ========================================================
         for (int n = 0; n < nbMaps; n++)
         {
-            // Position de cette carte
             int mapX = startX + n * (largeurMap + espacement);
             Rectangle mapBox = new Rectangle(mapX, startY, largeurMap, hauteurMap);
 
-            bool isHovered = Raylib.CheckCollisionPointRec(souris, mapBox);
-            if (isHovered) choixCarteIndex = n;        // la souris synchronise la sélection
-            bool isSelected = (n == choixCarteIndex);
+            bool focusCarte = MenuNav.Item(mapBox, out bool lancerCarte);
+            if (focusCarte) choixCarteIndex = n;
 
-            // A. DESSIN DE L'IMAGE (DrawTexturePro permet de forcer la taille à 350x220)
+            // A. Image
             Rectangle sourceRec = new Rectangle(0, 0, texturesMap[n].Width, texturesMap[n].Height);
             Raylib.DrawTexturePro(texturesMap[n], sourceRec, mapBox, Vector2.Zero, 0f, Color.White);
 
-            // B. EFFET DE SÉLECTION ET LANCEMENT (souris OU clavier/manette)
-            if (isSelected)
+            // B. Sélection : contour rouge + assombrissement sur la carte focalisée
+            if (focusCarte)
             {
-                // Un contour rouge très épais pour montrer qu'on sélectionne
                 Raylib.DrawRectangleLinesEx(mapBox, 6, Color.Red);
-
-                // On assombrit un peu l'image pour l'effet "sélectionné"
                 Raylib.DrawRectangleRec(mapBox, new Color(0, 0, 0, 50));
-
-                bool lancer = (isHovered && Raylib.IsMouseButtonPressed(MouseButton.Left)) || validerCarte;
-                if (lancer)
-                {
-                    Raylib.PlaySound(select);
-                    Raylib.DisableCursor(); // Si on passe en mode FPS
-
-                    // On décharge d'abord l'ancienne map (modèle + collisions BEPU),
-                    // sinon ses murs/sols fantômes restent actifs sur la nouvelle.
-                    DechargerMapActuelle();
-
-                    mapModel = Raylib.LoadModel(ModelMapPath[n]);
-
-                    // L'extraction des triangles BEPU vit maintenant dans ExtraireTrianglesMap()
-                    // (partagée avec le mode réseau pour éviter le code dupliqué)
-                    ExtraireTrianglesMap();
-
-
-
-                    unsafe
-                    {
-                        for (int j = 0; j < mapModel.MaterialCount; j++)
-                        {
-                            mapModel.Materials[j].Shader = lightShader;
-                        }
-                    }
-                    ApplyMapTextures();
-
-                    LoadMapSpawns(n);
-                    InitBarrels();
-                    InitEnnemis();
-
-                    // Téléportation du joueur vers un spawn de la NOUVELLE map !
-                    int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
-                    BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
-                    joueurVivant.Pose.Position = listeSpawns[indexAleatoire];
-                    joueurVivant.Velocity.Linear = Vector3.Zero; // Arrêt net
-                    joueurVivant.Velocity.Angular = Vector3.Zero;
-
-                    Program.isOnline = false;
-                    Program.currentState = Program.GameState.Playing;
-
-                }
             }
             else
             {
-                // Un contour noir simple
                 Raylib.DrawRectangleLinesEx(mapBox, 3, Color.Black);
             }
 
-            // C. DESSIN DU TEXTE (Noir centré sur l'image)
+            // C. Texte (fond blanc pour la lisibilité)
             int tailleTexteMap = 30;
             int largeurTexteMap = Raylib.MeasureText(nomsMap[n], tailleTexteMap);
             int texteX = mapX + (largeurMap - largeurTexteMap) / 2;
             int texteY = startY + (hauteurMap - tailleTexteMap) / 2;
-
-            // Astuce : On dessine un petit rectangle blanc semi-transparent juste derrière le texte
-            // pour être sûr à 100% qu'il sera lisible en noir, peu importe l'image de fond !
             Raylib.DrawRectangle(texteX - 10, texteY - 5, largeurTexteMap + 20, tailleTexteMap + 10, new Color(255, 255, 255, 180));
-            
             Raylib.DrawText(nomsMap[n], texteX, texteY, tailleTexteMap, Color.Black);
+
+            // D. Lancement de CETTE carte
+            if (lancerCarte)
+            {
+                Raylib.PlaySound(select);
+                Raylib.DisableCursor(); // Si on passe en mode FPS
+
+                // On décharge d'abord l'ancienne map (modèle + collisions BEPU).
+                DechargerMapActuelle();
+                mapModel = Raylib.LoadModel(ModelMapPath[n]);
+                ExtraireTrianglesMap();
+                unsafe
+                {
+                    for (int j = 0; j < mapModel.MaterialCount; j++) mapModel.Materials[j].Shader = lightShader;
+                }
+                ApplyMapTextures();
+                LoadMapSpawns(n);
+                InitBarrels();
+                InitEnnemis(); // respecte Program.zombiesActifs
+
+                int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+                BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
+                joueurVivant.Pose.Position = listeSpawns[indexAleatoire];
+                joueurVivant.Velocity.Linear = Vector3.Zero;
+                joueurVivant.Velocity.Angular = Vector3.Zero;
+
+                Program.isOnline = false;
+                Program.currentState = Program.GameState.Playing;
+            }
         }
 
         // ========================================================
-        // 6. BOUTON RETOUR (Bonus pratique !)
+        // 5bis. BOUTON TUTO (cliquable, sans effet) + INTERRUPTEUR ZOMBIES
+        // ========================================================
+        int centreX = Raylib.GetScreenWidth() / 2;
+        int optY = startY + hauteurMap + 45;
+
+        // Bouton TUTO
+        Rectangle boxTuto = new Rectangle(centreX - 95, optY, 190, 55);
+        bool focusTuto = MenuNav.Item(boxTuto, out bool clicTuto);
+        Raylib.DrawRectangleRec(boxTuto, focusTuto ? Color.LightGray : Color.Gray);
+        Raylib.DrawRectangleLinesEx(boxTuto, 3, focusTuto ? Color.White : Color.Black);
+        int wTuto = Raylib.MeasureText("TUTO", 30);
+        Raylib.DrawText("TUTO", centreX - wTuto / 2, (int)boxTuto.Y + 13, 30, focusTuto ? Color.Black : Color.White);
+        if (clicTuto) Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); // TODO : brancher le tutoriel
+
+        // Interrupteur ZOMBIES : active/désactive le spawn des zombies au lancement de la map
+        int labelZY = (int)boxTuto.Y + 55 + 22;
+        int wZ = Raylib.MeasureText("ZOMBIES", 25);
+        Raylib.DrawText("ZOMBIES", centreX - wZ / 2, labelZY, 25, Color.Black);
+
+        Rectangle boxSwitch = new Rectangle(centreX - 45, labelZY + 32, 90, 40);
+        bool focusSwitch = MenuNav.Item(boxSwitch, out bool clicSwitch);
+        if (clicSwitch)
+        {
+            Program.zombiesActifs = !Program.zombiesActifs;
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+        }
+        // Interrupteur CARRÉ : piste rectangulaire (vert = activé, gris = désactivé) +
+        // bouton carré coulissant (gauche = OFF, droite = ON) + contour blanc si focalisé.
+        Color pisteColor = Program.zombiesActifs ? new Color(70, 180, 70, 255) : new Color(90, 90, 90, 255);
+        Raylib.DrawRectangleRec(boxSwitch, pisteColor);
+        Raylib.DrawRectangleLinesEx(boxSwitch, focusSwitch ? 3 : 2, focusSwitch ? Color.White : Color.Black);
+        int knobSize = (int)boxSwitch.Height - 8;
+        int knobY = (int)boxSwitch.Y + 4;
+        int knobX = Program.zombiesActifs ? (int)(boxSwitch.X + boxSwitch.Width - knobSize - 4) : (int)(boxSwitch.X + 4);
+        Raylib.DrawRectangle(knobX, knobY, knobSize, knobSize, Color.White);
+
+        // ========================================================
+        // 6. BOUTON RETOUR
         // ========================================================
         Rectangle boxRetour = new Rectangle(50, 50, 150, 60);
-        bool retourHovered = Raylib.CheckCollisionPointRec(souris, boxRetour);
+        // RETOUR : à la souris OU via le bouton Retour (Échap / B). Hors du cycle des flèches
+        // pour ne pas parasiter la sélection des cartes.
+        bool retourHovered = MenuNav.UsingMouse && Raylib.CheckCollisionPointRec(souris, boxRetour);
         Raylib.DrawRectangleRec(boxRetour, retourHovered ? Color.LightGray : Color.DarkGray);
         Raylib.DrawRectangleLinesEx(boxRetour, 3, Color.Black);
         Raylib.DrawText("RETOUR", 50 + 20, 50 + 20, 25, retourHovered ? Color.Black : Color.White);
 
-        if (retourHovered && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        if ((retourHovered && Raylib.IsMouseButtonReleased(MouseButton.Left)) || MenuNav.Back)
         {
             Raylib.PlaySound(unselect);
-            // ANCIEN CODE : endroit = "menu";
-            // NOUVEAU CODE :
             Program.currentState = Program.GameState.ModeSelection;
         }
 
@@ -577,25 +577,25 @@ partial class Program
         Rectangle btnOnglet1 = new Rectangle(ecranLargeur / 2 - 220, 120, 200, 40);
         Rectangle btnOnglet2 = new Rectangle(ecranLargeur / 2 + 20, 120, 200, 40);
 
-        // Onglet 1 — Paramètres Généraux
+        bool focusOnglet1 = MenuNav.Item(btnOnglet1, out bool clicOnglet1);
+        bool focusOnglet2 = MenuNav.Item(btnOnglet2, out bool clicOnglet2);
+
+        // Onglet 1 — Paramètres Généraux (contour blanc = focalisé au clavier/manette)
         Color couleurOnglet1 = (ongletOptionActif == 0) ? Color.Red : Color.DarkGray;
         Raylib.DrawRectangleRec(btnOnglet1, couleurOnglet1);
-        Raylib.DrawRectangleLinesEx(btnOnglet1, 2, Color.Black);
+        Raylib.DrawRectangleLinesEx(btnOnglet1, focusOnglet1 ? 3 : 2, focusOnglet1 ? Color.White : Color.Black);
         int w1 = Raylib.MeasureText("GÉNÉRAL", 18);
         Raylib.DrawText("GÉNÉRAL", (int)btnOnglet1.X + ((int)btnOnglet1.Width - w1) / 2, (int)btnOnglet1.Y + 11, 18, Color.White);
 
         // Onglet 2 — Modifier les Touches
         Color couleurOnglet2 = (ongletOptionActif == 1) ? Color.Red : Color.DarkGray;
         Raylib.DrawRectangleRec(btnOnglet2, couleurOnglet2);
-        Raylib.DrawRectangleLinesEx(btnOnglet2, 2, Color.Black);
+        Raylib.DrawRectangleLinesEx(btnOnglet2, focusOnglet2 ? 3 : 2, focusOnglet2 ? Color.White : Color.Black);
         int w2 = Raylib.MeasureText("RACCOURCIS", 18);
         Raylib.DrawText("RACCOURCIS", (int)btnOnglet2.X + ((int)btnOnglet2.Width - w2) / 2, (int)btnOnglet2.Y + 11, 18, Color.White);
-        
-        // CORRECTION : On passe en Released !
-        if (Raylib.CheckCollisionPointRec(souris, btnOnglet1) && Raylib.IsMouseButtonReleased(MouseButton.Left)) 
-            ongletOptionActif = 0;
-        if (Raylib.CheckCollisionPointRec(souris, btnOnglet2) && Raylib.IsMouseButtonReleased(MouseButton.Left)) 
-            ongletOptionActif = 1;
+
+        if (clicOnglet1) ongletOptionActif = 0;
+        if (clicOnglet2) ongletOptionActif = 1;
 
         
 
@@ -620,39 +620,44 @@ partial class Program
             Raylib.DrawText("Volume Musique", debutX, debutY + espacementLigne * 2, 22, Color.LightGray);
             DrawVolumeSlider(debutX, debutY + espacementLigne * 2 + 30, 300, ref Settings.MusicVolume, "Music");
 
-            // === FOV ===
+            // === FOV === (souris : cliquer/glisser ; clavier/manette : Gauche/Droite)
             Raylib.DrawText("Champ de Vision (FOV)", debutX, debutY + espacementLigne * 3, 22, Color.LightGray);
+            Rectangle fovSlider = new Rectangle(debutX, debutY + espacementLigne * 3 + 30, 300, 25);
+            bool fovFocus = MenuNav.Item(fovSlider, out _);
             Raylib.DrawRectangle(debutX, debutY + espacementLigne * 3 + 30, 300, 25, new Color(50, 50, 50, 255));
-            
-            // Slider FOV
             int fovFilled = (int)((Settings.BaseFOV - 40f) / (120f - 40f) * 300f);
             Raylib.DrawRectangle(debutX, debutY + espacementLigne * 3 + 30, fovFilled, 25, Color.Red);
+            if (fovFocus) Raylib.DrawRectangleLinesEx(fovSlider, 2, Color.White);
             Raylib.DrawText($"{(int)Settings.BaseFOV}°", debutX + 310, debutY + espacementLigne * 3 + 30, 20, Color.White);
-            
-            // Interaction avec le slider FOV
-            Rectangle fovSlider = new Rectangle(debutX, debutY + espacementLigne * 3 + 30, 300, 25);
-            if (Raylib.CheckCollisionPointRec(souris, fovSlider) && (Raylib.IsMouseButtonDown(MouseButton.Left)))
+
+            if (MenuNav.UsingMouse && Raylib.CheckCollisionPointRec(souris, fovSlider) && Raylib.IsMouseButtonDown(MouseButton.Left))
+                Settings.BaseFOV = Math.Clamp(40f + ((souris.X - fovSlider.X) / 300f) * (120f - 40f), 40f, 120f);
+            if (fovFocus && !MenuNav.UsingMouse)
             {
-                float relativeX = souris.X - fovSlider.X;
-                Settings.BaseFOV = 40f + (relativeX / 300f) * (120f - 40f);
-                Settings.BaseFOV = Math.Clamp(Settings.BaseFOV, 40f, 120f);
+                if (MenuNav.Right) Settings.BaseFOV = Math.Clamp(Settings.BaseFOV + 2f, 40f, 120f);
+                if (MenuNav.Left)  Settings.BaseFOV = Math.Clamp(Settings.BaseFOV - 2f, 40f, 120f);
             }
 
             // === SENSIBILITÉ SOURIS ===
             Raylib.DrawText("Sensibilité Souris", debutX, debutY + espacementLigne * 4, 22, Color.LightGray);
+            Rectangle mouseSlider = new Rectangle(debutX, debutY + espacementLigne * 4 + 30, 300, 25);
+            bool mouseFocus = MenuNav.Item(mouseSlider, out _);
             Raylib.DrawRectangle(debutX, debutY + espacementLigne * 4 + 30, 300, 25, new Color(50, 50, 50, 255));
-            
             float mouseSensPercent = (Settings.MouseSensitivity - 0.001f) / (0.01f - 0.001f);
             int mouseSensFilled = (int)(Math.Clamp(mouseSensPercent, 0, 1) * 300f);
             Raylib.DrawRectangle(debutX, debutY + espacementLigne * 4 + 30, mouseSensFilled, 25, Color.Red);
+            if (mouseFocus) Raylib.DrawRectangleLinesEx(mouseSlider, 2, Color.White);
             Raylib.DrawText($"{(int)(mouseSensPercent * 100)}%", debutX + 310, debutY + espacementLigne * 4 + 30, 20, Color.White);
-            
-            Rectangle mouseSlider = new Rectangle(debutX, debutY + espacementLigne * 4 + 30, 300, 25);
-            if (Raylib.CheckCollisionPointRec(souris, mouseSlider) && Raylib.IsMouseButtonDown(MouseButton.Left))
+
+            if (MenuNav.UsingMouse && Raylib.CheckCollisionPointRec(souris, mouseSlider) && Raylib.IsMouseButtonDown(MouseButton.Left))
             {
-                float relativeX = souris.X - mouseSlider.X;
-                mouseSensPercent = Math.Clamp(relativeX / 300f, 0, 1);
+                mouseSensPercent = Math.Clamp((souris.X - mouseSlider.X) / 300f, 0, 1);
                 Settings.MouseSensitivity = 0.001f + mouseSensPercent * (0.01f - 0.001f);
+            }
+            if (mouseFocus && !MenuNav.UsingMouse)
+            {
+                if (MenuNav.Right) Settings.MouseSensitivity = Math.Clamp(Settings.MouseSensitivity + 0.0005f, 0.001f, 0.01f);
+                if (MenuNav.Left)  Settings.MouseSensitivity = Math.Clamp(Settings.MouseSensitivity - 0.0005f, 0.001f, 0.01f);
             }
         }
         else // --- PAGE RACCOURCIS ---
@@ -664,12 +669,16 @@ partial class Program
         // 4. BOUTON RETOUR
         // ==========================================
         Rectangle btnRetour = new Rectangle(ecranLargeur / 2 - 100, ecranHauteur - 100, 200, 50);
-        bool retourHover = Raylib.CheckCollisionPointRec(souris, btnRetour);
+        bool retourHover = MenuNav.Item(btnRetour, out bool retourClic);
 
         Raylib.DrawRectangleRec(btnRetour, retourHover ? Color.Red : Color.DarkGray);
         Raylib.DrawText("RETOUR", (int)btnRetour.X + 55, (int)btnRetour.Y + 15, 20, Color.White);
 
-        if (retourHover && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        // Retour aussi via Échap / B — sauf pendant un réassignement de touche.
+        // EN JEU (isPaused), l'overlay Options est refermé par le gestionnaire ÉCHAP au
+        // relâchement (BouclePrincipale) : on n'écoute donc MenuNav.Back qu'HORS jeu, pour
+        // ne pas compter Échap deux fois.
+        if ((retourClic || (MenuNav.Back && !isPaused)) && !isRebindingKey)
         {
             Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
             if (isPaused) isOptionsMenuOpen = false;
@@ -687,37 +696,37 @@ partial class Program
     private static void DrawVolumeSlider(int x, int y, int width, ref float volume, string label)
     {
         Vector2 souris = Raylib.GetMousePosition();
-        
-        // Fond du slider
+        Rectangle sliderRect = new Rectangle(x, y, width, 25);
+
+        // Focus clavier/manette (le survol souris est géré à l'intérieur de MenuNav.Item)
+        bool focused = MenuNav.Item(sliderRect, out _);
+
+        // Fond + portion remplie
         Raylib.DrawRectangle(x, y, width, 25, new Color(50, 50, 50, 255));
-        
-        // Portion remplie
         int filledWidth = (int)(volume * width);
         Raylib.DrawRectangle(x, y, filledWidth, 25, Color.Red);
-        
+        if (focused) Raylib.DrawRectangleLinesEx(sliderRect, 2, Color.White); // contour = focalisé
+
         // Texte du pourcentage
         Raylib.DrawText($"{(int)(volume * 100)}%", x + width + 10, y, 20, Color.White);
-        
-        // Interaction avec le slider
-        Rectangle sliderRect = new Rectangle(x, y, width, 25);
-        bool isHovering = Raylib.CheckCollisionPointRec(souris, sliderRect);
-        bool mouseDown = Raylib.IsMouseButtonDown(MouseButton.Left);
-        bool mouseReleased = Raylib.IsMouseButtonReleased(MouseButton.Left);
-        
-        if (isHovering && mouseDown)
+
+        bool changed = false;
+
+        // Souris : cliquer/glisser
+        if (MenuNav.UsingMouse && Raylib.CheckCollisionPointRec(souris, sliderRect) && Raylib.IsMouseButtonDown(MouseButton.Left))
         {
-            float relativeX = souris.X - x;
-            volume = Math.Clamp(relativeX / width, 0, 1);
-            
-            // Apply volume changes immediately
-            ApplyVolumeChanges(label);
+            volume = Math.Clamp((souris.X - x) / width, 0, 1);
+            changed = true;
         }
-        
-        // Play SFX sound only on mouse release for SFX slider
-        if (label == "SFX" && isHovering && mouseReleased)
+
+        // Clavier / manette : Gauche/Droite par pas de 5 %
+        if (focused && !MenuNav.UsingMouse)
         {
-            Program.PlaySoundWithPriority(pistolshot, Program.SoundPriority.Low);
+            if (MenuNav.Right) { volume = Math.Clamp(volume + 0.05f, 0, 1); changed = true; }
+            if (MenuNav.Left)  { volume = Math.Clamp(volume - 0.05f, 0, 1); changed = true; }
         }
+
+        if (changed) ApplyVolumeChanges(label);
     }
 
     private static void ApplyVolumeChanges(string label)
@@ -765,12 +774,12 @@ partial class Program
             }
 
             Rectangle keyButton = new Rectangle(startX + 350, y, 200, lineHeight - 10);
-            bool isHover = Raylib.CheckCollisionPointRec(mourisPos, keyButton);
-            
+            bool isHover = MenuNav.Item(keyButton, out bool clicKey);
+
             Raylib.DrawRectangleRec(keyButton, isHover ? new Color(80, 40, 40, 255) : Color.DarkGray);
             Raylib.DrawText(keyDisplay, (int)keyButton.X + 10, (int)keyButton.Y + 12, 18, Color.White);
 
-            if (isHover && Raylib.IsMouseButtonPressed(MouseButton.Left))
+            if (clicKey && !isRebindingKey)
             {
                 isRebindingKey = true;
                 rebindingAction = keybindsMap[i].name;
@@ -888,14 +897,15 @@ partial class Program
         // --- DESSIN ET LOGIQUE DES BOUTONS ---
 
         // A. BOUTON RESUME
-        bool hoverResume = Raylib.CheckCollisionPointRec(souris, boxResume);
+        bool hoverResume = MenuNav.Item(boxResume, out bool clicResume);
         Raylib.DrawRectangleRec(boxResume, new Color(60, 60, 60, 255)); // Fond gris
-        Raylib.DrawRectangleLinesEx(boxResume, 4, hoverResume ? Color.Red : Color.Black); // Bordure rouge si survolé
-        
+        Raylib.DrawRectangleLinesEx(boxResume, 4, hoverResume ? Color.Red : Color.Black); // Bordure rouge si survolé/focalisé
+
         int widthResume = Raylib.MeasureText("RESUME", 40);
         Raylib.DrawText("RESUME", posX + (largeurBouton - widthResume) / 2, posY_resume + 20, 40, Color.White);
 
-        if (hoverResume && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        // ÉCHAP / B ferme aussi le menu pause (retour au jeu)
+        if (clicResume)
         {
             Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
             isPaused = false;
@@ -903,28 +913,28 @@ partial class Program
         }
 
         // B. BOUTON OPTIONS
-        bool hoverOptions = Raylib.CheckCollisionPointRec(souris, boxOptions);
+        bool hoverOptions = MenuNav.Item(boxOptions, out bool clicOptions);
         Raylib.DrawRectangleRec(boxOptions, new Color(60, 60, 60, 255));
         Raylib.DrawRectangleLinesEx(boxOptions, 4, hoverOptions ? Color.Red : Color.Black);
-        
+
         int widthOptions = Raylib.MeasureText("OPTIONS", 40);
         Raylib.DrawText("OPTIONS", posX + (largeurBouton - widthOptions) / 2, posY_options + 20, 40, Color.White);
 
-        if (hoverOptions && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        if (clicOptions)
         {
             Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
             isOptionsMenuOpen = true; // On ouvre l'overlay au lieu de changer d'endroit !
         }
 
         // C. BOUTON MENU
-        bool hoverMenu = Raylib.CheckCollisionPointRec(souris, boxMenu);
+        bool hoverMenu = MenuNav.Item(boxMenu, out bool clicMenu);
         Raylib.DrawRectangleRec(boxMenu, new Color(60, 60, 60, 255));
         Raylib.DrawRectangleLinesEx(boxMenu, 4, hoverMenu ? Color.Red : Color.Black);
-        
+
         int widthMenu = Raylib.MeasureText("MENU", 40);
         Raylib.DrawText("MENU", posX + (largeurBouton - widthMenu) / 2, posY_menu + 20, 40, Color.White);
 
-        if (hoverMenu && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        if (clicMenu)
         {
             Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
             
@@ -967,13 +977,13 @@ partial class Program
         Rectangle boxMenu = new Rectangle(posX_boutons, posY_menu, largeurBouton, hauteurBouton);
 
         // --- BOUTON RESUME ---
-        bool hoverResume = Raylib.CheckCollisionPointRec(souris, boxResume);
+        bool hoverResume = MenuNav.Item(boxResume, out bool clicResume);
         Raylib.DrawRectangleRec(boxResume, new Color(60, 60, 60, 255));
         Raylib.DrawRectangleLinesEx(boxResume, 4, hoverResume ? Color.Red : Color.Black);
         int widthResume = Raylib.MeasureText("RESUME", 40);
         Raylib.DrawText("RESUME", posX_boutons + (largeurBouton - widthResume) / 2, posY_resume + 20, 40, Color.White);
 
-        if (hoverResume && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        if (clicResume)
         {
             Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
             isPaused = false;
@@ -981,41 +991,85 @@ partial class Program
         }
 
         // --- BOUTON OPTIONS ---
-        bool hoverOptions = Raylib.CheckCollisionPointRec(souris, boxOptions);
+        bool hoverOptions = MenuNav.Item(boxOptions, out bool clicOptions);
         Raylib.DrawRectangleRec(boxOptions, new Color(60, 60, 60, 255));
         Raylib.DrawRectangleLinesEx(boxOptions, 4, hoverOptions ? Color.Red : Color.Black);
         int widthOptions = Raylib.MeasureText("OPTIONS", 40);
         Raylib.DrawText("OPTIONS", posX_boutons + (largeurBouton - widthOptions) / 2, posY_options + 20, 40, Color.White);
 
-        if (hoverOptions && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        if (clicOptions)
         {
             Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
             isOptionsMenuOpen = true; // On ouvre l'overlay au lieu de changer d'endroit !
         }
 
-        // --- BOUTON MENU ---
-        bool hoverMenu = Raylib.CheckCollisionPointRec(souris, boxMenu);
-        Raylib.DrawRectangleRec(boxMenu, new Color(60, 60, 60, 255));
-        Raylib.DrawRectangleLinesEx(boxMenu, 4, hoverMenu ? Color.Red : Color.Black);
-        int widthMenu = Raylib.MeasureText("MENU", 40);
-        Raylib.DrawText("MENU", posX_boutons + (largeurBouton - widthMenu) / 2, posY_menu + 20, 40, Color.White);
-
-        if (hoverMenu && Raylib.IsMouseButtonReleased(MouseButton.Left))
+        // --- BOUTON(S) DE SORTIE ---
+        // EN LIGNE : on ne casse plus toute la session ! Deux choix distincts :
+        //   - RETOUR AU SALON : l'hôte termine le match pour tous ; le client repart au
+        //     salon en RESTANT connecté (il pourra rejoindre la partie via le hot-join).
+        //   - QUITTER LA SESSION : déconnexion propre -> menu réseau.
+        // HORS LIGNE (solo) : un seul bouton MENU -> menu principal, comme avant.
+        if (Program.isOnline)
         {
-            Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
-            isPaused = false;
-            Raylib.EnableCursor();
+            // Bouton 1 : RETOUR AU SALON (à la place du MENU)
+            bool hoverSalon = MenuNav.Item(boxMenu, out bool clicSalon);
+            Raylib.DrawRectangleRec(boxMenu, new Color(60, 60, 60, 255));
+            Raylib.DrawRectangleLinesEx(boxMenu, 4, hoverSalon ? Color.Red : Color.Black);
+            int wSalon = Raylib.MeasureText("SALON", 40);
+            Raylib.DrawText("SALON", posX_boutons + (largeurBouton - wSalon) / 2, posY_menu + 20, 40, Color.White);
+            if (clicSalon)
+            {
+                Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                isPaused = false;
+                if (Program.isServer) Program.HoteTerminerMatch();  // fin du match pour tout le monde
+                else Program.ClientQuitterVersSalon();               // le client repart au salon (reste connecté)
+            }
 
-            // Grand nettoyage avant de retourner au menu principal
-            foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
-            enemiesList.Clear();
-            activeExplosions.Clear();
-            activeDamageTexts.Clear();
+            // Bouton 2 : QUITTER LA SESSION (juste en dessous)
+            Rectangle boxQuit = new Rectangle(posX_boutons, posY_menu + hauteurBouton + ecart, largeurBouton, hauteurBouton);
+            bool hoverQuit = MenuNav.Item(boxQuit, out bool clicQuit);
+            Raylib.DrawRectangleRec(boxQuit, new Color(60, 40, 40, 255));
+            Raylib.DrawRectangleLinesEx(boxQuit, 4, hoverQuit ? Color.Red : Color.Black);
+            int wQuit = Raylib.MeasureText("QUITTER", 34);
+            Raylib.DrawText("QUITTER", posX_boutons + (largeurBouton - wQuit) / 2, (int)boxQuit.Y + 22, 34, Color.White);
+            if (clicQuit)
+            {
+                Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                isPaused = false;
+                Raylib.EnableCursor();
+                foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
+                enemiesList.Clear();
+                activeExplosions.Clear();
+                activeDamageTexts.Clear();
+                Program.CouperReseau();
+                Program.currentState = Program.GameState.NetworkHub;
+            }
+        }
+        else
+        {
+            // --- BOUTON MENU (solo) ---
+            bool hoverMenu = MenuNav.Item(boxMenu, out bool clicMenu);
+            Raylib.DrawRectangleRec(boxMenu, new Color(60, 60, 60, 255));
+            Raylib.DrawRectangleLinesEx(boxMenu, 4, hoverMenu ? Color.Red : Color.Black);
+            int widthMenu = Raylib.MeasureText("MENU", 40);
+            Raylib.DrawText("MENU", posX_boutons + (largeurBouton - widthMenu) / 2, posY_menu + 20, 40, Color.White);
 
-            // NOUVEAU : On coupe le réseau proprement (sinon l'hôte continue de tourner en fantôme !)
-            Program.CouperReseau();
+            if (clicMenu)
+            {
+                Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                isPaused = false;
+                Raylib.EnableCursor();
 
-            Program.currentState = Program.GameState.MainMenu;
+                // Grand nettoyage avant de retourner au menu principal
+                foreach (Enemy enemy in enemiesList) { if (enemy.isAlive) simulation.Bodies.Remove(enemy.bodyId); }
+                enemiesList.Clear();
+                activeExplosions.Clear();
+                activeDamageTexts.Clear();
+
+                Program.CouperReseau();
+
+                Program.currentState = Program.GameState.MainMenu;
+            }
         }
 
         // ==========================================
@@ -1064,8 +1118,17 @@ partial class Program
 
             Raylib.DrawText(rp.Name, scoreX + 20, rowY, 30, Color.LightGray);
             Raylib.DrawText(rp.Kills.ToString(), scoreX + 300, rowY, 30, Color.LightGray);
-            Raylib.DrawText(rp.Deaths.ToString(), scoreX + 420, rowY, 30, Color.LightGray);
-            Raylib.DrawText(pingTexte, scoreX + 520, rowY, 30, pingCouleur);
+            Raylib.DrawText(rp.Deaths.ToString(), scoreX + 400, rowY, 30, Color.LightGray);
+            Raylib.DrawText(pingTexte, scoreX + 490, rowY, 30, pingCouleur);
+
+            // Phase 3 : bouton d'EXCLUSION (hôte uniquement). La suppression effective
+            // se fait au prochain PollEvents (PeerDisconnectedEvent) -> pas de modif
+            // de collection pendant l'itération.
+            if (Program.isServer && DrawButton(scoreX + scoreWidth - 42, rowY, 34, 34, "X"))
+            {
+                Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                Program.KickJoueur(rp.Id, NetConfig.RejetKick);
+            }
             rowY += 50;
 
             if (rowY > scoreY + scoreHeight - 40) break; // On déborde pas du tableau
@@ -1074,15 +1137,84 @@ partial class Program
 
 
 
-    // Fonction utilitaire pour dessiner un bouton cliquable
+    // Type de filtre de saisie pour ChampTexteNav.
+    public enum FiltreTexte { Libre, IP, CodeAlnum, MotDePasse }
+
+    // Champ de texte navigable : SOURIS + CLAVIER + MANETTE.
+    // - Focalisable à la flèche/stick ; Entrée / A pour ENTRER dedans.
+    // - En édition : la navigation du menu est gelée (MenuNav.EditingText) pour taper
+    //   librement ; Entrée / Échap (ou un clic ailleurs) pour SORTIR.
+    public static void ChampTexteNav(Rectangle box, int id, ref string valeur, string placeholder, int maxLen, FiltreTexte filtre, int fontSize = 26)
+    {
+        int myItemId = MenuNav.NextId;
+        bool focused = MenuNav.Item(box, out bool active);
+        bool etaitActif = (activeTextBox == id);
+
+        // Entrer dans le champ : validation (Entrée/A) ou clic souris quand il est focalisé.
+        bool justEntered = false;
+        if (active && !etaitActif) { activeTextBox = id; justEntered = true; Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); }
+        bool editing = (activeTextBox == id);
+
+        // Le focus visuel suit le champ réellement édité (après un TAB), MAIS uniquement au
+        // clavier/manette. En mode souris on ne force rien : le curseur reste prioritaire,
+        // reste visible et peut cliquer où il veut (un clic hors du champ le referme).
+        if (editing && !focused && !MenuNav.UsingMouse) { MenuNav.SetFocus(myItemId); focused = true; }
+
+        // Fond + bordure : Or = en édition, Blanc = focalisé (nav), Noir sinon.
+        Raylib.DrawRectangleRec(box, new Color(40, 40, 40, 255));
+        Color bord = editing ? Color.Gold : (focused ? Color.White : Color.Black);
+        Raylib.DrawRectangleLinesEx(box, 3, bord);
+
+        // Texte saisi (ou placeholder grisé).
+        string affichage = valeur.Length > 0 ? (filtre == FiltreTexte.MotDePasse ? new string('*', valeur.Length) : valeur) : placeholder;
+        Color couleurTexte = valeur.Length > 0 ? Color.White : Color.Gray;
+        int ty = (int)box.Y + (int)box.Height / 2 - fontSize / 2;
+        Raylib.DrawText(affichage, (int)box.X + 15, ty, fontSize, couleurTexte);
+
+        if (editing)
+        {
+            MenuNav.EditingText = true; // gèle la navigation tant qu'on écrit
+
+            int k = Raylib.GetCharPressed();
+            while (k > 0)
+            {
+                char c = (char)k;
+                bool ok = filtre switch
+                {
+                    FiltreTexte.IP        => (c >= '0' && c <= '9') || c == '.',
+                    FiltreTexte.CodeAlnum => (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'),
+                    _                     => (k >= 32 && k <= 125)
+                };
+                if (ok && valeur.Length < maxLen)
+                    valeur += (filtre == FiltreTexte.CodeAlnum) ? char.ToUpperInvariant(c) : c;
+                k = Raylib.GetCharPressed();
+            }
+            if (Raylib.IsKeyPressed(KeyboardKey.Backspace) && valeur.Length > 0)
+                valeur = valeur.Substring(0, valeur.Length - 1);
+
+            // Curseur clignotant
+            if (((int)(Raylib.GetTime() * 2)) % 2 == 0)
+            {
+                int cx = (int)box.X + 15 + (valeur.Length > 0 ? Raylib.MeasureText(affichage, fontSize) : 0) + 3;
+                Raylib.DrawRectangle(cx, ty, 3, fontSize + 4, Color.White);
+            }
+
+            // Sortir du champ : Entrée / Échap (mais pas la frame d'entrée), ou clic hors du champ.
+            bool clicDehors = MenuNav.UsingMouse && Raylib.IsMouseButtonPressed(MouseButton.Left) && !Raylib.CheckCollisionPointRec(Raylib.GetMousePosition(), box);
+            if (!justEntered && (MenuNav.Confirm || MenuNav.Back || clicDehors))
+                activeTextBox = 0;
+        }
+    }
+
+    // Fonction utilitaire pour dessiner un bouton cliquable.
+    // Navigable à la SOURIS, au CLAVIER (flèches + Entrée) et à la MANETTE : le bouton
+    // focalisé s'affiche exactement comme s'il était survolé par la souris.
     public static bool DrawButton(int x, int y, int width, int height, string text)
     {
         Rectangle buttonRec = new Rectangle(x, y, width, height);
-        Vector2 mousePos = Raylib.GetMousePosition();
-        bool isHovered = Raylib.CheckCollisionPointRec(mousePos, buttonRec);
-        bool isClicked = isHovered && Raylib.IsMouseButtonReleased(MouseButton.Left);
+        bool isHovered = MenuNav.Item(buttonRec, out bool isClicked);
 
-        // Couleur : Gris clair si la souris est dessus, Gris foncé sinon
+        // Couleur : Gris clair si actif (survolé/focalisé), Gris foncé sinon
         Color buttonColor = isHovered ? Color.LightGray : Color.DarkGray;
         Color textColor = isHovered ? Color.Black : Color.RayWhite;
 
@@ -1093,7 +1225,7 @@ partial class Program
         int textWidth = Raylib.MeasureText(text, 20);
         Raylib.DrawText(text, x + (width / 2) - (textWidth / 2), y + (height / 2) - 10, 20, textColor);
 
-        return isClicked; // Renvoie 'true' SEULEMENT à la frame où on clique !
+        return isClicked; // true à la frame où on valide (clic relâché OU Entrée/A si focalisé)
     }
 
 
@@ -1105,6 +1237,15 @@ partial class Program
         UpdateActiveMusicStream();
 
         Vector2 souris = Raylib.GetMousePosition();
+
+        // Navigation clavier/manette + curseur auto pour TOUS les écrans de menu.
+        // (screenId distinct par écran/onglet -> le focus repart du 1er bouton en changeant d'écran)
+        int navScreenId = (int)Program.currentState * 1000;
+        if (Program.currentState == Program.GameState.Options) navScreenId += ongletOptionActif;
+        // (Skin : on NE remet PAS le focus en changeant d'onglet -> MenuCustomization gère le focus
+        //  lui-même pour rester dans la catégorie validée.)
+        MenuNav.Begin(navScreenId, Program.currentState == Program.GameState.Options);
+
         Vector2 BackgroundPos = new Vector2(0, 0);
         float rotation = 0.0f;
 
@@ -1160,27 +1301,27 @@ partial class Program
                 Rectangle boxQuit = new Rectangle(posQuit + ajustement, 300, 120);
 
                 // Bouton PLAY
-                if (Raylib.CheckCollisionPointRec(souris, boxPlay)) {
+                if (MenuNav.Item(boxPlay, out bool clicPlay)) {
                     Raylib.DrawTextureEx(play_active, posPlay - new Vector2(5, 5), rotation, echelleBoutonActif, Color.White);
-                    if (Raylib.IsMouseButtonReleased(MouseButton.Left)) {
+                    if (clicPlay) {
                         Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                         Program.currentState = Program.GameState.ModeSelection; // On avance !
                     }
                 } else Raylib.DrawTextureEx(play_button, posPlay, rotation, echelleBoutons, Color.White);
 
                 // Bouton OPTION
-                if (Raylib.CheckCollisionPointRec(souris, boxOption)) {
+                if (MenuNav.Item(boxOption, out bool clicOption)) {
                     Raylib.DrawTextureEx(option_active, posOption - new Vector2(5, 5), rotation, echelleBoutonActif, Color.White);
-                    if (Raylib.IsMouseButtonReleased(MouseButton.Left)) {
+                    if (clicOption) {
                         Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                         Program.currentState = Program.GameState.Options;
                     }
                 } else Raylib.DrawTextureEx(option_button, posOption, rotation, echelleBoutons, Color.White);
 
                 // Bouton QUIT
-                if (Raylib.CheckCollisionPointRec(souris, boxQuit)) {
+                if (MenuNav.Item(boxQuit, out bool clicQuit)) {
                     Raylib.DrawTextureEx(quit_active, posQuit + new Vector2(10, 5), rotation, 0.190f, Color.White);
-                    if (Raylib.IsMouseButtonReleased(MouseButton.Left)) Environment.Exit(0);
+                    if (clicQuit) Environment.Exit(0);
                 } else Raylib.DrawTextureEx(quit_button, posQuit, rotation, echelleBoutons, Color.White);
                 break;
 
@@ -1211,7 +1352,7 @@ partial class Program
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.Customization;
                 }
-                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
+                if (DrawButton(50, 50, 150, 60, "RETOUR") || (MenuNav.Back && !MenuNav.EditingText)) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.MainMenu;
                 }
@@ -1230,23 +1371,73 @@ partial class Program
             case Program.GameState.NetworkHub:
                 // --- 5. LE HUB RÉSEAU ---
                 Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
-                Raylib.DrawText("RÉSEAU LAN", Raylib.GetScreenWidth()/2 - 120, 200, 40, Color.Black);
+                Raylib.DrawText("RÉSEAU", Raylib.GetScreenWidth()/2 - 90, 150, 40, Color.Black);
 
-                if (DrawButton(Raylib.GetScreenWidth()/2 - 150, Raylib.GetScreenHeight()/2 - 80, 300, 60, "HÉBERGER")) {
-                    Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                    // On ne lance plus le serveur direct, on va taper le nom !
-                    Program.currentState = Program.GameState.CreateMatch; 
+                // La dernière erreur réseau (rejet version/plein, timeout, perçage NAT...) — S7
+                if (!string.IsNullOrEmpty(Program.derniereErreurReseau))
+                {
+                    string msgErr = Program.derniereErreurReseau;
+                    int largErr = Raylib.MeasureText(msgErr, 24);
+                    Raylib.DrawText(msgErr, Raylib.GetScreenWidth()/2 - largErr/2 + 1, 211, 24, Color.Black);
+                    Raylib.DrawText(msgErr, Raylib.GetScreenWidth()/2 - largErr/2, 210, 24, Color.Red);
                 }
 
-                if (DrawButton(Raylib.GetScreenWidth()/2 - 150, Raylib.GetScreenHeight()/2 + 20, 300, 60, "REJOINDRE")) {
+                // Mise en page aérée : une seule colonne centrée, éléments larges et espacés.
+                int hubCX = Raylib.GetScreenWidth() / 2;
+                int colW = 390;               // 520 * 0.75 : boutons du hub réseau réduits
+                int colX = hubCX - colW / 2;
+                int hy = 250;
+                int bh = 50;                  // 66 * 0.75
+
+                // 1) HÉBERGER
+                if (DrawButton(colX, hy, colW, bh, "HÉBERGER")) {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                    // On devient client, et on ouvre le radar !
+                    Program.currentState = Program.GameState.CreateMatch;
+                }
+                hy += bh + 55;
+
+                // 2) REJOINDRE PAR CODE
+                Raylib.DrawText("REJOINDRE PAR CODE", colX, hy, 24, Color.Black);
+                hy += 38;
+                ChampTexteNav(new Rectangle(colX, hy, colW, 44), 9, ref Program.codeSaisi, "CODE", 5, FiltreTexte.CodeAlnum, 26);
+                hy += 44 + 18;
+                ChampTexteNav(new Rectangle(colX, hy, colW, 40), 10, ref Program.joinPassword, "Mot de passe (si besoin)", 20, FiltreTexte.MotDePasse, 22);
+                hy += 40 + 18;
+                // TAB : passer au champ suivant (CODE <-> Mot de passe)
+                if (Raylib.IsKeyPressed(KeyboardKey.Tab))
+                {
+                    if (Program.activeTextBox == 9) Program.activeTextBox = 10;
+                    else if (Program.activeTextBox == 10) Program.activeTextBox = 9;
+                }
+                if (DrawButton(colX, hy, colW, bh, "REJOINDRE")) {
+                    if (Program.codeSaisi.Length == 5)
+                    {
+                        Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
+                        Program.AllumerMoteurReseau(false);
+                        Program.ClientRejoindreParCode(Program.codeSaisi);
+                    }
+                }
+                // État du perçage NAT (feedback en direct)
+                string etatTxt = Program.etatJoin switch
+                {
+                    Program.EtatJoin.Resolution => "Résolution du code...",
+                    Program.EtatJoin.Percage => "Perçage du NAT...",
+                    Program.EtatJoin.Connexion => "Connexion à l'hôte...",
+                    _ => ""
+                };
+                if (etatTxt != "") Raylib.DrawText(etatTxt, colX, hy + bh + 8, 18, Color.Gold);
+                hy += bh + 58;
+
+                // 3) RÉSEAU LOCAL / IP directe
+                Raylib.DrawText("OU EN RÉSEAU LOCAL", colX, hy, 24, Color.Black);
+                hy += 38;
+                if (DrawButton(colX, hy, colW, bh, "REJOINDRE (LAN / IP)")) {
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
                     Program.AllumerMoteurReseau(false);
-                    Program.currentState = Program.GameState.ServerBrowser; 
+                    Program.currentState = Program.GameState.ServerBrowser;
                 }
 
-
-                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
+                if (DrawButton(50, 50, 150, 60, "RETOUR") || (MenuNav.Back && !MenuNav.EditingText)) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.ModeSelection;
                 }
@@ -1262,60 +1453,17 @@ partial class Program
 
                 Raylib.DrawText("REJOINDRE UN MATCH", centerC - Raylib.MeasureText("REJOINDRE UN MATCH", 40)/2, centerCY - 200, 40, Color.White);
 
-                // --- LES BOÎTES DE TEXTE (Centrées) ---
-                Rectangle pseudoBoxJoin = new Rectangle(centerC - 300, centerCY - 100, 600, 50);
-                Rectangle ipTextBox = new Rectangle(centerC - 300, centerCY - 10, 600, 50);
-
-                // Gestion du clic pour le Focus
-                if (Raylib.IsMouseButtonPressed(MouseButton.Left))
+                // --- LES BOÎTES DE TEXTE (Centrées, navigables) ---
+                // Flèches/stick pour atteindre un champ, Entrée/A pour y entrer (la nav se fige),
+                // Entrée/Échap pour en sortir.
+                ChampTexteNav(new Rectangle(centerC - 300, centerCY - 100, 600, 50), 1, ref Program.playerNameInput, "Entrez votre Pseudo", 15, FiltreTexte.Libre);
+                ChampTexteNav(new Rectangle(centerC - 300, centerCY - 10, 600, 50), 2, ref Program.directIPInput, "Entrez l'IP du serveur", 15, FiltreTexte.IP);
+                // TAB : passer au champ suivant (Pseudo <-> IP)
+                if (Raylib.IsKeyPressed(KeyboardKey.Tab))
                 {
-                    if (Raylib.CheckCollisionPointRec(souris, pseudoBoxJoin)) Program.activeTextBox = 1;
-                    else if (Raylib.CheckCollisionPointRec(souris, ipTextBox)) Program.activeTextBox = 2;
-                    else Program.activeTextBox = 0;
+                    if (Program.activeTextBox == 1) Program.activeTextBox = 2;
+                    else if (Program.activeTextBox == 2) Program.activeTextBox = 1;
                 }
-                // Tabulation pour passer d'une case à l'autre
-                if (Raylib.IsKeyPressed(KeyboardKey.Tab)) Program.activeTextBox = (Program.activeTextBox == 1) ? 2 : 1;
-
-                // --- APPARENCE DES BOÎTES ---
-                // Boîte 1 : Pseudo
-                Raylib.DrawRectangleRec(pseudoBoxJoin, new Color(40, 40, 40, 255));
-                Raylib.DrawRectangleLinesEx(pseudoBoxJoin, 3, Program.activeTextBox == 1 ? Color.Red : Color.Black);
-                if (Program.playerNameInput.Length > 0) Raylib.DrawText(Program.playerNameInput, (int)pseudoBoxJoin.X + 20, (int)pseudoBoxJoin.Y + 12, 26, Color.White);
-                else Raylib.DrawText("Entrez votre Pseudo", (int)pseudoBoxJoin.X + 20, (int)pseudoBoxJoin.Y + 15, 20, Color.Gray);
-
-                // Boîte 2 : IP
-                Raylib.DrawRectangleRec(ipTextBox, new Color(40, 40, 40, 255));
-                Raylib.DrawRectangleLinesEx(ipTextBox, 3, Program.activeTextBox == 2 ? Color.Red : Color.Black);
-                if (Program.directIPInput.Length > 0) Raylib.DrawText(Program.directIPInput, (int)ipTextBox.X + 20, (int)ipTextBox.Y + 12, 26, Color.White);
-                else Raylib.DrawText("Entrez l'IP du serveur", (int)ipTextBox.X + 20, (int)ipTextBox.Y + 15, 20, Color.Gray);
-
-                // --- SAISIE CLAVIER COMMUNE ---
-                int keyChar = Raylib.GetCharPressed();
-                while (keyChar > 0)
-                {
-                    // Si focus sur Pseudo (lettres et chiffres)
-                    if (Program.activeTextBox == 1 && keyChar >= 32 && keyChar <= 125 && Program.playerNameInput.Length < 15)
-                        Program.playerNameInput += (char)keyChar;
-                    // Si focus sur IP (chiffres et points uniquement)
-                    else if (Program.activeTextBox == 2 && ((keyChar >= 48 && keyChar <= 57) || keyChar == 46) && Program.directIPInput.Length < 15)
-                        Program.directIPInput += (char)keyChar;
-                        
-                    keyChar = Raylib.GetCharPressed();
-                }
-
-                // Touche Effacer
-                if (Raylib.IsKeyPressed(KeyboardKey.Backspace)) 
-                {
-                    if (Program.activeTextBox == 1 && Program.playerNameInput.Length > 0) Program.playerNameInput = Program.playerNameInput.Substring(0, Program.playerNameInput.Length - 1);
-                    else if (Program.activeTextBox == 2 && Program.directIPInput.Length > 0) Program.directIPInput = Program.directIPInput.Substring(0, Program.directIPInput.Length - 1);
-                }
-
-                // --- CURSEUR CLIGNOTANT ---
-                bool clignote = ((int)(Raylib.GetTime() * 2)) % 2 == 0;
-                if (clignote && Program.activeTextBox == 1)
-                    Raylib.DrawRectangle((int)pseudoBoxJoin.X + 20 + (Program.playerNameInput.Length > 0 ? Raylib.MeasureText(Program.playerNameInput, 26) : 0) + 5, (int)pseudoBoxJoin.Y + 10, 3, 30, Color.White);
-                else if (clignote && Program.activeTextBox == 2)
-                    Raylib.DrawRectangle((int)ipTextBox.X + 20 + (Program.directIPInput.Length > 0 ? Raylib.MeasureText(Program.directIPInput, 26) : 0) + 5, (int)ipTextBox.Y + 10, 3, 30, Color.White);
 
                 // --- BOUTON VALIDER ---
                 if (DrawButton(centerC - 120, centerCY + 80, 240, 50, "REJOINDRE"))
@@ -1327,7 +1475,7 @@ partial class Program
                         IPEndPoint endPointCible = new IPEndPoint(ipCible, 7777);
 
                         Console.WriteLine($"[RÉSEAU] Tentative de connexion directe Unicast vers {endPointCible}");
-                        Program.netManager.Connect(endPointCible, "GoofyFPS_SecretKey");
+                        Program.ConnecterAHote(endPointCible);
                         lock (Program._lobbyLock) { Program.currentLobbyPlayers.Clear(); }
                         Program.currentState = Program.GameState.Lobby;
                     }
@@ -1356,14 +1504,14 @@ partial class Program
                     {
                         Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
                         Console.WriteLine($"[RÉSEAU] Connexion au salon '{salon.NomDuSalon}' sur {salon.EndPoint}");
-                        Program.netManager.Connect(new IPEndPoint(salon.EndPoint.Address, 7777), "GoofyFPS_SecretKey");
+                        Program.ConnecterAHote(new IPEndPoint(salon.EndPoint.Address, NetConfig.GamePort));
                         lock (Program._lobbyLock) { Program.currentLobbyPlayers.Clear(); }
                         Program.currentState = Program.GameState.Lobby;
                     }
                 }
 
                 // --- BOUTON RETOUR ---
-                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
+                if (DrawButton(50, 50, 150, 60, "RETOUR") || (MenuNav.Back && !MenuNav.EditingText)) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.CouperReseau();
                     Program.currentState = Program.GameState.NetworkHub;
@@ -1378,6 +1526,19 @@ partial class Program
                 // 1. AFFICHAGE DU NOM DE LA PARTIE (Dynamique)
                 string titreSalon = $"{Program.hostMatchName.ToUpper()}";
                 Raylib.DrawText(titreSalon, Raylib.GetScreenWidth()/2 - Raylib.MeasureText(titreSalon, 40)/2, 60, 40, Color.Black);
+
+                // 1bis. LE CODE DE SALON (Phase 2) — gros, pour le dicter à ses amis
+                string ligneCode;
+                Color couleurCode;
+                switch (Program.etatSalon)
+                {
+                    case Program.EtatSalon.Actif:   ligneCode = $"CODE : {Program.roomCode}"; couleurCode = Color.Gold; break;
+                    case Program.EtatSalon.Creation: ligneCode = "Enregistrement du salon..."; couleurCode = Color.LightGray; break;
+                    case Program.EtatSalon.Echec:   ligneCode = "Serveur maître injoignable (LAN / IP directe seulement)"; couleurCode = Color.Orange; break;
+                    default:                         ligneCode = ""; couleurCode = Color.White; break;
+                }
+                if (ligneCode != "")
+                    Raylib.DrawText(ligneCode, Raylib.GetScreenWidth()/2 - Raylib.MeasureText(ligneCode, 30)/2, 105, 30, couleurCode);
 
                 // ==========================================
                 // BLOC GAUCHE : LE CHOIX DE LA MAP (D'après ta maquette)
@@ -1397,23 +1558,24 @@ partial class Program
                 for (int i = 0; i < vignettes.Length; i++)
                 {
                     Rectangle boxVignette = new Rectangle(startVignetteX + (i * (vignetteW + 30)), startVignetteY, vignetteW, vignetteH);
-                    
+
+                    // Seul l'hôte choisit la map -> seules ses vignettes sont focalisables au clavier/manette
+                    bool focusVig = false, clicVig = false;
+                    if (Program.isServer) focusVig = MenuNav.Item(boxVignette, out clicVig);
+
                     // Rendu de la texture forcée aux dimensions
                     Rectangle src = new Rectangle(0, 0, vignettes[i].Width, vignettes[i].Height);
                     Raylib.DrawTexturePro(vignettes[i], src, boxVignette, Vector2.Zero, 0f, Color.White);
 
-                    // Cadre de sélection : Rouge si c'est la map actuellement choisie
+                    // Cadre : Rouge = map choisie, Blanc = focalisée (clavier/manette), Noir sinon
                     if (Program.mapChoisieIndex == i)
-                    {
                         Raylib.DrawRectangleLinesEx(boxVignette, 4, Color.Red);
-                    }
+                    else if (focusVig)
+                        Raylib.DrawRectangleLinesEx(boxVignette, 3, Color.White);
                     else
-                    {
                         Raylib.DrawRectangleLinesEx(boxVignette, 2, Color.Black);
-                    }
 
-                    // Seul l'hôte peut changer la map au clic
-                    if (Program.isServer && Raylib.CheckCollisionPointRec(souris, boxVignette) && Raylib.IsMouseButtonReleased(MouseButton.Left))
+                    if (clicVig)
                     {
                         Raylib.PlaySound(select);
                         Program.mapChoisieIndex = i;
@@ -1493,33 +1655,56 @@ partial class Program
                 // Bouton central d'action (LANCER pour l'host, PRÊT pour le client)
                 if (Program.isServer)
                 {
+                    // --- PANNEAU "RÈGLES DU MATCH" (réglé par l'hôte) ---
+                    int panW = 560, panH = 90;
+                    int panX = Raylib.GetScreenWidth() / 2 - panW / 2;
+                    int panY = (int)zoneMap.Y + (int)zoneMap.Height + 25;
+                    Raylib.DrawRectangle(panX, panY, panW, panH, new Color(30, 30, 30, 230));
+                    Raylib.DrawRectangleLinesEx(new Rectangle(panX, panY, panW, panH), 2, new Color(120, 120, 120, 255));
+                    Raylib.DrawText("RÈGLES DU MATCH", panX + panW / 2 - Raylib.MeasureText("RÈGLES DU MATCH", 20) / 2, panY + 8, 20, Color.Gold);
+
+                    int rowY = panY + 42;
+                    // Limite de kills : [ - ]  valeur  [ + ]
+                    Raylib.DrawText("KILLS", panX + 30, rowY + 6, 22, Color.White);
+                    if (DrawButton(panX + 120, rowY, 34, 34, "-")) Program.matchScoreLimitConfig = Math.Max(0, Program.matchScoreLimitConfig - 5);
+                    string txtScore = Program.matchScoreLimitConfig == 0 ? "OFF" : Program.matchScoreLimitConfig.ToString();
+                    Raylib.DrawText(txtScore, panX + 172 - Raylib.MeasureText(txtScore, 24) / 2 + 10, rowY + 6, 24, Color.Gold);
+                    if (DrawButton(panX + 200, rowY, 34, 34, "+")) Program.matchScoreLimitConfig = Math.Min(100, Program.matchScoreLimitConfig + 5);
+
+                    // Limite de temps (minutes) : [ - ]  valeur  [ + ]
+                    Raylib.DrawText("TEMPS", panX + 300, rowY + 6, 22, Color.White);
+                    if (DrawButton(panX + 390, rowY, 34, 34, "-")) Program.matchTimeLimitConfig = Math.Max(0, Program.matchTimeLimitConfig - 60);
+                    string txtTemps = Program.matchTimeLimitConfig == 0 ? "OFF" : (Program.matchTimeLimitConfig / 60) + "m";
+                    Raylib.DrawText(txtTemps, panX + 442 - Raylib.MeasureText(txtTemps, 24) / 2 + 10, rowY + 6, 24, Color.Gold);
+                    if (DrawButton(panX + 470, rowY, 34, 34, "+")) Program.matchTimeLimitConfig = Math.Min(1800, Program.matchTimeLimitConfig + 60);
+
+                    int cfgY = panY + panH + 10;
+
                     // L'hôte vérifie si tout le monde est prêt (sauf lui)
                     bool toutLeMondePret = Program.currentLobbyPlayers.Where(p => !p.IsHost).All(p => p.IsReady);
-                    
+
                     // Le bouton change de couleur visuellement si le lancement est possible
-                    if (DrawButton(Raylib.GetScreenWidth() / 2 - 100, (int)zoneMap.Y + (int)zoneMap.Height + 30, 300, 60, toutLeMondePret ? "LANCER LA PARTIE" : "ATTENTE DES JOUEURS..."))
+                    if (DrawButton(Raylib.GetScreenWidth() / 2 - 100, cfgY, 300, 60, toutLeMondePret ? "LANCER LA PARTIE" : "ATTENTE DES JOUEURS..."))
                     {
                         if (toutLeMondePret)
                         {
                             Program.PlaySoundWithPriority(select, Program.SoundPriority.Critical);
-                            
-                            // On forge le paquet de démarrage
-                            Packets.StartGamePacket startPack = new Packets.StartGamePacket();
-                            startPack.MapIndex = Program.mapChoisieIndex;
-
-                            NetDataWriter writer = new NetDataWriter();
-                            Program.netProcessor.Write(writer, startPack);
-                            
-                            // Le serveur envoie l'ordre à tout le monde
-                            Program.netManager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
-                            
-                            // Et le serveur se l'applique à lui-même pour démarrer
-                            Program.OnStartGameReceived(startPack, null);
+                            // Diffuse StartGame (avec les règles) + démarre chez l'hôte
+                            Program.HoteDemarrerMatch();
                         }
                     }
                 }
                 else
                 {
+                    // Client : si un match tourne déjà chez l'hôte, on propose de le REJOINDRE (hot-join)
+                    if (Program.partieEnCoursCoteHote)
+                    {
+                        if (DrawButton(Raylib.GetScreenWidth() / 2 - 100, (int)zoneMap.Y + (int)zoneMap.Height + 100, 300, 55, "REJOINDRE LA PARTIE"))
+                        {
+                            Program.PlaySoundWithPriority(select, Program.SoundPriority.High);
+                            Program.ClientDemanderRejoindre();
+                        }
+                    }
                     // Code Client : Trouver notre propre état Prêt
                     // CORRECTION : on se cherche par notre ID unique (l'ancien code cherchait
                     // un pseudo commençant par "Joueur_" qui n'existe plus -> bouton cassé)
@@ -1547,8 +1732,8 @@ partial class Program
                     }
                 }
 
-                // Bouton QUITTER (Fermeture propre du socket)
-                if (DrawButton(50, 50, 150, 60, "RETOUR"))
+                // Bouton QUITTER (Fermeture propre du socket) — bouton, ou Échap / B
+                if (DrawButton(50, 50, 150, 60, "RETOUR") || MenuNav.Back)
                 {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.CouperReseau(); // Coupe la carte réseau proprement
@@ -1566,7 +1751,23 @@ partial class Program
                 }
                 break;
 
-            
+
+            case Program.GameState.Loading:
+                // Hot-join : on charge la map et on attend la baseline de l'hôte
+                Raylib.ClearBackground(Color.Black);
+                string txtCharge = "Connexion à la partie en cours...";
+                Raylib.DrawText(txtCharge, Raylib.GetScreenWidth()/2 - Raylib.MeasureText(txtCharge, 30)/2, Raylib.GetScreenHeight()/2 - 15, 30, Color.White);
+                string txtSous = "Synchronisation du monde (murs, scores, position)";
+                Raylib.DrawText(txtSous, Raylib.GetScreenWidth()/2 - Raylib.MeasureText(txtSous, 20)/2, Raylib.GetScreenHeight()/2 + 30, 20, Color.Gray);
+                break;
+
+            case Program.GameState.PostMatch:
+                // Écran de fin de match (scoreboard + gagnant + compte à rebours)
+                Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
+                Program.DessinerPostMatch();
+                break;
+
+
             case Program.GameState.CreateMatch:
                 Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
                 int centerC2 = Raylib.GetScreenWidth() / 2;
@@ -1574,54 +1775,15 @@ partial class Program
 
                 Raylib.DrawText("Créer un Match", centerC2 - Raylib.MeasureText("Créer un Match", 40)/2, centerCY2 - 200, 40, Color.White);
 
-                // --- LES BOÎTES DE TEXTE ---
-                Rectangle pseudoBox = new Rectangle(centerC2 - 300, centerCY2 - 100, 600, 50);
-                Rectangle matchBox = new Rectangle(centerC2 - 300, centerCY2 - 10, 600, 50);
-
-                // Gestion du clic pour le Focus
-                if (Raylib.IsMouseButtonPressed(MouseButton.Left))
-                {
-                    if (Raylib.CheckCollisionPointRec(souris, pseudoBox)) Program.activeTextBox = 1;
-                    else if (Raylib.CheckCollisionPointRec(souris, matchBox)) Program.activeTextBox = 2;
-                    else Program.activeTextBox = 0;
-                }
-                // Bonus UX : Utiliser TAB pour passer d'une boîte à l'autre
-                if (Raylib.IsKeyPressed(KeyboardKey.Tab)) Program.activeTextBox = (Program.activeTextBox == 1) ? 2 : 1;
-
-                // --- APPARENCE DES BOÎTES ---
-                // Boîte 1 : Pseudo
-                Raylib.DrawRectangleRec(pseudoBox, new Color(40, 40, 40, 255));
-                Raylib.DrawRectangleLinesEx(pseudoBox, 3, Program.activeTextBox == 1 ? Color.Red : Color.Black); // Surlignage rouge si actif
-                if (Program.playerNameInput.Length > 0) Raylib.DrawText(Program.playerNameInput, (int)pseudoBox.X + 20, (int)pseudoBox.Y + 12, 26, Color.White);
-                else Raylib.DrawText("Entrez votre Pseudo", (int)pseudoBox.X + 20, (int)pseudoBox.Y + 15, 20, Color.Gray);
-
-                // Boîte 2 : Nom du Match
-                Raylib.DrawRectangleRec(matchBox, new Color(40, 40, 40, 255));
-                Raylib.DrawRectangleLinesEx(matchBox, 3, Program.activeTextBox == 2 ? Color.Red : Color.Black);
-                if (Program.matchNameInput.Length > 0) Raylib.DrawText(Program.matchNameInput, (int)matchBox.X + 20, (int)matchBox.Y + 12, 26, Color.White);
-                else Raylib.DrawText("Entrez le nom du match", (int)matchBox.X + 20, (int)matchBox.Y + 15, 20, Color.Gray);
-
-                // --- CURSEUR CLIGNOTANT ---
-                bool clignote2 = ((int)(Raylib.GetTime() * 2)) % 2 == 0;
-                if (clignote2 && Program.activeTextBox == 1)
-                    Raylib.DrawRectangle((int)pseudoBox.X + 20 + (Program.playerNameInput.Length > 0 ? Raylib.MeasureText(Program.playerNameInput, 26) : 0) + 5, (int)pseudoBox.Y + 10, 3, 30, Color.White);
-                else if (clignote2 && Program.activeTextBox == 2)
-                    Raylib.DrawRectangle((int)matchBox.X + 20 + (Program.matchNameInput.Length > 0 ? Raylib.MeasureText(Program.matchNameInput, 26) : 0) + 5, (int)matchBox.Y + 10, 3, 30, Color.White);
-
-                // --- SAISIE CLAVIER UNIVERSELLE ---
-                int key = Raylib.GetCharPressed();
-                while (key > 0)
-                {
-                    if (Program.activeTextBox == 1 && key >= 32 && key <= 125 && Program.playerNameInput.Length < 15) Program.playerNameInput += (char)key;
-                    else if (Program.activeTextBox == 2 && key >= 32 && key <= 125 && Program.matchNameInput.Length < 20) Program.matchNameInput += (char)key;
-                    key = Raylib.GetCharPressed();
-                }
-
-                if (Raylib.IsKeyPressed(KeyboardKey.Backspace))
-                {
-                    if (Program.activeTextBox == 1 && Program.playerNameInput.Length > 0) Program.playerNameInput = Program.playerNameInput.Substring(0, Program.playerNameInput.Length - 1);
-                    else if (Program.activeTextBox == 2 && Program.matchNameInput.Length > 0) Program.matchNameInput = Program.matchNameInput.Substring(0, Program.matchNameInput.Length - 1);
-                }
+                // --- LES BOÎTES DE TEXTE (navigables) ---
+                // Flèches/stick pour atteindre un champ, Entrée/A pour y entrer (la nav se fige),
+                // Entrée/Échap pour en sortir.
+                ChampTexteNav(new Rectangle(centerC2 - 300, centerCY2 - 120, 600, 50), 1, ref Program.playerNameInput, "Entrez votre Pseudo", 15, FiltreTexte.Libre);
+                ChampTexteNav(new Rectangle(centerC2 - 300, centerCY2 - 50, 600, 50), 2, ref Program.matchNameInput, "Entrez le nom du match", 20, FiltreTexte.Libre);
+                ChampTexteNav(new Rectangle(centerC2 - 300, centerCY2 + 20, 600, 50), 3, ref Program.hostRoomPassword, "Mot de passe (optionnel)", 20, FiltreTexte.MotDePasse);
+                // TAB : champ suivant (Pseudo -> Match -> Mot de passe -> Pseudo)
+                if (Raylib.IsKeyPressed(KeyboardKey.Tab) && Program.activeTextBox >= 1 && Program.activeTextBox <= 3)
+                    Program.activeTextBox = (Program.activeTextBox % 3) + 1;
 
                 // Bouton Créer
                 if (DrawButton(centerC2 - 100, centerCY2 + 80, 200, 50, "Créer"))
@@ -1642,10 +1804,14 @@ partial class Program
                         Program.currentLobbyPlayers.Add(new Program.LobbyPlayer { Name = pseudoFinal, IsHost = true, IsReady = true, Id = 0, Peer = null });
                     }
 
+                    // Phase 2 : on enregistre le salon sur le serveur maître (code de salon).
+                    // Si le maître est injoignable, la partie reste jouable en LAN + IP directe.
+                    Program.HoteCreerSalon();
+
                     Program.currentState = Program.GameState.Lobby;
                 }
 
-                if (DrawButton(50, 50, 150, 60, "RETOUR")) {
+                if (DrawButton(50, 50, 150, 60, "RETOUR") || (MenuNav.Back && !MenuNav.EditingText)) {
                     Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
                     Program.currentState = Program.GameState.NetworkHub;
                 }
@@ -1666,8 +1832,8 @@ partial class Program
             }
         }
 
-    
-            Raylib.EndDrawing();
+        MenuNav.End(); // clôture la navigation menu de cette frame
+        Raylib.EndDrawing();
         
     }
 

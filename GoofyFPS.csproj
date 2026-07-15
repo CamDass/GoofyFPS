@@ -6,7 +6,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Ce projet n'est pas annoté "nullable reference types" (choix historique) : on
+         garde l'analyse active pour l'IDE mais on n'émet pas ses avertissements de style
+         au build (CS86xx), ni les champs inutilisés préexistants (CS0414/CS0472).
+         Aucun de ces avertissements n'est un bug de logique. -->
+    <NoWarn>CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625;CS0414;CS0472</NoWarn>
   </PropertyGroup>
+
+  <!-- Le serveur maître (master/) est un projet .NET séparé : on l'exclut du build du jeu
+       pour ne pas compiler deux Program.cs / deux points d'entrée dans le même binaire. -->
+  <ItemGroup>
+    <Compile Remove="master/**/*.cs" />
+    <Content Remove="master/**/*" />
+    <None Remove="master/**/*" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BepuPhysics" Version="2.4.0" />

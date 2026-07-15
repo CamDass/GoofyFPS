@@ -253,6 +253,8 @@ public partial class Program
     // GESTIONNAIRE DE SURVIE ET SPAWNS
     // ========================================================
     public static float survivalTime = 0f;
+    // Solo : active/désactive l'apparition des zombies (réglé par l'interrupteur du menu Solo).
+    public static bool zombiesActifs = true;
     public static int killCount = 0;
     public static int deathCount = 0;
     public static float enemySpawnTimer = 0f;
@@ -303,6 +305,12 @@ public partial class Program
 
     public static NetPacketProcessor netProcessor = new NetPacketProcessor();
 
+    // --- Reconnexion client (Task 3.4) ---
+    public static bool clientEnReconnexion = false;   // vrai pendant la fenêtre de reconnexion
+    public static float reconnexionRestant = 0f;      // secondes restantes avant abandon
+    static float reconnexionRetryTimer = 0f;          // cadence des tentatives
+    static IPEndPoint hostEndpoint = null;            // l'hôte à recontacter
+
 
     // ==========================================
     // LA MACHINE À ÉTATS DU JEU
@@ -315,7 +323,9 @@ public partial class Program
         ChoiceMap,          // TA page de sélection (Tuto, Ville, Sandbox)
         NetworkHub,         // Choix Héberger / Rejoindre
         Lobby,              // La salle d'attente
+        Loading,            // Chargement de la map (hot-join : on attend la baseline)
         Playing,             // En jeu
+        PostMatch,          // Écran de score de fin de match (avant retour au salon)
         ServerBrowser,
         CreateMatch,
         Customization       // Le menu de personnalisation du personnage (skins)
@@ -351,8 +361,22 @@ public partial class Program
     public static string directIPInput = ""; 
     
     // NOUVEAU : Variables pour le Pseudo et le Focus des boîtes de texte
-    public static string playerNameInput = ""; 
+    public static string playerNameInput = "";
     public static int activeTextBox = 1; // 1 = Boîte Pseudo, 2 = Boîte Match/IP, 0 = Rien
+
+    // Mots de passe de salon (Task 2.9) — optionnels
+    public static string hostRoomPassword = "";   // défini par l'hôte à la création (vide = pas de mdp)
+    public static string joinPassword = "";       // saisi par le client pour rejoindre un salon protégé
+
+    // Connexion à un hôte AVEC les données de connexion (clé de version + mot de passe).
+    // Toutes les connexions (IP directe, salon LAN, code, reconnexion) passent par ici.
+    public static void ConnecterAHote(IPEndPoint ep)
+    {
+        NetDataWriter data = new NetDataWriter();
+        data.Put(NetConfig.ConnectionKey);
+        data.Put(joinPassword ?? "");
+        netManager.Connect(ep, data);
+    }
 
     public static int mapChoisieIndex = 1;
     public static bool afficherIPDuServeur = false;
@@ -383,12 +407,20 @@ public partial class Program
         isServer = host;
 
         // ==========================================
-        // CORRECTION CRUCIALE : SANS CES DEUX FLAGS, LE RADAR LAN EST SOURD !
-        // - BroadcastReceiveEnabled : le serveur doit pouvoir ENTENDRE les broadcasts "GOOFY_REQ"
-        // - UnconnectedMessagesEnabled : le client doit pouvoir RECEVOIR la réponse "GOOFY_RES"
+        // SÉCURITÉ S6 : les messages non-connectés (radar LAN) sont FERMÉS par défaut.
+        // La boucle principale ne les ouvre QUE dans les états où ils servent :
+        //  - hôte en Lobby (répondre aux "GOOFY_REQ")
+        //  - client en ServerBrowser (recevoir les "GOOFY_RES")
+        // Sur internet, un inconnu qui scanne le port ne déclenche AUCUN traitement.
         // ==========================================
-        netManager.BroadcastReceiveEnabled = true;
-        netManager.UnconnectedMessagesEnabled = true;
+        netManager.BroadcastReceiveEnabled = false;
+        netManager.UnconnectedMessagesEnabled = false;
+
+        // Statistiques réseau pour le HUD F3 (débits, paquets/s)
+        netManager.EnableStatistics = true;
+
+        // GOOFY_NETSIM=latence:gigue:perte (ex: "150:30:5") -> simulation WAN en local
+        AppliquerSimulationReseau();
 
         // Remise à zéro de la session (IDs, joueurs distants, etc.)
         ReinitialiserSessionReseau(host);
@@ -399,54 +431,60 @@ public partial class Program
         // ==========================================
         netListener.NetworkReceiveUnconnectedEvent += (endPoint, reader, messageType) =>
         {
-            // 1. SI ON EST L'HÔTE : On entend quelqu'un chercher une partie
-            if (isServer && messageType == UnconnectedMessageType.Broadcast)
+            // S1/S3 : un datagramme forgé (tronqué, chaîne géante...) ne doit JAMAIS
+            // faire tomber le processus -> lectures bornées + filet de sécurité global.
+            try
             {
-                string entete = reader.GetString();
-                if (entete == "GOOFY_REQ") // Sécurité : On vérifie que c'est bien notre jeu qui parle
+                // 1. SI ON EST L'HÔTE : On entend quelqu'un chercher une partie
+                if (isServer && messageType == UnconnectedMessageType.Broadcast)
                 {
-                    // On fabrique notre réponse
-                    NetDataWriter writer = new NetDataWriter();
-                    writer.Put("GOOFY_RES"); // Je suis une réponse GoofyFPS
-                    writer.Put(Program.hostMatchName); // On utilise le VRAI nom de la partie !
-                    int nbJoueurs;
-                    lock (_lobbyLock) { nbJoueurs = currentLobbyPlayers.Count; }
-                    writer.Put(nbJoueurs); // Joueurs actuels (le vrai nombre !)
-                    writer.Put(4); // Joueurs max
-                    
-                    // On renvoie la réponse directement à l'IP qui a posé la question !
-                    netManager.SendUnconnectedMessage(writer, endPoint);
+                    string entete = reader.GetString(16);
+                    if (entete == "GOOFY_REQ") // Sécurité : On vérifie que c'est bien notre jeu qui parle
+                    {
+                        // On fabrique notre réponse
+                        NetDataWriter writer = new NetDataWriter();
+                        writer.Put("GOOFY_RES"); // Je suis une réponse GoofyFPS
+                        writer.Put(NetConfig.NettoyerNom(Program.hostMatchName, "Salon")); // Le VRAI nom de la partie
+                        int nbJoueurs;
+                        lock (_lobbyLock) { nbJoueurs = currentLobbyPlayers.Count; }
+                        writer.Put(nbJoueurs); // Joueurs actuels (le vrai nombre !)
+                        writer.Put(NetConfig.MaxPlayers); // Joueurs max (fini le 4 en dur)
+
+                        // On renvoie la réponse directement à l'IP qui a posé la question !
+                        netManager.SendUnconnectedMessage(writer, endPoint);
+                    }
+                }
+
+                // 2. SI ON EST CLIENT : On reçoit la réponse d'un Hôte !
+                if (!isServer && messageType == UnconnectedMessageType.BasicMessage)
+                {
+                    string entete = reader.GetString(16);
+                    if (entete == "GOOFY_RES")
+                    {
+                        // On lit les données dans L'ORDRE EXACT où l'Hôte les a écrites
+                        string nomSalon = NetConfig.NettoyerNom(reader.GetString(64), "Salon");
+                        int jActuels = Math.Clamp(reader.GetInt(), 0, NetConfig.MaxPlayersAbsolu);
+                        int jMax = Math.Clamp(reader.GetInt(), 1, NetConfig.MaxPlayersAbsolu);
+
+                        Console.WriteLine($"salon trouvé : {nomSalon}");
+
+                        // On met à jour notre Dictionnaire
+                        if (!serveursDisponibles.ContainsKey(endPoint))
+                        {
+                            serveursDisponibles[endPoint] = new InfoServeur();
+                        }
+
+                        serveursDisponibles[endPoint].NomDuSalon = nomSalon;
+                        serveursDisponibles[endPoint].JoueursActuels = jActuels;
+                        serveursDisponibles[endPoint].JoueursMax = jMax;
+                        serveursDisponibles[endPoint].EndPoint = endPoint;
+                        serveursDisponibles[endPoint].TempsDepuisDerniereReponse = 0f; // On remet le chrono de mort à 0
+                    }
                 }
             }
-
-            // 2. SI ON EST CLIENT : On reçoit la réponse d'un Hôte !
-            if (!isServer && messageType == UnconnectedMessageType.BasicMessage)
+            catch (Exception ex)
             {
-                string entete = reader.GetString();
-                if (entete == "GOOFY_RES") 
-                {
-                    // On lit les données dans L'ORDRE EXACT où l'Hôte les a écrites
-                    string nomSalon = reader.GetString();
-                    int jActuels = reader.GetInt();
-                    int jMax = reader.GetInt();
-
-                    // ==========================================
-                    // AJOUT DU DEBUG DEMANDÉ
-                    // ==========================================
-                    Console.WriteLine($"salon trouvé : {nomSalon}");
-
-                    // On met à jour notre Dictionnaire
-                    if (!serveursDisponibles.ContainsKey(endPoint))
-                    {
-                        serveursDisponibles[endPoint] = new InfoServeur();
-                    }
-                    
-                    serveursDisponibles[endPoint].NomDuSalon = nomSalon;
-                    serveursDisponibles[endPoint].JoueursActuels = jActuels;
-                    serveursDisponibles[endPoint].JoueursMax = jMax;
-                    serveursDisponibles[endPoint].EndPoint = endPoint;
-                    serveursDisponibles[endPoint].TempsDepuisDerniereReponse = 0f; // On remet le chrono de mort à 0
-                }
+                Console.WriteLine($"[RÉSEAU-SÉCU] Datagramme non-connecté invalide de {endPoint} ignoré : {ex.GetType().Name}");
             }
         };
 
@@ -454,21 +492,43 @@ public partial class Program
         // LES PORTES DU SERVEUR (Connexion & Déconnexion)
         // ==========================================
         
-        // 1. QUELQU'UN TOQUE À LA PORTE
+        // 1. QUELQU'UN TOQUE À LA PORTE (S7 : la douane)
+        // On lit la clé nous-mêmes au lieu d'AcceptIfKey : ça permet de renvoyer
+        // une VRAIE raison de rejet que le client affichera (version, plein, en partie).
         netListener.ConnectionRequestEvent += request =>
         {
-            if (isServer)
+            if (!isServer) { request.Reject(); return; }
+
+            string cle = "";
+            string motDePasse = "";
+            try
             {
-                // Le serveur vérifie que la partie n'est pas déjà pleine (ex: max 4 joueurs)
-                if (netManager.ConnectedPeersCount < 4 && currentState == GameState.Lobby)
-                {
-                    // On accepte le joueur !
-                    request.AcceptIfKey("GoofyFPS_SecretKey");
-                }
-                else
-                {
-                    request.Reject(); // Salon plein ou partie déjà lancée
-                }
+                cle = request.Data.GetString(64);
+                if (!request.Data.EndOfData) motDePasse = request.Data.GetString(64); // Task 2.9
+            }
+            catch { /* données forgées : cle/mdp restent vides */ }
+
+            if (cle != NetConfig.ConnectionKey)
+            {
+                RejeterAvecRaison(request, NetConfig.RejetVersion);
+            }
+            else if (!string.IsNullOrEmpty(hostRoomPassword) && motDePasse != hostRoomPassword)
+            {
+                RejeterAvecRaison(request, NetConfig.RejetMotDePasse); // Task 2.9
+            }
+            else if (netManager.ConnectedPeersCount >= NetConfig.MaxPlayers - 1) // -1 : l'hôte compte aussi
+            {
+                RejeterAvecRaison(request, NetConfig.RejetPlein);
+            }
+            else if (currentState != GameState.Lobby && currentState != GameState.Playing)
+            {
+                // Lobby OU partie en cours (hot-join) sont acceptés. Loading/PostMatch sont
+                // des transitions courtes : on refuse temporairement (le client réessaiera).
+                RejeterAvecRaison(request, NetConfig.RejetEnPartie);
+            }
+            else
+            {
+                request.Accept();
             }
         };
 
@@ -480,18 +540,31 @@ public partial class Program
             {
                 Packets.JoinPacket passeport = new Packets.JoinPacket();
 
-                // CORRECTION : On utilise le pseudo tapé dans le menu (Avec une sécurité s'il est vide)
-                string pseudoFinal = string.IsNullOrEmpty(Program.playerNameInput) ? "Anonyme_" + Raylib.GetRandomValue(10, 99) : Program.playerNameInput;
-                // Sécurité : la virgule et le point-virgule servent de séparateurs réseau, on les interdit
-                pseudoFinal = pseudoFinal.Replace(",", "").Replace(";", "");
+                // On utilise le pseudo tapé dans le menu, nettoyé par la règle commune (S3)
+                string pseudoFinal = NetConfig.NettoyerNom(Program.playerNameInput, "Anonyme_" + Raylib.GetRandomValue(10, 99));
                 passeport.PlayerName = pseudoFinal;
                 myLobbyName = pseudoFinal; // On mémorise NOTRE pseudo pour se retrouver dans la liste
+
+                // Task 3.4 : si c'est une RECONNEXION après coupure, on présente notre ancien
+                // ID + jeton pour récupérer notre place et notre score.
+                if (clientEnReconnexion && myPlayerId > 0)
+                {
+                    passeport.ReconnectId = myPlayerId;
+                    passeport.ReconnectToken = myReconnectToken;
+                }
 
                 NetDataWriter writer = new NetDataWriter();
                 netProcessor.Write(writer, passeport);
                 peer.Send(writer, DeliveryMethod.ReliableOrdered);
 
-                currentState = GameState.Lobby;
+                // On mémorise l'hôte pour pouvoir le recontacter en cas de coupure (Task 3.4)
+                hostEndpoint = new IPEndPoint(peer.Address, peer.Port);
+                clientEnReconnexion = false; // (re)connexion réussie
+
+                // Une reconnexion réussie enchaîne sur le hot-join (MatchInfo) : on reste en
+                // Lobby une fraction de seconde, puis Loading -> Playing.
+                if (currentState != GameState.Playing && currentState != GameState.Loading)
+                    currentState = GameState.Lobby;
             }
         };
 
@@ -500,45 +573,89 @@ public partial class Program
             Console.WriteLine($"[RÉSEAU] Déconnexion de {peer.Address}");
             if (isServer)
             {
-                // On retrouve QUI vient de partir pour prévenir tout le monde
-                int idParti = -1;
-                lock (_lobbyLock)
-                {
-                    var partant = currentLobbyPlayers.Find(p => p.Peer == peer);
-                    if (partant != null) idParti = partant.Id;
-                    currentLobbyPlayers.RemoveAll(p => p.Peer == peer);
-                }
+                // On retrouve QUI vient de partir
+                LobbyPlayer partant;
+                lock (_lobbyLock) { partant = currentLobbyPlayers.Find(p => p.Peer == peer); }
 
-                if (idParti >= 0)
+                // Task 3.4 : en PLEIN MATCH, on réserve sa place 30 s (reconnexion possible)
+                // au lieu de le purger. Sa place/score restent, il n'est juste plus dessiné.
+                if (partant != null && HoteReserverSlot(partant))
                 {
+                    MettreAJourEtDiffuserLobby();
+                }
+                else if (partant != null)
+                {
+                    // Hors match (ou pas de grâce) : purge normale immédiate
+                    int idParti = partant.Id;
+                    lock (_lobbyLock) currentLobbyPlayers.RemoveAll(p => p.Id == idParti);
+                    string nomParti = ObtenirNomJoueur(idParti);
                     peersParId.Remove(idParti);
                     remotePlayers.Remove(idParti);
+                    peersEnBaseline.Remove(idParti);
+                    tokensParId.Remove(idParti);
+                    AjouterToast($"{nomParti} a quitté la partie");
 
-                    // On prévient les survivants que ce joueur n'existe plus (utile en pleine partie)
                     Packets.PlayerLeftPacket depart = new Packets.PlayerLeftPacket { PlayerId = idParti };
                     NetDataWriter writerDepart = new NetDataWriter();
                     netProcessor.Write(writerDepart, depart);
                     netManager.SendToAll(writerDepart, DeliveryMethod.ReliableOrdered);
+                    MettreAJourEtDiffuserLobby();
                 }
-
-                // On prévient les survivants (mise à jour du lobby)
-                MettreAJourEtDiffuserLobby();
             }
             else
             {
-                // Si le serveur a fermé, le client retourne au menu réseau
-                if (currentState == GameState.Playing)
+                // S7 : si l'hôte a fourni une raison (rejet version/plein/en partie),
+                // on la décode pour l'afficher dans le menu au lieu d'un silence radio.
+                derniereErreurReseau = "";
+                try
                 {
-                    // On était en pleine partie : on coupe tout proprement et on rend la souris
+                    // Rejet à la connexion (version/plein) OU exclusion en cours de partie (kick,
+                    // triche) : dans les deux cas l'hôte a joint un octet-raison qu'on affiche.
+                    if ((disconnectInfo.Reason == DisconnectReason.ConnectionRejected
+                         || disconnectInfo.Reason == DisconnectReason.RemoteConnectionClose)
+                        && disconnectInfo.AdditionalData != null && !disconnectInfo.AdditionalData.EndOfData)
+                    {
+                        derniereErreurReseau = NetConfig.MessageRejet(disconnectInfo.AdditionalData.GetByte());
+                    }
+                    else if (disconnectInfo.Reason == DisconnectReason.ConnectionFailed)
+                    {
+                        derniereErreurReseau = "Impossible de joindre l'hôte.";
+                    }
+                    else if (disconnectInfo.Reason == DisconnectReason.Timeout)
+                    {
+                        derniereErreurReseau = "Connexion perdue avec l'hôte.";
+                    }
+                }
+                catch { /* données de rejet forgées : on garde le message vide */ }
+                if (derniereErreurReseau != "") Console.WriteLine($"[RÉSEAU] {derniereErreurReseau}");
+
+                // Task 3.4 — RECONNEXION : une simple COUPURE réseau (Timeout) en pleine
+                // partie ne renvoie plus au menu. On tente de se rebrancher pendant 30 s ;
+                // l'hôte garde notre place et notre score le temps qu'on revienne.
+                bool coupureReseau = disconnectInfo.Reason == DisconnectReason.Timeout;
+                if (coupureReseau && (currentState == GameState.Playing || currentState == GameState.Loading)
+                    && hostEndpoint != null && myPlayerId > 0)
+                {
+                    clientEnReconnexion = true;
+                    reconnexionRestant = GraceReconnexionSec;
+                    reconnexionRetryTimer = 0f;
+                    derniereErreurReseau = "";
+                    Console.WriteLine("[RÉSEAU] Coupure détectée : tentative de reconnexion (30 s)...");
+                    // On NE coupe PAS netManager : il sert à reconnecter. On garde la map chargée.
+                }
+                else if (currentState == GameState.Playing)
+                {
+                    // Déconnexion volontaire / kick / hôte fermé : retour propre au menu
                     CouperReseau();
                     Raylib.EnableCursor();
                     isPaused = false;
+                    currentState = GameState.NetworkHub;
                 }
                 else
                 {
                     remotePlayers.Clear();
+                    currentState = GameState.NetworkHub;
                 }
-                currentState = GameState.NetworkHub;
             }
         };
 
@@ -547,9 +664,20 @@ public partial class Program
         // ==========================================
         
         // 1. Dès qu'un paquet officiel arrive, on le donne au traducteur automatique (NetProcessor)
+        // SÉCURITÉ S1 : un paquet malformé (tronqué, forgé, type inconnu) lève une exception
+        // dans le NetProcessor. Sans ce filet, UN datagramme pourri = crash de l'hôte pour
+        // tout le monde. Ici : on journalise et on déconnecte l'expéditeur fautif, point.
         netListener.NetworkReceiveEvent += (peer, reader, deliveryMethod, channel) =>
         {
-            netProcessor.ReadAllPackets(reader, peer);
+            try
+            {
+                netProcessor.ReadAllPackets(reader, peer);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RÉSEAU-SÉCU] Paquet invalide de {peer.Address} ({ex.GetType().Name}) : déconnexion du peer.");
+                peer.Disconnect();
+            }
         };
 
         // 2. On abonne le traducteur à notre "Passeport" (JoinPacket)
@@ -557,7 +685,7 @@ public partial class Program
         netProcessor.SubscribeReusable<Packets.JoinPacket, NetPeer>(OnJoinPacketReceived);
         // Abonnements aux nouveaux paquets du Lobby
         netProcessor.SubscribeReusable<Packets.ToggleReadyPacket, NetPeer>(OnReadyPacketReceived);
-        netProcessor.SubscribeReusable<Packets.LobbyStatePacket, NetPeer>(OnLobbyStateReceived);
+        netProcessor.SubscribeNetSerializable<Packets.LobbyStatePacket, NetPeer>(OnLobbyStateReceived);
         netProcessor.SubscribeReusable<Packets.StartGamePacket, NetPeer>(OnStartGameReceived);
         // Abonnements aux paquets de la partie en cours (positions, tirs, dégâts...)
         EnregistrerPaquetsEnJeu();
@@ -566,7 +694,7 @@ public partial class Program
         // Lancement effectif de la carte réseau
         if (host) 
         {
-            netManager.Start(7777); // Le serveur ouvre la porte 7777 fixement
+            netManager.Start(NetConfig.GamePort); // Le serveur ouvre sa porte fixe (7777)
 
             // ==========================================
             // LOGIQUE DE RÉCUPÉRATION DE L'IP LOCALE (Calculé 1 seule fois)
@@ -590,13 +718,57 @@ public partial class Program
                 adresseIPLocaleServeur = "IP Introuvable";
             }
         }
-        else 
+        else
         {
             netManager.Start(); // Le client prend un port au hasard
         }
+
+        // Le module de perçage NAT (Phase 2) : hôte ET client en ont besoin
+        InitNatPunch();
     }
 
 
+
+    // ==========================================
+    // LES OUTILS DE LA DOUANE (S7) + SIMULATION WAN
+    // ==========================================
+    // Le dernier message d'erreur réseau, affiché dans les menus (rejet, timeout...)
+    public static string derniereErreurReseau = "";
+
+    // Rejette une demande de connexion AVEC un code de raison que le client saura lire
+    static void RejeterAvecRaison(ConnectionRequest request, byte code)
+    {
+        NetDataWriter writer = new NetDataWriter();
+        writer.Put(code);
+        request.Reject(writer);
+        Console.WriteLine($"[SERVEUR] Connexion de {request.RemoteEndPoint} rejetée : {NetConfig.MessageRejet(code)}");
+    }
+
+    // GOOFY_NETSIM=latence:gigue:perte (ms:ms:%) — pour tester le WAN sans quitter le LAN.
+    // Ex: GOOFY_NETSIM=150:30:5 -> 150 ms ±30 de latence + 5 % de perte de paquets.
+    static void AppliquerSimulationReseau()
+    {
+        string config = Environment.GetEnvironmentVariable("GOOFY_NETSIM");
+        if (string.IsNullOrEmpty(config)) return;
+
+        string[] parts = config.Split(':');
+        int latence = parts.Length > 0 && int.TryParse(parts[0], out int l) ? l : 0;
+        int gigue = parts.Length > 1 && int.TryParse(parts[1], out int g) ? g : 0;
+        int perte = parts.Length > 2 && int.TryParse(parts[2], out int p) ? p : 0;
+
+        if (latence > 0)
+        {
+            netManager.SimulateLatency = true;
+            netManager.SimulationMinLatency = Math.Max(latence - gigue, 0);
+            netManager.SimulationMaxLatency = latence + gigue;
+        }
+        if (perte > 0)
+        {
+            netManager.SimulatePacketLoss = true;
+            netManager.SimulationPacketLossChance = Math.Clamp(perte, 0, 100);
+        }
+        Console.WriteLine($"[NETSIM] Simulation active : {latence} ms ±{gigue}, {perte} % de perte");
+    }
 
     // 1. QUAND LE SERVEUR REÇOIT UN PASSEPORT (JoinPacket)
     public static void OnJoinPacketReceived(Packets.JoinPacket passeport, NetPeer peer)
@@ -605,16 +777,41 @@ public partial class Program
         {
             string adresseIP = (peer != null) ? peer.Address.ToString() : "127.0.0.1 (SIMULATION)";
 
-            // Sécurité : pseudo vide ou avec séparateurs réseau interdits
-            string nomPropre = string.IsNullOrEmpty(passeport.PlayerName) ? "Anonyme_" + Raylib.GetRandomValue(10, 99) : passeport.PlayerName;
-            nomPropre = nomPropre.Replace(",", "").Replace(";", "");
+            // Sécurité S3 : pseudo nettoyé par la règle commune (longueur, séparateurs, contrôle)
+            string nomPropre = NetConfig.NettoyerNom(passeport.PlayerName, "Anonyme_" + Raylib.GetRandomValue(10, 99));
 
-            // NOUVEAU : Le serveur attribue un numéro unique à ce joueur
+            // RECONNEXION (Task 3.4) : ce joueur revient-il sur une place réservée ?
+            if (peer != null)
+            {
+                int idRepris = HoteTenterReconnexion(peer, passeport);
+                if (idRepris >= 0)
+                {
+                    // On lui renvoie sa carte d'identité (même ID + même jeton) et sa baseline.
+                    tokensParId.TryGetValue(idRepris, out int tokenRepris);
+                    Packets.YourIdPacket carteR = new Packets.YourIdPacket { PlayerId = idRepris, ReconnectToken = tokenRepris };
+                    NetDataWriter wR = new NetDataWriter();
+                    netProcessor.Write(wR, carteR);
+                    peer.Send(wR, DeliveryMethod.ReliableOrdered);
+
+                    // Trombinoscope + relance de la baseline (le match tourne forcément)
+                    EnvoyerInfoJoueurA(peer, 0, myLobbyName, skinCouleur, skinHat, skinFace);
+                    foreach (RemotePlayer autre in remotePlayers.Values)
+                    {
+                        if (autre.Id == idRepris) continue;
+                        EnvoyerInfoJoueurA(peer, autre.Id, autre.Name, autre.SkinColor, autre.SkinHat, autre.SkinFace);
+                    }
+                    if (currentState == GameState.Playing) HoteDemarrerBaseline(peer, idRepris);
+                    MettreAJourEtDiffuserLobby();
+                    return;
+                }
+            }
+
+            // Le serveur attribue un numéro unique à ce joueur
             int nouvelId = nextPlayerId++;
 
             Console.WriteLine($"[SERVEUR] Le joueur '{nomPropre}' (ID {nouvelId}) rejoint le salon ({adresseIP})");
 
-            // CORRECTION : On ajoute le vrai joueur à la liste du serveur !
+            // On ajoute le vrai joueur à la liste du serveur !
             lock (_lobbyLock)
             {
                 currentLobbyPlayers.Add(new LobbyPlayer {
@@ -626,14 +823,38 @@ public partial class Program
                 });
             }
 
-            // On envoie au nouveau venu sa carte d'identité (son numéro unique)
             if (peer != null)
             {
+                // SÉCURITÉ S2 : l'identité de ce peer est scellée ICI, une fois pour toutes.
+                // Tous les handlers déduiront ensuite "qui parle" de ce Tag, jamais des paquets.
+                peer.Tag = nouvelId;
                 peersParId[nouvelId] = peer;
-                Packets.YourIdPacket carte = new Packets.YourIdPacket { PlayerId = nouvelId };
+
+                // Jeton de reconnexion (Task 3.4) : gardé côté hôte, renvoyé au client.
+                int token = rngToken.Next(1, int.MaxValue);
+                tokensParId[nouvelId] = token;
+
+                // On envoie au nouveau venu sa carte d'identité (son numéro unique + jeton)
+                Packets.YourIdPacket carte = new Packets.YourIdPacket { PlayerId = nouvelId, ReconnectToken = token };
                 NetDataWriter writerId = new NetDataWriter();
                 netProcessor.Write(writerId, carte);
                 peer.Send(writerId, DeliveryMethod.ReliableOrdered);
+
+                // Et le trombinoscope : la fiche de l'hôte + celle de chaque joueur déjà présent
+                // (le nouveau venu recevra les skins ; les siens arriveront via SON PlayerInfo)
+                EnvoyerInfoJoueurA(peer, 0, myLobbyName, skinCouleur, skinHat, skinFace);
+                foreach (RemotePlayer rp in remotePlayers.Values)
+                {
+                    if (rp.Id == nouvelId) continue;
+                    EnvoyerInfoJoueurA(peer, rp.Id, rp.Name, rp.SkinColor, rp.SkinHat, rp.SkinFace);
+                }
+
+                // HOT-JOIN : si l'hôte est déjà en pleine partie, on lance la baseline
+                // (le retardataire va charger la map puis recevoir murs + scores + spawn).
+                if (currentState == GameState.Playing)
+                    HoteDemarrerBaseline(peer, nouvelId);
+                else
+                    AjouterToast($"{nomPropre} a rejoint le salon");
             }
 
             // On diffuse la mise à jour à tout le monde
@@ -657,7 +878,7 @@ public partial class Program
     }
 
     // 3. QUAND LE CLIENT REÇOIT LA MISE À JOUR DU SERVEUR
-    // 3. QUAND LE CLIENT REÇOIT LA MISE À JOUR DU SERVEUR
+    // (Paquet STRUCTURÉ : la sérialisation borne déjà les compteurs et les chaînes)
     public static void OnLobbyStateReceived(Packets.LobbyStatePacket packet, NetPeer peer)
     {
         if (!isServer)
@@ -665,29 +886,20 @@ public partial class Program
             hostMatchName = packet.MatchName;
             mapChoisieIndex = packet.MapIndex;
 
-            lock (_lobbyLock) {currentLobbyPlayers.Clear();}
-
-            // CORRECTION : On décode la phrase envoyée par le serveur (Format : "Nom,Pret,Id")
-            if (!string.IsNullOrEmpty(packet.SerializedPlayers))
+            lock (_lobbyLock)
             {
-                string[] joueurs = packet.SerializedPlayers.Split(';');
-                for (int i = 0; i < joueurs.Length; i++)
+                currentLobbyPlayers.Clear();
+                if (packet.Joueurs != null)
                 {
-                    string[] data = joueurs[i].Split(',');
-                    if (data.Length >= 2)
+                    foreach (var entree in packet.Joueurs)
                     {
-                        int idJoueur = i; // Sécurité si l'ID manque
-                        if (data.Length >= 3) int.TryParse(data[2], out idJoueur);
-
-                        lock (_lobbyLock) {
-                            currentLobbyPlayers.Add(new LobbyPlayer {
-                            Name = data[0],
-                            IsReady = data[1] == "1",
-                            IsHost = (i == 0), // Le premier de la liste est toujours l'hôte
-                            Id = idJoueur
+                        currentLobbyPlayers.Add(new LobbyPlayer
+                        {
+                            Name = entree.Nom,
+                            IsReady = entree.Pret,
+                            IsHost = entree.EstHote,
+                            Id = entree.Id
                         });
-                        }
-
                     }
                 }
             }
@@ -699,45 +911,55 @@ public partial class Program
     
     public static bool lancerPartieEnAttente = false;
     public static int mapIndexEnAttente = 0;
+    public static int scoreLimitEnAttente = 20;
+    public static int timeLimitEnAttente = 600;
 
     public static void OnStartGameReceived(Packets.StartGamePacket packet, NetPeer peer)
     {
-        // On mémorise juste la commande, sans rien exécuter
+        // On mémorise juste la commande, sans rien exécuter (le vrai lancement se fait dans la boucle)
         mapIndexEnAttente = packet.MapIndex;
+        scoreLimitEnAttente = packet.ScoreLimit;
+        timeLimitEnAttente = packet.TimeLimitSec;
         lancerPartieEnAttente = true;
     }
 
     // FONCTION UTILITAIRE : Le serveur emballe le Lobby et l'envoie à tout le monde
+    // (Version structurée : chaque joueur est un vrai champ, plus de bricolage de chaînes)
     public static void MettreAJourEtDiffuserLobby()
     {
         if (!isServer) return;
 
-        Packets.LobbyStatePacket pack = new Packets.LobbyStatePacket();
-        pack.MatchName = hostMatchName;
-        pack.MapIndex = mapChoisieIndex;
-        
-        // CORRECTION : On fusionne tous les joueurs en une seule phrase (ex: "Moi,1,0;Joueur_123,0,1")
-        List<string> joueursData = new List<string>();
+        Packets.LobbyStatePacket pack = new Packets.LobbyStatePacket
+        {
+            MatchName = hostMatchName,
+            MapIndex = (byte)Math.Clamp(mapChoisieIndex, 0, 255)
+        };
+
         lock (_lobbyLock)
         {
-            foreach (var p in currentLobbyPlayers)
+            pack.Joueurs = new Packets.LobbyStatePacket.Entree[currentLobbyPlayers.Count];
+            for (int i = 0; i < currentLobbyPlayers.Count; i++)
             {
-                int pret = p.IsReady ? 1 : 0;
-                string nomSain = p.Name.Replace(",", "").Replace(";", "");
-                joueursData.Add($"{nomSain},{pret},{p.Id}");
+                var p = currentLobbyPlayers[i];
+                pack.Joueurs[i] = new Packets.LobbyStatePacket.Entree
+                {
+                    Id = (byte)Math.Clamp(p.Id, 0, 255),
+                    Nom = p.Name,
+                    Pret = p.IsReady,
+                    EstHote = p.IsHost
+                };
             }
         }
-        pack.SerializedPlayers = string.Join(";", joueursData);
 
         NetDataWriter writer = new NetDataWriter();
-        netProcessor.Write(writer, pack);
+        netProcessor.WriteNetSerializable(writer, ref pack);
 
         // On envoie le colis à tous les clients connectés
         netManager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
     }
 
 
-    public static void ChargerMapReseau(int mapIndex)
+    public static void ChargerMapReseau(int mapIndex, bool spawnAleatoire = true)
 {
     // Nettoyage (une seule fois, pas en double) — partagé avec le mode solo
     DechargerMapActuelle();
@@ -765,12 +987,16 @@ public partial class Program
     InitBarrels();
     InitEnnemis();
 
-    int idx = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
-    BodyReference joueur = simulation.Bodies.GetBodyReference(PlayerId);
-    joueur.Pose.Position = listeSpawns[idx];
-    joueur.Velocity.Linear = Vector3.Zero;
-    joueur.Velocity.Angular = Vector3.Zero;
-    Raylib.DisableCursor();
+    // Hot-join : on NE choisit PAS de spawn ici (l'hôte nous en donne un via BaselineEnd).
+    if (spawnAleatoire)
+    {
+        int idx = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
+        BodyReference joueur = simulation.Bodies.GetBodyReference(PlayerId);
+        joueur.Pose.Position = listeSpawns[idx];
+        joueur.Velocity.Linear = Vector3.Zero;
+        joueur.Velocity.Angular = Vector3.Zero;
+        Raylib.DisableCursor();
+    }
 }
 
     // ========================================================
@@ -944,8 +1170,14 @@ public static void GenererPhysiqueMap(Model modele)
     // ========================================================
     // INITIALISATION PRINCIPALE
     // ========================================================
-    static void Main()
+    static void Main(string[] args)
     {
+        // Auto-tests des zombies (fenêtre cachée, pas de partie) :
+        // dotnet run -- --navtest  : le pathfinding A* trouve-t-il les chemins ?
+        // dotnet run -- --aitest   : le comportement runtime (anti-gel, fluidité) est-il bon ?
+        if (args.Length > 0 && args[0] == "--navtest") { LancerNavTest(); return; }
+        if (args.Length > 0 && args[0] == "--aitest") { LancerAiTest(); return; }
+
         //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
         Raylib.InitWindow(LargeurFenetre, HauteurFenetre, "GoofyFPS");
 
@@ -1215,6 +1447,12 @@ public static void GenererPhysiqueMap(Model modele)
         // Aucun impact en usage normal.
         // ==========================================
         bool modeTestAuto = Environment.GetEnvironmentVariable("GOOFY_AUTOHOST") == "1";
+        // Réglages de match pour les tests auto (limite de temps / de score courtes)
+        if (int.TryParse(Environment.GetEnvironmentVariable("GOOFY_MATCHTIME"), out int mt)) matchTimeLimitConfig = mt;
+        if (int.TryParse(Environment.GetEnvironmentVariable("GOOFY_SCORELIMIT"), out int sl)) matchScoreLimitConfig = sl;
+        // Mots de passe de test (Task 2.9) : GOOFY_ROOMPASS (hôte) / GOOFY_JOINPASS (client)
+        hostRoomPassword = Environment.GetEnvironmentVariable("GOOFY_ROOMPASS") ?? "";
+        joinPassword = Environment.GetEnvironmentVariable("GOOFY_JOINPASS") ?? "";
         if (modeTestAuto)
         {
             hostMatchName = "Salon de Test Auto";
@@ -1226,18 +1464,43 @@ public static void GenererPhysiqueMap(Model modele)
                 currentLobbyPlayers.Add(new LobbyPlayer { Name = "HoteTest", IsHost = true, IsReady = true, Id = 0, Peer = null });
             }
             currentState = GameState.Lobby;
+            // Si un serveur maître est configuré (GOOFY_MASTER_URL), on enregistre le salon
+            // pour tester le chemin "code de salon" bout-en-bout.
+            if (Environment.GetEnvironmentVariable("GOOFY_MASTER_URL") != null) HoteCreerSalon();
             Console.WriteLine("[TEST-AUTO] Salon hébergé automatiquement sur le port 7777");
+        }
+
+        // GOOFY_JOINCODE=XXXXX : rejoindre par CODE via le serveur maître (test du perçage NAT)
+        string joinCodeTest = Environment.GetEnvironmentVariable("GOOFY_JOINCODE");
+        if (!string.IsNullOrEmpty(joinCodeTest))
+        {
+            playerNameInput = "ClientCode";
+            AllumerMoteurReseau(false);
+            ClientRejoindreParCode(joinCodeTest);
+            Console.WriteLine($"[TEST-AUTO] Tentative de connexion par code {joinCodeTest}.");
         }
 
         // GOOFY_AUTOJOIN=1 : l'inverse, on cherche un salon sur le réseau et on le rejoint tout seul
         bool modeTestJoin = Environment.GetEnvironmentVariable("GOOFY_AUTOJOIN") == "1";
+        // GOOFY_JOINIP=127.0.0.1 : connexion DIRECTE (sans découverte broadcast) — indispensable
+        // pour tester le hot-join, car le radar LAN est sourd pendant une partie (S6).
+        string joinIpTest = Environment.GetEnvironmentVariable("GOOFY_JOINIP");
         bool testReadyEnvoye = false;
         if (modeTestJoin)
         {
             playerNameInput = "ClientTest";
             AllumerMoteurReseau(false);
-            currentState = GameState.ServerBrowser;
-            Console.WriteLine("[TEST-AUTO] Mode client auto : recherche d'un salon...");
+            if (!string.IsNullOrEmpty(joinIpTest))
+            {
+                ConnecterAHote(new IPEndPoint(IPAddress.Parse(joinIpTest), NetConfig.GamePort));
+                currentState = GameState.Lobby;
+                Console.WriteLine($"[TEST-AUTO] Connexion directe à {joinIpTest} (test hot-join).");
+            }
+            else
+            {
+                currentState = GameState.ServerBrowser;
+                Console.WriteLine("[TEST-AUTO] Mode client auto : recherche d'un salon...");
+            }
         }
 
         // --- BOUCLE DE JEU ---
@@ -1248,6 +1511,20 @@ public static void GenererPhysiqueMap(Model modele)
         if (netManager != null)
         {
             netManager.PollEvents();
+            netManager.NatPunchModule.PollEvents(); // événements de perçage NAT (Phase 2)
+
+            // Annuaire + rendez-vous : heartbeat hôte / machine à états de perçage client
+            float dtMaster = Raylib.GetFrameTime();
+            TickMasterHote(dtMaster);
+            TickMasterClient(dtMaster);
+
+            // SÉCURITÉ S6 : les oreilles "non-connectées" (radar LAN) ne sont ouvertes
+            // QUE dans les états où elles servent. Partout ailleurs (et surtout en
+            // pleine partie exposée à internet), un datagramme non sollicité est sourd.
+            bool radarHote = isServer && currentState == GameState.Lobby;
+            bool radarClient = !isServer && currentState == GameState.ServerBrowser;
+            netManager.BroadcastReceiveEnabled = radarHote;
+            netManager.UnconnectedMessagesEnabled = radarHote || radarClient;
         }
 
         if (lancerPartieEnAttente)
@@ -1256,15 +1533,19 @@ public static void GenererPhysiqueMap(Model modele)
             mapChoisieIndex = mapIndexEnAttente;
             isOnline = true;
             ChargerMapReseau(mapChoisieIndex); // Le "crash 2" est corrigé : la map a maintenant sa physique !
+            DemarrerHorlogeMatch(scoreLimitEnAttente, timeLimitEnAttente); // règles + horloge du match
             currentState = GameState.Playing;
         }
+
+        // LE TICK DE SESSION (toasts + détection de fin de match + compte à rebours PostMatch)
+        if (isOnline) TickSessionFrame(Raylib.GetFrameTime());
 
         // [TEST-AUTO] En mode autojoin : on se connecte au premier salon découvert
         if (modeTestJoin && currentState == GameState.ServerBrowser && serveursDisponibles.Count > 0)
         {
             var salonTest = serveursDisponibles.Values.First();
             Console.WriteLine($"[TEST-AUTO] Salon '{salonTest.NomDuSalon}' trouvé, connexion à {salonTest.EndPoint.Address}...");
-            netManager.Connect(new IPEndPoint(salonTest.EndPoint.Address, 7777), "GoofyFPS_SecretKey");
+            ConnecterAHote(new IPEndPoint(salonTest.EndPoint.Address, NetConfig.GamePort));
             lock (_lobbyLock) { currentLobbyPlayers.Clear(); }
             currentState = GameState.Lobby;
         }
@@ -1288,11 +1569,7 @@ public static void GenererPhysiqueMap(Model modele)
             if (unClientPret)
             {
                 Console.WriteLine("[TEST-AUTO] Client prêt détecté : lancement de la partie !");
-                Packets.StartGamePacket startPack = new Packets.StartGamePacket { MapIndex = mapChoisieIndex };
-                NetDataWriter writerStart = new NetDataWriter();
-                netProcessor.Write(writerStart, startPack);
-                netManager.SendToAll(writerStart, DeliveryMethod.ReliableOrdered);
-                OnStartGameReceived(startPack, null);
+                HoteDemarrerMatch(); // utilise matchScoreLimitConfig / matchTimeLimitConfig
             }
         }
 
@@ -1307,7 +1584,7 @@ public static void GenererPhysiqueMap(Model modele)
             {
                 NetDataWriter writer = new NetDataWriter();
                 writer.Put("GOOFY_REQ");
-                netManager.SendBroadcast(writer, 7777); 
+                netManager.SendBroadcast(writer, NetConfig.GamePort);
                 chronoRecherche = 1.5f; // Reset du timer
             }
 

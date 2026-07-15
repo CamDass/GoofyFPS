@@ -180,8 +180,10 @@ partial class Program
 
 
         // Map 3 : Blocs — à l'écart des spawns joueurs (dérivé de blockmap.glb)
+        // CORRECTION (navtest) : (-39.4, 21.4) était HORS de la map (le sol s'arrête à x≈-34),
+        // les zombies y tombaient dans le vide. Déplacé sur le sol vérifié.
         [
-        new Vector3(-39.4f, 1f,  21.4f), new Vector3(52.6f, 1f, -10.7f),
+        new Vector3(-30f, 1f,  20f), new Vector3(52.6f, 1f, -10.7f),
         new Vector3( 56.6f, 1f, -36.7f), new Vector3( 6.6f, 1f, -12.7f),
         new Vector3( 78.6f, 1f, -12.7f), new Vector3(-13.4f,1f,  19.3f),
         new Vector3( 32.6f, 1f,   1.3f), new Vector3(66.6f, 1f,  11.3f)
@@ -422,16 +424,35 @@ static void InitBarrels()
         survivalTime = 0f;
         enemySpawnTimer = 10;
 
-        // EN LIGNE (LAN) : pas de zombies ! C'est du joueur contre joueur.
+        // EN LIGNE (LAN) : pas de zombies (PvP). En solo : uniquement si l'interrupteur ZOMBIES est activé.
         // (Les ennemis ne sont pas synchronisés entre les machines, chacun verrait des zombies différents)
-        if (isOnline) return;
+        if (isOnline || !zombiesActifs)
+        {
+            NavGrid.Vider(); // pas de zombies = pas besoin de grille de navigation
+            return;
+        }
 
-        // 3. On fait apparaître 2 ennemis de base
+        // 3. LE BAKE DE LA NAVGRID : la map physique vient d'être chargée (ExtraireTrianglesMap),
+        // on cuit la grille de navigation A* dessus. Rebake automatique à chaque changement de map.
+        NavGrid.Bake(simulation, Raylib.GetModelBoundingBox(mapModel), mapScale, mapPosition);
+
+        // 4. On fait apparaître 2 ennemis de base
         if (enemySpawnPoints.Count >= 2)
         {
-            enemiesList.Add(new Enemy(enemySpawnPoints[0], 100, 4.0f));
-            enemiesList.Add(new Enemy(enemySpawnPoints[1], 100, 4.0f));
+            enemiesList.Add(new Enemy(SpawnZombieSur(enemySpawnPoints[0]), 100, 4.0f));
+            enemiesList.Add(new Enemy(SpawnZombieSur(enemySpawnPoints[1]), 100, 4.0f));
         }
+    }
+
+    // Recale un point de spawn zombie sur la grille de navigation : le corps (capsule de 2m,
+    // centre à 1m des pieds) est posé PILE sur le sol marchable le plus proche. Si le point
+    // est complètement hors grille, on le garde tel quel (l'IA de secours prendra le relais).
+    static Vector3 SpawnZombieSur(Vector3 brut)
+    {
+        if (NavGrid.SnapAuSol(brut, out Vector3 sol))
+            return sol + new Vector3(0, 1.05f, 0);
+        Console.WriteLine($"[NAV] Spawn zombie {brut} hors grille : point conservé tel quel");
+        return brut;
     }
 
 
@@ -444,6 +465,12 @@ static void InitBarrels()
 
     static bool debugInfo = false;
 
+    // --- Le tick à pas fixe 64 Hz (voir docs/NETWORK_ROADMAP.md §4.1) ---
+    static float tickAccumulateur = 0f;          // temps réel en attente de simulation
+    static Vector3 posJoueurTickPrec;            // position du joueur au tick précédent
+    static Vector3 posJoueurTickCour;            // position du joueur au dernier tick
+    static bool lissageCamInitialise = false;    // faux tant qu'aucun pas n'a tourné
+
     //===== BOUCLE DU JEU =====
     public static void BouclePrincipale()
     {
@@ -455,19 +482,30 @@ static void InitBarrels()
         // ========================================================
         // [ZONE ILIAN] 1. GESTION DES MENUS ET TIMERS
         // ========================================================
-        if (KeyBinds.IsPauseTogglePressed())
+        // ÉCHAP en jeu : pris au RELÂCHEMENT (voir IsPauseToggleTriggered) pour ne pas être
+        // compté deux fois. On recule d'UN cran à la fois : overlay Options -> menu pause -> jeu.
+        if (KeyBinds.IsPauseToggleTriggered())
         {
-            isPaused = !isPaused; // On bascule le mode pause (Vrai/Faux)
-            
-            if (isPaused) 
-            { 
-                Raylib.EnableCursor(); 
-                Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low); 
+            if (isOptionsMenuOpen)
+            {
+                // 1er cran : on referme l'overlay Options, on revient au menu pause.
+                isOptionsMenuOpen = false;
+                Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
             }
-            else 
-            { 
-                Raylib.DisableCursor();
-                Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); 
+            else
+            {
+                // 2e cran : on ouvre / ferme le menu pause.
+                isPaused = !isPaused;
+                if (isPaused)
+                {
+                    Raylib.EnableCursor();
+                    Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                }
+                else
+                {
+                    Raylib.DisableCursor();
+                    Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+                }
             }
         }
 
@@ -791,7 +829,9 @@ static void InitBarrels()
             
             if (KeyBinds.IsShootingPressed())
             {
-                if (wallChrono >= FPS * 10)
+                // S4 : le même plafond de murs que l'hôte applique aux paquets reçus.
+                // Un joueur légitime ne peut donc JAMAIS être désynchronisé par le plafond.
+                if (wallChrono >= FPS * 10 && (!isOnline || PeutPoserMur(myPlayerId)))
                 {
                     Program.PlaySound3D(wallSound, positionPrevueMur, 20f);
                     wallChrono = 0;
@@ -1204,25 +1244,58 @@ static void InitBarrels()
         // Jump pad (Sandbox)
         //if (posCube.X > 9 && posCube.X < 11 && posCube.Z > -1 && posCube.Z < 1 && capteurSol.toucheSol) espionCube.Velocity.Linear.Y += 20f;
 
-        // On fait passer le temps
-        // On fait passer le temps physique
+        // ========================================================
+        // LE TICK UNIFIÉ 64 Hz (Phase 0, §4.1 de la roadmap)
+        // La physique ET le réseau battent sur la MÊME horloge à pas fixe,
+        // découplée du framerate d'affichage. L'accumulateur transforme le
+        // temps réel (irrégulier) en pas de simulation exacts de 1/64 s.
+        // ========================================================
         if (!isPaused || isOnline)
         {
-            simulation.Timestep(1f / 60f);
+            tickAccumulateur += deltaTime;
+            // Garde-fou "spirale de la mort" : après un gros freeze (chargement,
+            // alt-tab...), on ne rattrape pas plus de 0.25 s de simulation d'un coup.
+            if (tickAccumulateur > 0.25f) tickAccumulateur = 0.25f;
+
+            while (tickAccumulateur >= NetConfig.TickDt)
+            {
+                tickAccumulateur -= NetConfig.TickDt;
+
+                // On mémorise la position AVANT le pas pour lisser la caméra entre deux ticks
+                posJoueurTickPrec = lissageCamInitialise ? posJoueurTickCour : espionCube.Pose.Position;
+                simulation.Timestep(NetConfig.TickDt);
+                posJoueurTickCour = espionCube.Pose.Position;
+                lissageCamInitialise = true;
+
+                // LE BATTEMENT DE COEUR DU MULTIJOUEUR : notre état part à CHAQUE tick
+                // (et l'hôte diffuse le snapshot du monde entier)
+                if (isOnline)
+                {
+                    TickReseauEnJeu(posJoueurTickCour, CameraYaw, CameraPitch);
+                }
+            }
         }
 
-        // Application finale de la Caméra
-        camera.Position = new Vector3(posCube.X, posCube.Y + hauteurVoulue, posCube.Z);
+        // Application finale de la Caméra : position INTERPOLÉE entre les deux
+        // derniers pas physiques (sinon, à 60 im/s pour 64 ticks/s, la vue
+        // sautillerait 4 fois par seconde au battement des deux horloges).
+        Vector3 posCamera = posCube;
+        if (lissageCamInitialise)
+        {
+            // Respawn/téléportation : on saute directement, pas de glissade
+            if (Vector3.Distance(posJoueurTickPrec, posJoueurTickCour) > NetConfig.SeuilTeleportation)
+                posJoueurTickPrec = posJoueurTickCour;
+            float alphaCam = Math.Clamp(tickAccumulateur / NetConfig.TickDt, 0f, 1f);
+            posCamera = Vector3.Lerp(posJoueurTickPrec, posJoueurTickCour, alphaCam);
+        }
+        camera.Position = new Vector3(posCamera.X, posCamera.Y + hauteurVoulue, posCamera.Z);
         camera.Up = Vector3.Transform(new Vector3(0, 1f, 0), Matrix4x4.CreateFromAxisAngle(CamFroward, rollActuel));
         camera.Target = camera.Position + CamFroward;
 
-        // ==========================================
-        // LE BATTEMENT DE COEUR DU MULTIJOUEUR :
-        // On envoie notre position et on lisse celle des autres
-        // ==========================================
+        // L'INTERPOLATION des joueurs distants + vieillissement des tirs (par frame, pas par tick)
         if (isOnline)
         {
-            MettreAJourReseauEnJeu(deltaTime, espionCube.Pose.Position, CameraYaw, CameraPitch);
+            MettreAJourReseauVisuel(deltaTime);
         }
 
 
@@ -1248,13 +1321,13 @@ static void InitBarrels()
 
             // Si le temps est écoulé, et qu'il n'y a pas déjà trop de zombies (ex: limite de 30)
             // EN LIGNE : pas de zombies, c'est du PvP !
-            if (!isOnline && enemySpawnTimer <= 0f && enemiesList.Count < 40)
+            if (!isOnline && zombiesActifs && enemySpawnTimer <= 0f && enemiesList.Count < 40)
             {
                 // On choisit un point de spawn au hasard
                 int randomSpawnIndex = random.Next(enemySpawnPoints.Count);
-                
-                // On crée le zombie
-                enemiesList.Add(new Enemy(enemySpawnPoints[randomSpawnIndex], 100, 4.0f));
+
+                // On crée le zombie (recalé sur la grille de navigation)
+                enemiesList.Add(new Enemy(SpawnZombieSur(enemySpawnPoints[randomSpawnIndex]), 100, 4.0f));
                 
                 // On relance le chrono d'apparition
                 enemySpawnTimer = timeBetweenSpawns;
@@ -1332,8 +1405,12 @@ static void InitBarrels()
             }
 
             //dessiner le model du joueur (avec la couleur de son skin !)
-            Vector3 PointHaut = new Vector3(posCube.X, posCube.Y + 0.5f, posCube.Z);
-            Vector3 PointBas = new Vector3(posCube.X, posCube.Y - 0.5f, posCube.Z);
+            // IMPORTANT : on dessine la capsule à la MÊME position interpolée que l'oeil
+            // (posCamera), pas à la position physique brute (posCube). Sinon, à grande
+            // vitesse, la caméra (interpolée) prend du retard sur la capsule (brute) et
+            // on aperçoit sa propre couleur de skin traverser le champ de vision.
+            Vector3 PointHaut = new Vector3(posCamera.X, posCamera.Y + 0.5f, posCamera.Z);
+            Vector3 PointBas = new Vector3(posCamera.X, posCamera.Y - 0.5f, posCamera.Z);
             Raylib.DrawCapsule(PointHaut,PointBas,0.5f,8,8, Program.couleursSkin[Program.skinCouleur]);
 
             // ==========================================
@@ -1354,11 +1431,12 @@ static void InitBarrels()
                 Vector3 positionDessin = new Vector3(positionPhysique.X, positionPhysique.Y - 0.5f, positionPhysique.Z);
                 
                 // ==========================================
-                // NOUVEAU : FAIRE TOURNER LE MODÈLE VERS LE JOUEUR
+                // ORIENTATION : le zombie regarde là où son cerveau regarde (direction de
+                // marche en errance, cible en poursuite) — plus de "stare" permanent.
                 // ==========================================
-                // 1. On calcule la direction entre l'ennemi et le joueur
-                Vector3 directionVersJoueur = posCube - positionDessin;
-                
+                // 1. La direction du regard vient de l'IA (enemy.regard)
+                Vector3 directionVersJoueur = enemy.regard;
+
                 // 2. On calcule l'angle sur le plan horizontal (X et Z) en Radians
                 float angleRadians = MathF.Atan2(directionVersJoueur.X, directionVersJoueur.Z);
                 
@@ -1379,6 +1457,10 @@ static void InitBarrels()
                 // Bonus Debug : Afficher la vraie hitbox BEPU
                 if (debugInfo) Raylib.DrawBoundingBox(new BoundingBox(positionPhysique - new Vector3(0.5f,1f,0.5f), positionPhysique + new Vector3(0.5f,1f,0.5f)), Color.Red);
             }
+
+            // Debug : la grille de navigation des zombies autour du joueur
+            // (points verts = cases marchables, lignes jaunes = liens de saut)
+            if (debugInfo) NavGrid.DessinerDebug(posCube, 20f);
 
             // Dessiner les barrils
             foreach (BarrelSpot spot in barrelSpots)
@@ -1453,6 +1535,9 @@ static void InitBarrels()
         // PSEUDOS + VIE DES AUTRES JOUEURS (Multijoueur LAN)
         // ==========================================
         if (isOnline) DessinerNomsJoueursDistants(camera, CamFroward);
+
+        // Chrono du match + objectif + toasts d'arrivée/départ
+        if (isOnline) DessinerHudSession();
 
         // 1. LES BARRES DE VIE
         // 1. LES BARRES DE VIE (Affichage ciblé)
@@ -1790,6 +1875,13 @@ static void InitBarrels()
 
             // Vitesse Debug BEPU
             Raylib.DrawText($"Vitesse horizontale: {vitesseHorizontale:F2}", 10, 340, 20, Color.DarkGreen);
+
+            // LE HUD RÉSEAU (Phase 0) : ping, débits, âge du snapshot, tampons d'interpolation
+            if (isOnline)
+            {
+                Raylib.DrawText(hudReseauLigne1, 10, 410, 20, Color.SkyBlue);
+                Raylib.DrawText(hudReseauLigne2, 10, 440, 20, Color.SkyBlue);
+            }
         }
 
         
@@ -1901,16 +1993,20 @@ static void InitBarrels()
             // HUD : LE CHRONOMÈTRE DE SURVIE
             // ==========================================
             // On convertit les secondes en un texte propre (ex: "Survie : 45s")
-            string chronoTexte = $"SURVIE : {MathF.Floor(survivalTime)}s";
-            int tailleChrono = 40;
-            int largeurChrono = Raylib.MeasureText(chronoTexte, tailleChrono);
-            
-            int chronoX = (LargeurFenetre - largeurChrono) / 2; // Centré en haut
-            int chronoY = 30;
+            // Masqué en multijoueur : l'overlay survie n'a de sens qu'en solo/zombies.
+            if (!isOnline)
+            {
+                string chronoTexte = $"SURVIE : {MathF.Floor(survivalTime)}s";
+                int tailleChrono = 40;
+                int largeurChrono = Raylib.MeasureText(chronoTexte, tailleChrono);
 
-            // Effet d'ombre pour que ce soit bien lisible
-            Raylib.DrawText(chronoTexte, chronoX + 3, chronoY + 3, tailleChrono, Color.Black);
-            Raylib.DrawText(chronoTexte, chronoX, chronoY, tailleChrono, Color.White);
+                int chronoX = (LargeurFenetre - largeurChrono) / 2; // Centré en haut
+                int chronoY = 30;
+
+                // Effet d'ombre pour que ce soit bien lisible
+                Raylib.DrawText(chronoTexte, chronoX + 3, chronoY + 3, tailleChrono, Color.Black);
+                Raylib.DrawText(chronoTexte, chronoX, chronoY, tailleChrono, Color.White);
+            }
 
 
 
@@ -1981,22 +2077,28 @@ static void InitBarrels()
         // ==========================================
         if (isPaused)
         {
+            // Navigation clavier/manette + curseur auto pour le menu pause ET l'overlay Options.
+            // (verticalOnly quand Options est ouvert : Gauche/Droite règlent les sliders.)
+            MenuNav.Begin(90000 + (isOptionsMenuOpen ? 1000 + ongletOptionActif : 0), isOptionsMenuOpen);
+
             // Si le joueur a cliqué sur Options, on affiche le calque des paramètres
             if (isOptionsMenuOpen)
             {
                 string dummy = "";
                 AfficherMenuOptions(ref dummy);
-                
+
             }
             // Sinon, on affiche le menu pause normal (Online ou Offline)
-            else if (isOnline) 
+            else if (isOnline)
             {
                 MenugameOnline();
             }
-            else 
+            else
             {
                 MenugameOffline();
             }
+
+            MenuNav.End();
         }
 
 
