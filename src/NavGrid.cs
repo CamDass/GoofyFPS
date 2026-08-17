@@ -70,8 +70,15 @@ public static class NavGrid
     // --- Marge de sécurité (obstacle inflation) : évite le "scraping" contre les murs ---
     const float CLEARANCE_RAYON = 0.9f;       // sonde de proximité mur, à hauteur de torse
     const float CLEARANCE_HAUTEUR = 0.9f;     // hauteur du torse au-dessus des pieds (où on sonde)
-    const float BLOCK_DIST = 0.5f;            // mur plus proche que ça (= rayon capsule) => case INMARCHABLE
+    const float BLOCK_DIST = 0.5f;            // mur plus proche que ça (= rayon capsule) => case à fuir
     const float MULT_ORANGE = 10f;            // surcoût x10 des cases "orange" (frôlent un mur, 0.5-0.9m)
+    // Case à moins de 0.5m d'un mur : la capsule s'y coincerait -> coût prohibitif (x1000).
+    // Pourquoi un coût énorme plutôt qu'un vrai blocage ? La grille fait 1m : un passage
+    // pourtant franchissable mais mal aligné sur le quadrillage se retrouverait TOTALEMENT
+    // scellé (constaté : un spawn des Blocs se retrouvait emmuré dans une poche). Avec x1000,
+    // l'A* ne passe là QUE s'il n'existe aucune autre route — c'est exactement l'exception
+    // "couloir étroit" demandée, et ça marche quelle que soit l'épaisseur de la bande.
+    const float MULT_BLOQUE = 1000f;
     const float CLEARANCE_ZOMBIE = 1.9f;      // hauteur d'un zombie debout (blocage dynamique par murs posés)
 
     // Un point du chemin renvoyé par A*. "sautVersSuivant" = l'arête qui part de CE
@@ -222,13 +229,14 @@ public static class NavGrid
         cellules = brouillon.ToArray();
         foreach (var kv in colonnesTmp) colonnes[kv.Key] = kv.Value.ToArray();
 
-        // --- 1bis. MARGE DE SÉCURITÉ + BLOCAGE DUR (obstacle inflation) ---
-        // On sonde 8 directions à hauteur de torse et on retient le MUR LE PLUS PROCHE :
-        //   < 0.5m (rayon capsule) -> case INMARCHABLE : la capsule s'y coincerait ;
+        // --- 1bis. MARGE DE SÉCURITÉ (obstacle inflation) ---
+        // On sonde 12 directions à hauteur de torse et on retient le MUR LE PLUS PROCHE :
+        //   < 0.5m (rayon capsule) -> coût x1000 : la capsule s'y coincerait, l'A* n'y passe
+        //                            QUE s'il n'existe aucune autre route (exception couloir) ;
         //   0.5–0.9m -> case "orange" à coût x10 : l'A* la contourne agressivement ;
         //   >= 0.9m  -> case dégagée (coût normal).
         coutMult = new float[cellules.Length];
-        bloque = new bool[cellules.Length];
+        bloque = new bool[cellules.Length]; // réservé au blocage DUR : murs posés par les joueurs
         for (int i = 0; i < cellules.Length; i++)
         {
             Vector3 torse = cellules[i].pos + new Vector3(0, CLEARANCE_HAUTEUR, 0);
@@ -240,15 +248,10 @@ public static class NavGrid
                 if (mur.aTouche && mur.distance < plusProche) plusProche = mur.distance;
             }
 
-            if (plusProche < BLOCK_DIST) { bloque[i] = true; coutMult[i] = MULT_ORANGE; }
+            if (plusProche < BLOCK_DIST) coutMult[i] = MULT_BLOQUE;
             else if (plusProche < CLEARANCE_RAYON) coutMult[i] = MULT_ORANGE;
             else coutMult[i] = 1f;
         }
-
-        // Exception "couloir" : on ROUVRE (en gardant le coût x10) toute case bloquée qui
-        // est l'UNIQUE pont entre deux zones marchables — sinon on scellerait un passage
-        // pourtant assez large pour la physique. Itéré : rouvrir un pont en révèle d'autres.
-        RescaperPontsBloques();
 
         // --- 2. LIAISONS DE MARCHE (8 directions, anti coupe-de-coin) ---
         (int dx, int dz)[] dirs8 = { (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1) };
@@ -328,11 +331,11 @@ public static class NavGrid
         // sans ça, chaque cible injoignable brûlerait tout le budget d'exploration à chaque repath.
         RecalculerComposantes();
 
-        int nbBloques = 0, nbOrange = 0;
-        for (int i = 0; i < bloque.Length; i++) { if (bloque[i]) nbBloques++; else if (coutMult[i] > 1.01f) nbOrange++; }
+        int nbEvitees = 0, nbOrange = 0;
+        for (int i = 0; i < coutMult.Length; i++) { if (coutMult[i] >= MULT_BLOQUE) nbEvitees++; else if (coutMult[i] > 1.01f) nbOrange++; }
 
         chrono.Stop();
-        Console.WriteLine($"[NAV] Grille cuite : {cellules.Length} cases ({nbBloques} bloquées, {nbOrange} orange), {nbLiens} liens de saut, en {chrono.ElapsedMilliseconds} ms");
+        Console.WriteLine($"[NAV] Grille cuite : {cellules.Length} cases ({nbEvitees} quasi-bloquées, {nbOrange} orange), {nbLiens} liens de saut, en {chrono.ElapsedMilliseconds} ms");
     }
 
     // Recalcule les îlots de connexité en IGNORANT les cases bloquées (statiques ET murs
@@ -349,53 +352,6 @@ public static class NavGrid
         }
         for (int i = 0; i < composante.Length; i++) composante[i] = Racine(i);
     }
-
-    // Rouvre les cases bloquées qui sont l'unique pont entre deux zones marchables.
-    // Union-find local (cardinal, cases non bloquées) : une case bloquée dont ≥2 voisins
-    // cardinaux non bloqués appartiennent à des composantes DIFFÉRENTES est un pont -> on
-    // la rend franchissable (mais garde son coût x10). Itéré car rouvrir change les composantes.
-    static void RescaperPontsBloques()
-    {
-        int n = cellules.Length;
-        (int dx, int dz)[] card = { (1, 0), (-1, 0), (0, 1), (0, -1) };
-        int[] parent = new int[n];
-
-        for (int pass = 0; pass < 4; pass++)
-        {
-            for (int i = 0; i < n; i++) parent[i] = i;
-            for (int i = 0; i < n; i++)
-            {
-                if (bloque[i]) continue;
-                ref var c = ref cellules[i];
-                foreach (var (dx, dz) in card)
-                {
-                    int j = ChercherNiveau(c.gx + dx, c.gz + dz, c.pos.Y, MARCHE_MAX);
-                    if (j >= 0 && !bloque[j]) UnionTab(parent, i, j);
-                }
-            }
-
-            bool changed = false;
-            for (int i = 0; i < n; i++)
-            {
-                if (!bloque[i]) continue;
-                ref var c = ref cellules[i];
-                int r1 = -1; bool pont = false;
-                foreach (var (dx, dz) in card)
-                {
-                    int j = ChercherNiveau(c.gx + dx, c.gz + dz, c.pos.Y, MARCHE_MAX);
-                    if (j < 0 || bloque[j]) continue;
-                    int rj = RacineTab(parent, j);
-                    if (r1 < 0) r1 = rj;
-                    else if (rj != r1) { pont = true; break; }
-                }
-                if (pont) { bloque[i] = false; changed = true; } // garde coutMult[i] = MULT_ORANGE
-            }
-            if (!changed) break;
-        }
-    }
-
-    static int RacineTab(int[] p, int i) { while (p[i] != i) { p[i] = p[p[i]]; i = p[i]; } return i; }
-    static void UnionTab(int[] p, int a, int b) { int ra = RacineTab(p, a), rb = RacineTab(p, b); if (ra != rb) p[ra] = rb; }
 
     // ==========================================
     // BLOCAGE DYNAMIQUE : un mur posé par un joueur rend des cases inmarchables.
@@ -758,16 +714,17 @@ public static class NavGrid
         return true;
     }
 
-    // Y a-t-il une case BLOQUÉE à cette position (colonne la plus proche, étage proche) ?
+    // Y a-t-il une case à ÉVITER à cette position (mur posé, ou case collée à un mur) ?
     // Sert au lissage/look-ahead : les rayons ne voient que la map, pas les murs posés ni
-    // le concept "trop près d'un mur" — cette vérification niveau-grille comble le trou.
+    // le concept "trop près d'un mur" — cette vérification niveau-grille comble le trou
+    // (sinon on lisserait un raccourci droit à travers un mur posé ou en frottant un pilier).
     static bool EstBloqueEn(Vector3 pos)
     {
         int gx = (int)MathF.Round(pos.X / CELLULE);
         int gz = (int)MathF.Round(pos.Z / CELLULE);
         if (!colonnes.TryGetValue((gx, gz), out var etages)) return false;
         foreach (int idx in etages)
-            if (bloque[idx] && MathF.Abs(cellules[idx].pos.Y - pos.Y) < 1.0f) return true;
+            if ((bloque[idx] || coutMult[idx] >= MULT_BLOQUE) && MathF.Abs(cellules[idx].pos.Y - pos.Y) < 1.0f) return true;
         return false;
     }
 
@@ -852,7 +809,12 @@ public static class NavGrid
         return false;
     }
 
-    // [DBG] voisinage détaillé de la case la plus proche
+    // ==========================================
+    // DEBUG : détaille pourquoi une case est (ou non) reliée à ses 8 voisines.
+    // "vide" = pas de case, "EVIT" = quasi-bloquée (x1000), "BLOQ" = mur posé,
+    // "MUR" = un mur s'intercale entre les deux cases, "OK" = arête utilisable.
+    // Très pratique quand un zombie semble coincé ou refuse un passage.
+    // ==========================================
     public static string DebugVoisinage(Vector3 pos)
     {
         int i = CelluleProche(pos);
@@ -866,6 +828,7 @@ public static class NavGrid
             string etat;
             if (j < 0) etat = "vide";
             else if (bloque[j]) etat = "BLOQ";
+            else if (coutMult[j] >= MULT_BLOQUE) etat = "EVIT";
             else if (MurEntre(Program.simulation, c.pos + new Vector3(0, 0.9f, 0), cellules[j].pos + new Vector3(0, 0.9f, 0))) etat = "MUR";
             else etat = "OK";
             sb.Append($"({dx},{dz})={etat} ");
@@ -922,9 +885,10 @@ public static class NavGrid
             float dx = p.X - centre.X, dz = p.Z - centre.Z;
             if (dx * dx + dz * dz > rayonCarre) continue;
 
-            // Rouge = case INMARCHABLE (bloquée : trop près d'un mur, ou mur posé dessus) ;
-            // orange = case à coût x10 (frôle un mur) ; vert = dégagée.
-            Color couleur = bloque[i] ? Color.Red : (coutMult[i] > 1.01f ? Color.Orange : Color.Green);
+            // Rouge = case inmarchable (mur posé dessus) ou quasi-bloquée (<0.5m d'un mur,
+            // coût x1000) ; orange = case à coût x10 (frôle un mur) ; vert = dégagée.
+            Color couleur = (bloque[i] || coutMult[i] >= MULT_BLOQUE) ? Color.Red
+                          : (coutMult[i] > 1.01f ? Color.Orange : Color.Green);
             Raylib.DrawCubeV(p + new Vector3(0, 0.05f, 0), new Vector3(0.15f, 0.02f, 0.15f), couleur);
 
             if (bloque[i]) continue; // pas de liens de saut affichés depuis une case bloquée

@@ -945,11 +945,14 @@ partial class Program
     // Un mur posé doit exister chez TOUT le monde : en visuel ET en physique,
     // sinon les autres passent au travers sans même le voir !
     // ==========================================
-    public static void PoserMur(Vector3 position, Quaternion rotation)
+    // 'couleurIdx' = la couleur de skin du POSEUR (index dans couleursSkin) : chaque
+    // mur garde la couleur de celui qui l'a construit, même en réseau. On la borne ici,
+    // une seule fois, pour que le rendu puisse indexer couleursSkin sans se poser de question.
+    public static void PoserMur(Vector3 position, Quaternion rotation, int couleurIdx = 0)
     {
         StaticDescription description = new StaticDescription(position, rotation, formeMurIndex);
         StaticHandle handle = simulation.Statics.Add(description);
-        listeMur.Add(new MurPose(position, rotation, handle));
+        listeMur.Add(new MurPose(position, rotation, handle, Math.Clamp(couleurIdx, 0, couleursSkin.Length - 1)));
 
         // ==========================================
         // NAVGRID DYNAMIQUE : le mur rend des cases inmarchables -> les zombies contournent.
@@ -998,7 +1001,8 @@ partial class Program
         {
             PlayerId = myPlayerId,
             X = position.X, Y = position.Y, Z = position.Z,
-            QX = rotation.X, QY = rotation.Y, QZ = rotation.Z, QW = rotation.W
+            QX = rotation.X, QY = rotation.Y, QZ = rotation.Z, QW = rotation.W,
+            SkinColor = (byte)skinCouleur
         };
         if (isServer) DiffuserATous(paquet, DeliveryMethod.ReliableOrdered);
         else EnvoyerAuServeur(paquet, DeliveryMethod.ReliableOrdered);
@@ -1028,7 +1032,7 @@ partial class Program
         if (isServer && !PeutPoserMur(packet.PlayerId)) return;
         CompterMurPose(packet.PlayerId);
 
-        PoserMur(pos, rot);
+        PoserMur(pos, rot, packet.SkinColor);
         PlaySound3D(wallSound, pos, 20f);
 
         // Le serveur relaie le mur aux autres clients

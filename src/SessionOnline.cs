@@ -484,7 +484,8 @@ partial class Program
         var murs = listeMur.Select(m => new Packets.WallBatchPacket.Mur
         {
             X = m.position.X, Y = m.position.Y, Z = m.position.Z,
-            QX = m.rotation.X, QY = m.rotation.Y, QZ = m.rotation.Z, QW = m.rotation.W
+            QX = m.rotation.X, QY = m.rotation.Y, QZ = m.rotation.Z, QW = m.rotation.W,
+            Couleur = (byte)m.couleurIdx
         }).ToList();
         for (int i = 0; i < murs.Count; i += 30)
         {
@@ -567,7 +568,7 @@ partial class Program
             if (!VecteurValide(pos)) continue;
             float nq = rot.Length();
             if (nq < 0.9f || nq > 1.1f) continue;
-            PoserMur(pos, rot);
+            PoserMur(pos, rot, m.Couleur);
         }
     }
 

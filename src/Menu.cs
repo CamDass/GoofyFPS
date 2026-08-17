@@ -453,8 +453,13 @@ partial class Program
                 }
                 ApplyMapTextures();
                 LoadMapSpawns(n);
+                // Réglages normaux (le tuto les modifie de son côté)
+                Program.maxZombies = 40;
+                Program.modeTuto = false;
+                barrelRespawnSeconds = 30f;
                 InitBarrels();
                 InitEnnemis(); // respecte Program.zombiesActifs
+                EquiperArmeDeDepart();
 
                 int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
                 BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
@@ -480,7 +485,60 @@ partial class Program
         Raylib.DrawRectangleLinesEx(boxTuto, 3, focusTuto ? Color.White : Color.Black);
         int wTuto = Raylib.MeasureText("TUTO", 30);
         Raylib.DrawText("TUTO", centreX - wTuto / 2, (int)boxTuto.Y + 13, 30, focusTuto ? Color.Black : Color.White);
-        if (clicTuto) Program.PlaySoundWithPriority(select, Program.SoundPriority.Low); // TODO : brancher le tutoriel
+        if (clicTuto)
+        {
+            // TUTORIEL : partie solo normale sur maptuto.glb, spawn fixe, sans aucun zombie.
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            Raylib.DisableCursor(); // mode FPS
+
+            // On décharge l'ancienne map (modèle + collisions BEPU) avant de charger le tuto.
+            DechargerMapActuelle();
+            mapModel = Raylib.LoadModel("assets/models/maps/maptuto.glb");
+            ExtraireTrianglesMap();
+            unsafe
+            {
+                for (int j = 0; j < mapModel.MaterialCount; j++) mapModel.Materials[j].Shader = lightShader;
+            }
+            ApplyMapTextures();
+
+            // Pas de données de map indexées pour le tuto : on pose tout à la main.
+            listeSpawns.Clear();
+            // Milieu de la 1re plateforme (dessus à Y=1.26 après la mise à l'échelle 0.5) :
+            // la capsule repose à 2.26, on spawn juste au-dessus pour une chute minime.
+            listeSpawns.Add(new Vector3(0f, 3f, 0.4f));
+
+            // Tonneaux : 3 emplacements sur la plateforme pilier (donc 3 max).
+            // Quand un tonneau explose, il réapparaît dans un emplacement libre.
+            barrelSpots.Clear();
+            barrelSpots.Add(new BarrelSpot(new Vector3(9.30f, 13.60f, -221f)));
+            barrelSpots.Add(new BarrelSpot(new Vector3(9.30f, 13.60f, -223f)));
+            barrelSpots.Add(new BarrelSpot(new Vector3(9.30f, 13.60f, -226f)));
+
+            // Zombies : 1 point d'apparition sur la plateforme volante, 3 simultanés max.
+            // Le tuto garde toujours ses zombies (section test des armes), quel que soit l'interrupteur.
+            enemySpawnPoints.Clear();
+            enemySpawnPoints.Add(new Vector3(11.5f, 15.8f, -223.4f));
+            Program.zombiesActifs = true;
+            Program.maxZombies = 3;
+
+            // Mode tuto : zombies immobiles (cibles), tonneaux qui reviennent vite,
+            // et paliers d'explication le long du parcours.
+            Program.modeTuto = true;
+            barrelRespawnSeconds = 6f;
+            PreparerZonesTuto();
+
+            InitBarrels();
+            InitEnnemis();
+            EquiperArmeDeDepart();
+
+            BodyReference joueurTuto = simulation.Bodies.GetBodyReference(PlayerId);
+            joueurTuto.Pose.Position = listeSpawns[0];
+            joueurTuto.Velocity.Linear = Vector3.Zero;
+            joueurTuto.Velocity.Angular = Vector3.Zero;
+
+            Program.isOnline = false;
+            Program.currentState = Program.GameState.Playing;
+        }
 
         // Interrupteur ZOMBIES : active/désactive le spawn des zombies au lancement de la map
         int labelZY = (int)boxTuto.Y + 55 + 22;
@@ -1229,8 +1287,18 @@ partial class Program
     }
 
 
+    // L'écran affiché à la frame précédente, pour repérer les CHANGEMENTS d'état.
+    static Program.GameState etatMenuPrecedent = Program.GameState.MainMenu;
+
     public static void Draw()
     {
+        // RETOUR AU MENU PRINCIPAL = FIN DE PARTIE : on remet les stats du joueur à zéro.
+        // Détecté ici, sur le changement d'état, plutôt que dans chaque bouton "MENU" :
+        // aucun chemin de retour (mort, pause solo, pause réseau, déconnexion) ne peut
+        // ainsi oublier la remise à zéro.
+        if (Program.currentState == Program.GameState.MainMenu && etatMenuPrecedent != Program.GameState.MainMenu)
+            ReinitialiserStatsPartie();
+        etatMenuPrecedent = Program.currentState;
 
         // NOUVEAU : On force la musique du menu ici pour TOUS les écrans du menu !
         SetActiveMusic(ActiveMusic.Menu);

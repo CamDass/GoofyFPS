@@ -22,7 +22,7 @@ partial class Program
     static Weapon swordWeapon = new Weapon("Sword", 10, 1000, 0.15f, 30, 4, sword, swordslash, 3f);
 
     static List<Weapon> weapons = new List<Weapon> { sniperrifle, karambitknife, bazookaWeapon, shotgunWeapon, pistolWeapon, revolverWeapon, swordWeapon };
-    static Weapon currentWeapon = pistolWeapon;
+    static Weapon currentWeapon = karambitknife;
     static float laserTimer = 0.0f;
     static Vector3 laserStart = new Vector3();
     static Vector3 laserEnd = new Vector3();
@@ -220,6 +220,37 @@ partial class Program
 
 
 
+
+    // ========================================================
+    // L'ARME DE DÉPART + LA REMISE À ZÉRO DES STATS
+    // ========================================================
+    // currentWeapon, killCount, survivalTime... sont des statiques : elles survivent
+    // à la partie. Sans ces deux fonctions, la partie suivante reprendrait le score
+    // et l'arme tirée au hasard par le dernier baril de la précédente.
+
+    // Toute partie (solo, tuto, réseau) démarre au karambit.
+    public static void EquiperArmeDeDepart()
+    {
+        currentWeapon = karambitknife;
+    }
+
+    // Appelée à chaque retour au menu principal.
+    public static void ReinitialiserStatsPartie()
+    {
+        killCount = 0;
+        deathCount = 0;
+        survivalTime = 0f;
+        localPlayer.Respawn();      // vie au maximum, joueur vivant
+        EquiperArmeDeDepart();
+
+        // Les Weapon sont des objets partagés : leurs munitions et leur rechargement
+        // en cours survivent aussi à la partie.
+        foreach (Weapon arme in weapons)
+        {
+            arme.ammo = arme.maxammo;
+            arme.isReloading = false;
+        }
+    }
 
     public static void SwitchWeaponFromBarrel(bool excludeBazooka = false)
     {
@@ -465,6 +496,124 @@ static void InitBarrels()
 
     static bool debugInfo = false;
 
+    // ==========================================
+    // OVERLAY TUTORIEL
+    // Affiche une mécanique (titre) + la touche à utiliser. Servira pendant le tuto,
+    // déclenché selon la position du joueur. TEST : F2 (debug) puis O.
+    // ==========================================
+    public static string overlayTitre = "";
+    public static string overlayTouche = "";
+    public static string overlayDesc = "";
+    public static float overlayTimer = 0f;
+    public static float overlayDuree = 4f;
+
+    /// <summary>Affiche un overlay tuto : titre de la mécanique, explication, touche.</summary>
+    public static void DeclencherOverlayTuto(string titre, string touche, string desc = "", float duree = 4f)
+    {
+        overlayTitre = titre;
+        overlayTouche = touche;
+        overlayDesc = desc;
+        overlayDuree = duree;
+        overlayTimer = duree;
+        PlaySoundWithPriority(select, SoundPriority.Low);
+    }
+
+    // ==========================================
+    // ZONES DU TUTORIEL
+    // La map est linéaire le long de -Z : chaque zone se déclenche UNE fois quand le
+    // joueur passe sous son seuil Z. Ordonnées du plus proche au plus lointain.
+    // ==========================================
+    public class ZoneTuto
+    {
+        public float Z;             // seuil de déclenchement (le joueur avance vers -Z)
+        public string Titre, Touche, Desc;
+        public bool Fait;
+        public ZoneTuto(float z, string titre, string touche, string desc)
+        { Z = z; Titre = titre; Touche = touche; Desc = desc; }
+    }
+    public static List<ZoneTuto> zonesTuto = new List<ZoneTuto>();
+    public static bool modeTuto = false;
+
+    /// <summary>Construit les paliers d'explication du tuto (coordonnées de maptuto.glb).</summary>
+    public static void PreparerZonesTuto()
+    {
+        zonesTuto = new List<ZoneTuto>
+        {
+            new ZoneTuto(  -6f, "SAUT",             "ESPACE",   "Franchis le trou devant toi."),
+            new ZoneTuto( -17f, "DOUBLE SAUT",      "ESPACE x2","Appuie une 2e fois en l'air : tu rebondis plus haut."),
+            new ZoneTuto( -36f, "DASH",             "CTRL",     "Fonce d'un coup. Enchaine dash + saut pour franchir les grands vides."),
+            new ZoneTuto( -58f, "S'ACCROUPIR",      "C",        "Reste accroupi pour passer sous les obstacles bas."),
+            new ZoneTuto( -63f, "SAUT AU MUR",      "ESPACE",   "En l'air, colle-toi a un mur et saute : tu rebondis dessus."),
+            new ZoneTuto( -76f, "GLISSADE",         "MAJ + C",  "Sprinte puis accroupis-toi : tu glisses en gardant ta vitesse."),
+            new ZoneTuto(-120f, "DE MUR EN MUR",    "ESPACE",   "Rebondis d'un mur a l'autre : chaque saut relance ta vitesse."),
+            new ZoneTuto(-215f, "TESTE TES ARMES",  "CLIC G",   "Tire sur les zombies. Casse un tonneau pour changer d'arme."),
+            new ZoneTuto(-232f, "GRIMPE LA BOITE",  "ESPACE",   "Enchaine sauts et sauts au mur jusqu'au sommet."),
+            new ZoneTuto(-466f, "GG !",             "",         "Tu maitrises toutes les mecaniques. Bonne chance !"),
+        };
+        foreach (ZoneTuto z in zonesTuto) z.Fait = false;
+    }
+
+    /// <summary>Déclenche l'overlay de la zone atteinte (appelé chaque frame pendant le tuto).</summary>
+    static void MajZonesTuto(Vector3 posJoueur)
+    {
+        if (!modeTuto) return;
+        ZoneTuto aAfficher = null;
+        foreach (ZoneTuto z in zonesTuto)
+        {
+            // On marque TOUTES les zones franchies, mais on n'affiche que la plus avancée
+            // (evite un defilement d'overlays si le joueur saute plusieurs paliers d'un coup)
+            if (!z.Fait && posJoueur.Z <= z.Z) { z.Fait = true; aAfficher = z; }
+        }
+        if (aAfficher != null)
+            DeclencherOverlayTuto(aAfficher.Titre, aAfficher.Touche, aAfficher.Desc, 6f);
+    }
+
+    static void DessinerOverlayTuto(float deltaTime)
+    {
+        if (overlayTimer <= 0f) return;
+        overlayTimer -= deltaTime;
+
+        // Fondu : apparition rapide (10 % du temps), disparition douce (25 %)
+        float t = overlayTimer / overlayDuree;
+        float alpha = 1f;
+        if (t > 0.9f) alpha = (1f - t) / 0.1f;
+        else if (t < 0.25f) alpha = t / 0.25f;
+        alpha = Math.Clamp(alpha, 0f, 1f);
+        int a = (int)(alpha * 255);
+
+        int cx = LargeurFenetre / 2;
+        bool avecTouche = overlayTouche.Length > 0;
+        int panW = 720, panH = avecTouche ? 184 : 116;
+        int panX = cx - panW / 2, panY = 110;
+
+        // Panneau sombre + liseré orange
+        Raylib.DrawRectangle(panX, panY, panW, panH, new Color(12, 12, 18, (int)(alpha * 215)));
+        Raylib.DrawRectangleLinesEx(new Rectangle(panX, panY, panW, panH), 3, new Color(255, 170, 50, a));
+
+        // Titre de la mécanique (avec ombre pour la lisibilité)
+        int tw = Raylib.MeasureText(overlayTitre, 40);
+        Raylib.DrawText(overlayTitre, cx - tw / 2 + 2, panY + 20, 40, new Color(0, 0, 0, a));
+        Raylib.DrawText(overlayTitre, cx - tw / 2, panY + 18, 40, new Color(255, 200, 90, a));
+
+        // Explication de la technique
+        if (overlayDesc.Length > 0)
+        {
+            int dw = Raylib.MeasureText(overlayDesc, 20);
+            Raylib.DrawText(overlayDesc, cx - dw / 2, panY + 66, 20, new Color(215, 215, 220, a));
+        }
+
+        // La touche, façon "keycap" (omise pour les messages sans touche, ex. le GG final)
+        if (avecTouche)
+        {
+            int kw = Raylib.MeasureText(overlayTouche, 30);
+            int capW = Math.Max(kw + 40, 70), capH = 52;
+            int capX = cx - capW / 2, capY = panY + 110;
+            Raylib.DrawRectangle(capX, capY, capW, capH, new Color(235, 235, 235, a));
+            Raylib.DrawRectangleLinesEx(new Rectangle(capX, capY, capW, capH), 3, new Color(30, 30, 30, a));
+            Raylib.DrawText(overlayTouche, cx - kw / 2, capY + 12, 30, new Color(20, 20, 20, a));
+        }
+    }
+
     // --- Le tick à pas fixe 64 Hz (voir docs/NETWORK_ROADMAP.md §4.1) ---
     static float tickAccumulateur = 0f;          // temps réel en attente de simulation
     static Vector3 posJoueurTickPrec;            // position du joueur au tick précédent
@@ -678,8 +827,20 @@ static void InitBarrels()
         {
             foreach (Enemy enemy in enemiesList)
             {
-                // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
-                enemy.Maj(posCube, ref espionCube);
+                if (modeTuto)
+                {
+                    // TUTO : les zombies sont des cibles FIXES (pas d'IA, pas de poursuite).
+                    // On annule le déplacement horizontal, la gravité les garde posés.
+                    BodyReference corpsZombie = Program.simulation.Bodies.GetBodyReference(enemy.bodyId);
+                    corpsZombie.Velocity.Linear.X = 0f;
+                    corpsZombie.Velocity.Linear.Z = 0f;
+                    corpsZombie.Velocity.Angular = System.Numerics.Vector3.Zero;
+                }
+                else
+                {
+                    // On leur donne la position de ton Cube Espion pour qu'ils te poursuivent !
+                    enemy.Maj(posCube, ref espionCube);
+                }
                             
                 // Vérifier si l'ennemi tombe dans le vide (limite de void)
                 try
@@ -796,8 +957,10 @@ static void InitBarrels()
         // ==========================================
         // MODE CONSTRUCTION (Touche F)
         // ==========================================
+        // La préview porte notre couleur de skin, comme le mur une fois posé.
         // Alpha bas (70) : on doit voir les joueurs/ennemis À TRAVERS la préview du mur !
-        couleurMurTransparent = new Color(255, 130, 50, 70);
+        Color couleurMonSkin = couleursSkin[skinCouleur];
+        couleurMurTransparent = new Color(couleurMonSkin.R, couleurMonSkin.G, couleurMonSkin.B, (byte)70);
         modeConstruction = false;
         if (KeyBinds.IsBuildWallPressed())
         {
@@ -835,7 +998,7 @@ static void InitBarrels()
                 {
                     Program.PlaySound3D(wallSound, positionPrevueMur, 20f);
                     wallChrono = 0;
-                    PoserMur(positionPrevueMur, rotationPrevueMur);
+                    PoserMur(positionPrevueMur, rotationPrevueMur, skinCouleur);
 
                     // En ligne : on annonce le mur pour qu'il existe chez TOUT le monde
                     // (visuel + physique), sinon les autres passent au travers !
@@ -1310,6 +1473,13 @@ static void InitBarrels()
             }
         }
 
+        // TEST OVERLAY : mode debug (F2) actif + touche O
+        if (debugInfo && Raylib.IsKeyPressed(KeyboardKey.O))
+            DeclencherOverlayTuto("TEST OVERLAY", "O", "Overlay de test (F2 + O).");
+
+        // TUTORIEL : explique la mécanique dès que le joueur atteint le palier correspondant
+        MajZonesTuto(posCube);
+
         
 
 
@@ -1321,7 +1491,8 @@ static void InitBarrels()
 
             // Si le temps est écoulé, et qu'il n'y a pas déjà trop de zombies (ex: limite de 30)
             // EN LIGNE : pas de zombies, c'est du PvP !
-            if (!isOnline && zombiesActifs && enemySpawnTimer <= 0f && enemiesList.Count < 40)
+            // (enemySpawnPoints vide = aucun zombie possible : c'est le cas du TUTO)
+            if (!isOnline && zombiesActifs && enemySpawnPoints.Count > 0 && enemySpawnTimer <= 0f && enemiesList.Count < maxZombies)
             {
                 // On choisit un point de spawn au hasard
                 int randomSpawnIndex = random.Next(enemySpawnPoints.Count);
@@ -1373,8 +1544,8 @@ static void InitBarrels()
                 if (axe.LengthSquared() > 0.0001f) axe = Vector3.Normalize(axe); else axe = new Vector3(0, 1, 0);
 
                 float angleDegres = angleRadians * (180.0f / MathF.PI);
-                Color couleurMur = new Color(255, 130, 50, 255);
-                
+                Color couleurMur = couleursSkin[mur.couleurIdx]; // la couleur du skin de son poseur
+
                 Raylib.DrawModelEx(visuelMur, mur.position, axe, angleDegres, Vector3.One, couleurMur);
                 //Raylib.DrawModelWiresEx(visuelMur, mur.position, axe, angleDegres, Vector3.One, Color.Black);
             }
@@ -1526,7 +1697,8 @@ static void InitBarrels()
                 float angleDegresPreview = angleRadians * (180.0f / MathF.PI);
                 Raylib.DrawModelEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, couleurMurTransparent);
                 // Le contour rend la préview lisible malgré la forte transparence
-                Raylib.DrawModelWiresEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, new Color(255, 130, 50, 200));
+                Color contourPreview = new Color(couleurMonSkin.R, couleurMonSkin.G, couleurMonSkin.B, (byte)200);
+                Raylib.DrawModelWiresEx(visuelMur, positionPrevueMur, axe, angleDegresPreview, Vector3.One, contourPreview);
             }
             
         Raylib.EndMode3D();
@@ -2071,6 +2243,9 @@ static void InitBarrels()
             Color damageColor = new Color(255, 0, 0, (int)(damageOverlayOpacity * 255));
             Raylib.DrawRectangle(0, 0, LargeurFenetre, HauteurFenetre, damageColor);
         }
+
+        // Overlay du tutoriel (mécanique + touche), par-dessus le HUD
+        DessinerOverlayTuto(deltaTime);
         
         // ==========================================
         // AFFICHAGE DU MENU PAUSE ET OPTIONS (PAR-DESSUS LE JEU)

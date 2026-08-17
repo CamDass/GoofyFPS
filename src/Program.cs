@@ -255,6 +255,8 @@ public partial class Program
     public static float survivalTime = 0f;
     // Solo : active/désactive l'apparition des zombies (réglé par l'interrupteur du menu Solo).
     public static bool zombiesActifs = true;
+    // Nombre max de zombies simultanés (40 en solo normal, 3 dans le tuto).
+    public static int maxZombies = 40;
     public static int killCount = 0;
     public static int deathCount = 0;
     public static float enemySpawnTimer = 0f;
@@ -276,12 +278,14 @@ public partial class Program
         public Vector3 position;
         public Quaternion rotation; // NOUVEAU : Sauvegarde la rotation 3D !
         public StaticHandle handlePhysique;
+        public int couleurIdx;      // index dans couleursSkin : le mur porte la couleur du skin de son poseur
 
-        public MurPose(Vector3 pos, Quaternion angle, StaticHandle handle)
+        public MurPose(Vector3 pos, Quaternion angle, StaticHandle handle, int couleur = 0)
         {
             position = pos;
             rotation = angle;
             handlePhysique = handle;
+            couleurIdx = couleur;
         }
     }
     public static List<MurPose> listeMur = new List<MurPose>();
@@ -969,6 +973,8 @@ public partial class Program
     activeDamageTexts.Clear();
     remoteShots.Clear();
     killCount = 0; deathCount = 0;
+    modeTuto = false;      // sécurité : on sort du mode tuto en rejoignant une partie en ligne
+    maxZombies = 40;
     localPlayer.Respawn(); // On repart avec toute sa vie
 
     // Les chemins de tes maps
@@ -986,6 +992,7 @@ public partial class Program
     LoadMapSpawns(mapIndex);
     InitBarrels();
     InitEnnemis();
+    EquiperArmeDeDepart();
 
     // Hot-join : on NE choisit PAS de spawn ici (l'hôte nous en donne un via BaselineEnd).
     if (spawnAleatoire)
@@ -1177,6 +1184,9 @@ public static void GenererPhysiqueMap(Model modele)
         // dotnet run -- --aitest   : le comportement runtime (anti-gel, fluidité) est-il bon ?
         if (args.Length > 0 && args[0] == "--navtest") { LancerNavTest(); return; }
         if (args.Length > 0 && args[0] == "--aitest") { LancerAiTest(); return; }
+        // dotnet run -- --skintest [filtre] : aligne tous les chapeaux/visages et screenshot
+        // (le filtre ajoute un gros plan du chapeau correspondant, ex: --skintest robot)
+        if (args.Length > 0 && args[0] == "--skintest") { LancerSkinTest(args.Length > 1 ? args[1] : ""); return; }
 
         //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
         Raylib.InitWindow(LargeurFenetre, HauteurFenetre, "GoofyFPS");
@@ -1242,6 +1252,9 @@ public static void GenererPhysiqueMap(Model modele)
         Box formeBaril = new Box(barrelHalfExtents.X * barrelHitboxInflation, barrelHalfExtents.Y * barrelHitboxInflation, barrelHalfExtents.Z * barrelHitboxInflation);
         sniperaim = Raylib.LoadTexture("assets/textures/hud/sniperaim.png");
         cibleTexture = Raylib.LoadTexture("assets/textures/hud/cible.png");
+
+        // --- LES COSMÉTIQUES : chapeaux (.glb) + têtes (.png), scannés depuis assets/ ---
+        ChargerCosmetiques();
 
         Raylib.InitAudioDevice();
         menuMusic = Raylib.LoadMusicStream("assets\\sounds\\menuMusic.mp3");

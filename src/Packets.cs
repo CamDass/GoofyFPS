@@ -209,6 +209,7 @@ public class Packets
         {
             public float X, Y, Z;
             public float QX, QY, QZ, QW;
+            public byte Couleur;   // couleur de skin du poseur (index dans couleursSkin)
         }
         public Mur[] Murs;
 
@@ -220,6 +221,7 @@ public class Packets
             {
                 writer.Put(Murs[i].X); writer.Put(Murs[i].Y); writer.Put(Murs[i].Z);
                 writer.Put(Murs[i].QX); writer.Put(Murs[i].QY); writer.Put(Murs[i].QZ); writer.Put(Murs[i].QW);
+                writer.Put(Murs[i].Couleur);
             }
         }
 
@@ -232,6 +234,7 @@ public class Packets
             {
                 Murs[i].X = reader.GetFloat(); Murs[i].Y = reader.GetFloat(); Murs[i].Z = reader.GetFloat();
                 Murs[i].QX = reader.GetFloat(); Murs[i].QY = reader.GetFloat(); Murs[i].QZ = reader.GetFloat(); Murs[i].QW = reader.GetFloat();
+                Murs[i].Couleur = reader.GetByte();
             }
         }
     }
@@ -361,6 +364,7 @@ public class Packets
         public float QY { get; set; }
         public float QZ { get; set; }
         public float QW { get; set; }
+        public byte SkinColor { get; set; }  // couleur de skin du poseur (index dans couleursSkin)
     }
 
     // 3. LES ACTIONS PONCTUELLES (Tirer)

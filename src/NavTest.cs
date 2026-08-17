@@ -41,21 +41,25 @@ partial class Program
 
             NavGrid.Bake(simulation, Raylib.GetModelBoundingBox(mapModel), mapScale, mapPosition);
 
-            int ok = 0, echec = 0;
+            int ok = 0, echec = 0, horsMap = 0;
 
-            if (i == 3)
-                for (int a = 0; a < enemySpawnPoints.Count; a++)
-                    Console.WriteLine($"[DBG] ennemi{a} {enemySpawnPoints[a]} : {NavGrid.InfoCellule(enemySpawnPoints[a])}");
-
-            // Diagnostic : chaque spawn ennemi doit être posé sur la grille (les zombies
-            // apparaissent LÀ : hors grille = zombie qui tombe dans le vide ou IA de secours).
+            // ===== A. LES SPAWNS SONT-ILS SUR LA MAP ? (problème d'AUTHORING, pas d'IA) =====
+            // Un spawn sans aucune case sous lui = coordonnée qui ne colle plus à la géométrie
+            // (map ré-exportée sans mettre à jour les tableaux de spawns) -> chute dans le vide.
             for (int a = 0; a < enemySpawnPoints.Count; a++)
             {
-                string info = NavGrid.InfoCellule(enemySpawnPoints[a]);
-                if (info.StartsWith("AUCUNE"))
+                if (NavGrid.InfoCellule(enemySpawnPoints[a]).StartsWith("AUCUNE"))
                 {
-                    echec++;
-                    Console.WriteLine($"[NAVTEST]   ECHEC spawn ennemi{a} {enemySpawnPoints[a]} : {info}");
+                    horsMap++;
+                    Console.WriteLine($"[NAVTEST]   HORS MAP : spawn ennemi{a} {enemySpawnPoints[a]} — aucun sol (mapEnemySpawns[{i}] à corriger)");
+                }
+            }
+            foreach (Vector3 sp in listeSpawns)
+            {
+                if (NavGrid.InfoCellule(sp).StartsWith("AUCUNE"))
+                {
+                    horsMap++;
+                    Console.WriteLine($"[NAVTEST]   HORS MAP : spawn joueur {sp} — aucun sol (mapPlayerSpawns[{i}] à corriger)");
                 }
             }
 
@@ -77,6 +81,9 @@ partial class Program
             // d'approche partiel est le comportement voulu (les zombies s'agglutinent en dessous).
             foreach (Vector3 spawnJoueur in listeSpawns)
             {
+                // Un spawn hors map est déjà signalé plus haut : inutile de le compter deux fois.
+                if (NavGrid.InfoCellule(spawnJoueur).StartsWith("AUCUNE")) continue;
+
                 var chemin = NavGrid.TrouverChemin(enemySpawnPoints[0], spawnJoueur, out bool complet);
                 bool perche = spawnJoueur.Y - enemySpawnPoints[0].Y > 3f;
 
@@ -85,10 +92,11 @@ partial class Program
                 else { echec++; Console.WriteLine($"[NAVTEST]   ECHEC ennemi0 -> joueur {spawnJoueur} (chemin={(chemin == null ? "aucun" : "partiel")}, perché={perche})"); }
             }
 
-            string verdict = echec == 0 ? "OK" : "PROBLEME";
+            string verdict = (echec == 0 && horsMap == 0) ? "OK" : "PROBLEME";
             string notePerchoirs = perchoirs > 0 ? $" (dont {perchoirs} perchoirs en approche partielle)" : "";
-            Console.WriteLine($"[NAVTEST] map {i} ({nomsMap[i]}) : {NavGrid.NbCellules} cases, chemins {ok}/{ok + echec}{notePerchoirs} -> {verdict}");
-            if (echec > 0) toutOk = false;
+            string noteHorsMap = horsMap > 0 ? $", {horsMap} spawns HORS MAP" : "";
+            Console.WriteLine($"[NAVTEST] map {i} ({nomsMap[i]}) : {NavGrid.NbCellules} cases, chemins {ok}/{ok + echec}{notePerchoirs}{noteHorsMap} -> {verdict}");
+            if (echec > 0 || horsMap > 0) toutOk = false;
 
             DechargerMapActuelle();
         }
