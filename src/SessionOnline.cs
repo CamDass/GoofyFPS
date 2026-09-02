@@ -36,6 +36,10 @@ partial class Program
     public static int matchRemainingAffiche = -1;   // temps restant affiché (client : lu du snapshot ; -1 = pas de limite)
     public static bool partieEnCoursCoteHote = false; // client : vrai s'il a quitté vers le salon alors qu'un match tourne (-> bouton REJOINDRE)
 
+    // Modificateur aléatoire (règle "chaos") : compte à rebours avant le prochain tirage.
+    public const float ChaosPeriode = 60f;
+    public static float chaosTimer = ChaosPeriode;
+
     // Écran de fin de match (PostMatch)
     public const float PostMatchDuree = 10f;
     public static float postMatchTimer = 0f;
@@ -303,11 +307,63 @@ partial class Program
     }
 
     // ==========================================
+    // LES MUTATEURS DE MATCH SUR LE RÉSEAU (autorité hôte)
+    // ==========================================
+    // L'hôte est le SEUL à régler : il diffuse la liste complète des valeurs à chaque
+    // changement du salon, au lancement du match et au hot-join. Le client se contente
+    // de l'appliquer et de l'afficher en lecture seule.
+    static Packets.MatchRulesPacket ConstruirePaquetRegles()
+    {
+        float[] valeurs = new float[MatchRules.Liste.Count];
+        for (int i = 0; i < valeurs.Length; i++) valeurs[i] = MatchRules.Liste[i].Valeur;
+        return new Packets.MatchRulesPacket { Version = MatchRules.VersionReseau, Valeurs = valeurs };
+    }
+
+    /// <summary>HÔTE : envoie les règles courantes à tout le monde.</summary>
+    public static void HoteDiffuserRegles()
+    {
+        if (!isServer || netManager == null || !netManager.IsRunning) return;
+        Packets.MatchRulesPacket paquet = ConstruirePaquetRegles();
+        DiffuserStructATous(ref paquet, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>HÔTE : envoie les règles à UN peer précis (arrivée / hot-join).</summary>
+    public static void HoteEnvoyerReglesA(NetPeer peer)
+    {
+        if (!isServer || peer == null) return;
+        Packets.MatchRulesPacket paquet = ConstruirePaquetRegles();
+        EnvoyerStructA(peer, ref paquet, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>CLIENT : applique les règles reçues de l'hôte (jamais l'inverse).</summary>
+    public static void OnMatchRulesReceived(Packets.MatchRulesPacket packet, NetPeer peer)
+    {
+        // S2 : l'hôte fait autorité. Un paquet de règles reçu par l'hôte (donc venant
+        // d'un client) est purement et simplement ignoré.
+        if (isServer) return;
+        if (packet.Valeurs == null) return;
+
+        int n = Math.Min(packet.Valeurs.Length, MatchRules.Liste.Count);
+        for (int i = 0; i < n; i++)
+        {
+            float v = packet.Valeurs[i];
+            if (float.IsNaN(v) || float.IsInfinity(v)) continue;   // S3 : valeur forgée -> on garde la nôtre
+            MatchRules.Poser(MatchRules.Liste[i], v);              // Poser() borne déjà sur [Min, Max]
+        }
+        MatchRules.Appliquer();
+        Console.WriteLine($"[SESSION] Règles reçues de l'hôte ({n} réglages) : {MatchRules.Resume(4)}");
+    }
+
+    // ==========================================
     // HÔTE : LANCEMENT D'UN MATCH DEPUIS LE LOBBY
     // ==========================================
     public static void HoteDemarrerMatch()
     {
         if (!isServer) return;
+
+        // Les règles PARTENT AVANT le top départ : les clients chargent la map avec la
+        // bonne gravité, la bonne vie max et les bonnes armes dès la première frame.
+        HoteDiffuserRegles();
 
         Packets.StartGamePacket start = new Packets.StartGamePacket
         {
@@ -334,7 +390,37 @@ partial class Program
         matchRemainingAffiche = timeLimit > 0 ? timeLimit : -1;
         // Nouveau match : on repart de scores vierges (les distants aussi)
         foreach (RemotePlayer rp in remotePlayers.Values) { rp.Kills = 0; rp.Deaths = 0; }
-        Console.WriteLine($"[SESSION] Match démarré (limite {scoreLimit} kills / {timeLimit}s).");
+
+        // Les mutateurs prennent effet MAINTENANT (gravité, vie max, sauts, barils...).
+        MatchRules.Appliquer();
+        chaosTimer = ChaosPeriode;
+
+        Console.WriteLine($"[SESSION] Match démarré (limite {scoreLimit} kills / {timeLimit}s) — {MatchRules.Resume(4)}.");
+    }
+
+    // ==========================================
+    // LE MODIFICATEUR ALÉATOIRE (règle "chaos")
+    // ==========================================
+    // Appelé à chaque frame de jeu (solo ET en ligne). En ligne, seul l'HÔTE tire :
+    // il rediffuse ensuite les nouvelles règles, le client les reçoit comme n'importe
+    // quel autre changement. Personne ne peut donc se retrouver avec des règles à part.
+    public static void TickModificateurAleatoire(float dt)
+    {
+        if (!MatchRules.ChaosActif) return;
+        if (currentState != GameState.Playing) return;
+        if (isOnline && !isServer) return;
+
+        chaosTimer -= dt;
+        if (chaosTimer > 0f) return;
+        chaosTimer = ChaosPeriode;
+
+        string texte = MatchRules.TirerModificateurAleatoire(isOnline);
+        if (texte == "") return;
+
+        MatchRules.Appliquer();
+        if (isServer) { HoteDiffuserRegles(); AjouterToast("CHAOS : " + texte); }
+        DeclencherOverlayTuto("MODIFICATEUR ALÉATOIRE", "", texte, 4f);
+        Console.WriteLine($"[CHAOS] Nouveau modificateur : {texte}");
     }
 
     // ==========================================
@@ -466,6 +552,10 @@ partial class Program
     public static void HoteDemarrerBaseline(NetPeer peer, int idJoueur)
     {
         peersEnBaseline.Add(idJoueur);
+
+        // Les mutateurs d'abord : le retardataire charge sa map avec les bonnes règles.
+        HoteEnvoyerReglesA(peer);
+
         Packets.MatchInfoPacket info = new Packets.MatchInfoPacket
         {
             MapIndex = mapChoisieIndex,

@@ -31,9 +31,22 @@ partial class Program
     static Random random = new Random();
     static float barrelRespawnSeconds = 30.0f;
     static float barrelScale = 1.0f;
-    static int initialBarrelCount = 10;
+    public static int initialBarrelCount = 10;
 
     static bool showweapon = true;
+
+    // ========================================================
+    // ÉTAT DES MUTATEURS QUI ONT BESOIN DE MÉMOIRE D'UNE FRAME À L'AUTRE
+    // ========================================================
+    // "Dégâts de chute" : on compare la vitesse verticale de la frame précédente.
+    const float ChuteSansDegat = 25f;      // en dessous de 25 m/s, atterrissage gratuit
+    static bool etaitAuSol = true;
+    static float vitesseChutePrecedente = 0f;
+    // "Régénération" : on accumule les fractions de PV (2 PV/s à 144 fps = 0.014 PV/frame).
+    static float regenAccumulateur = 0f;
+
+    /// <summary>Durée de recharge du mur en frames (mutateur "Recharge du mur").</summary>
+    public static int WallChronoMax => Math.Max(1, MatchRules.MurDelaiSec * FPS);
 
     public class BarrelSpot
     {
@@ -228,10 +241,35 @@ partial class Program
     // à la partie. Sans ces deux fonctions, la partie suivante reprendrait le score
     // et l'arme tirée au hasard par le dernier baril de la précédente.
 
-    // Toute partie (solo, tuto, réseau) démarre au karambit.
+    // Toute partie (solo, tuto, réseau) démarre au karambit — sauf si le mutateur
+    // "Armes autorisées" l'a décoché : on prend alors la première arme cochée.
     public static void EquiperArmeDeDepart()
     {
-        currentWeapon = karambitknife;
+        currentWeapon = ArmeAutoriseeOuRepli(karambitknife);
+    }
+
+    /// <summary>Renvoie l'arme voulue si elle est autorisée, sinon la 1re arme cochée.</summary>
+    static Weapon ArmeAutoriseeOuRepli(Weapon voulue)
+    {
+        if (MatchRules.ArmeAutorisee(weapons.IndexOf(voulue))) return voulue;
+        for (int i = 0; i < weapons.Count; i++)
+            if (MatchRules.ArmeAutorisee(i)) return weapons[i];
+        return voulue; // ne devrait jamais arriver : MatchRules garde toujours une arme cochée
+    }
+
+    /// <summary>
+    /// Recale les armes sur les mutateurs courants : chargeurs bornés à la nouvelle taille,
+    /// rechargement en cours annulé, arme en main remplacée si elle vient d'être interdite.
+    /// Appelé par MatchRules.Appliquer() (donc aussi quand l'hôte change une règle en direct).
+    /// </summary>
+    public static void RecalibrerArmes()
+    {
+        foreach (Weapon arme in weapons)
+        {
+            if (arme.ammo > arme.MaxAmmoEffectif) arme.ammo = arme.MaxAmmoEffectif;
+            if (!arme.BesoinDeRecharger) arme.isReloading = false;
+        }
+        currentWeapon = ArmeAutoriseeOuRepli(currentWeapon);
     }
 
     // Appelée à chaque retour au menu principal.
@@ -247,14 +285,18 @@ partial class Program
         // en cours survivent aussi à la partie.
         foreach (Weapon arme in weapons)
         {
-            arme.ammo = arme.maxammo;
+            arme.ammo = arme.MaxAmmoEffectif;
             arme.isReloading = false;
         }
     }
 
     public static void SwitchWeaponFromBarrel(bool excludeBazooka = false)
     {
-        List<Weapon> allowedWeapons = weapons.Where(w => !excludeBazooka || !string.Equals(w.name, "Bazooka", StringComparison.OrdinalIgnoreCase)).ToList();
+        // Le baril ne peut sortir que des armes cochées dans le mutateur "Armes autorisées".
+        List<Weapon> allowedWeapons = weapons
+            .Where(w => MatchRules.ArmeAutorisee(weapons.IndexOf(w)))
+            .Where(w => !excludeBazooka || !string.Equals(w.name, "Bazooka", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         if (allowedWeapons.Count <= 1) return;
 
         Weapon newWeapon = currentWeapon;
@@ -467,12 +509,50 @@ static void InitBarrels()
         // on cuit la grille de navigation A* dessus. Rebake automatique à chaque changement de map.
         NavGrid.Bake(simulation, Raylib.GetModelBoundingBox(mapModel), mapScale, mapPosition);
 
-        // 4. On fait apparaître 2 ennemis de base
+        // 4. On fait apparaître 2 ennemis de base (aux stats des mutateurs)
         if (enemySpawnPoints.Count >= 2)
         {
-            enemiesList.Add(new Enemy(SpawnZombieSur(enemySpawnPoints[0]), 100, 4.0f));
-            enemiesList.Add(new Enemy(SpawnZombieSur(enemySpawnPoints[1]), 100, 4.0f));
+            enemiesList.Add(CreerZombie(enemySpawnPoints[0]));
+            enemiesList.Add(CreerZombie(enemySpawnPoints[1]));
         }
+    }
+
+    /// <summary>Un zombie aux stats des mutateurs "Vie des zombies" / "Vitesse des zombies".</summary>
+    static Enemy CreerZombie(Vector3 pointDeSpawn)
+    {
+        Enemy z = new Enemy(SpawnZombieSur(pointDeSpawn), MatchRules.ZombieVie, 4.0f * MatchRules.ZombieVitesseMul);
+        // Le tirage "explosif" se fait UNE fois, à la naissance : un zombie ne change
+        // pas de nature en cours de route même si l'hôte bouge le curseur.
+        z.explosif = MatchRules.ZombieExplosifPct > 0f
+                     && random.NextDouble() * 100.0 < MatchRules.ZombieExplosifPct;
+        return z;
+    }
+
+    /// <summary>
+    /// Le souffle d'un zombie explosif (mutateur "Zombies explosifs") : mêmes rayon et
+    /// effets qu'un baril. Touche les autres zombies, le joueur et les barils alentour,
+    /// ce qui permet les réactions en chaîne.
+    /// </summary>
+    static void FaireExploserZombie(Vector3 position, Vector3 posJoueur)
+    {
+        float rayon = Weapon.RayonExplosion;
+        if (rayon <= 0f) return;
+        int degats = Math.Max(1, (int)MathF.Round(40f * MatchRules.DegatsMul));
+
+        foreach (Enemy autre in enemiesList)
+        {
+            if (!autre.isAlive) continue;
+            Vector3 centre = autre.GetPosition(); // centre du corps = centre de la hitbox
+            if (Vector3.Distance(position, centre) <= rayon) autre.TakeDamage(degats, position);
+        }
+
+        if (localPlayer.IsAlive && Vector3.Distance(position, posJoueur) <= rayon)
+            localPlayer.TakeDamage(degats);
+
+        BreakBarrelsInRadius(position, rayon);
+        SpawnExplosionEffect(position);
+        PlaySound3D(explosion, position, 120f);
+        Program.duckingTimer = 1.5f;
     }
 
     // Recale un point de spawn zombie sur la grille de navigation : le corps (capsule de 2m,
@@ -815,6 +895,19 @@ static void InitBarrels()
         {
             if (!enemy.isAlive)
             {
+                // Mutateur "Zombies explosifs" : le souffle part AVANT qu'on retire le
+                // corps (GetPosition() renvoie Vector3.Zero une fois le zombie mort).
+                if (enemy.explosif)
+                {
+                    try
+                    {
+                        Vector3 posMort = simulation.Bodies.GetBodyReference(enemy.bodyId).Pose.Position;
+                        enemy.explosif = false; // une seule explosion par zombie
+                        FaireExploserZombie(posMort, posCube);
+                    }
+                    catch (Exception ex) { Console.WriteLine($"[WARN] Explosion de zombie ignorée : {ex.Message}"); }
+                }
+
                 simulation.Bodies.Remove(enemy.bodyId);
                 deadEnemiesCount++;
             }
@@ -871,17 +964,31 @@ static void InitBarrels()
         }
 
         // ==========================================
+        // MUTATEUR "Dégâts de chute"
+        // ==========================================
+        // On regarde la vitesse verticale de la frame PRÉCÉDENTE : à la frame de
+        // l'atterrissage, la collision l'a déjà ramenée à ~0.
+        if (MatchRules.ChuteMortelle && capteurSol.toucheSol && !etaitAuSol
+            && vitesseChutePrecedente < -ChuteSansDegat)
+        {
+            int degatsChute = (int)MathF.Round((-vitesseChutePrecedente - ChuteSansDegat) * 3f);
+            if (degatsChute > 0) localPlayer.TakeDamage(degatsChute);
+        }
+        etaitAuSol = capteurSol.toucheSol;
+        vitesseChutePrecedente = espionCube.Velocity.Linear.Y;
+
+        // ==========================================
         // CHRONOMÈTRES ET SONS D'INTERFACE (UX)
         // ==========================================
         // 1. On mémorise l'état AVANT de faire passer le temps
         bool dashEtaitPret = dashChrono >= 90;
-        bool murEtaitPret = wallChrono >= 10 * FPS;
+        bool murEtaitPret = wallChrono >= WallChronoMax;
 
         // 2. On fait avancer le temps (1 frame)
         if (dashChrono < 90) dashChrono++;
-        if (wallChrono < 10 * FPS) wallChrono++;
+        if (wallChrono < WallChronoMax) wallChrono++;
         
-        if (!murEtaitPret && wallChrono >= 10 * FPS)
+        if (!murEtaitPret && wallChrono >= WallChronoMax)
         {
             Program.PlaySoundWithPriority(wallNotifSound, Program.SoundPriority.Low);
         }
@@ -994,7 +1101,7 @@ static void InitBarrels()
             {
                 // S4 : le même plafond de murs que l'hôte applique aux paquets reçus.
                 // Un joueur légitime ne peut donc JAMAIS être désynchronisé par le plafond.
-                if (wallChrono >= FPS * 10 && (!isOnline || PeutPoserMur(myPlayerId)))
+                if (wallChrono >= WallChronoMax && (!isOnline || PeutPoserMur(myPlayerId)))
                 {
                     Program.PlaySound3D(wallSound, positionPrevueMur, 20f);
                     wallChrono = 0;
@@ -1164,8 +1271,9 @@ static void InitBarrels()
 
             IsSprinting = KeyBinds.IsSprintingPressed();
             float SpeedCoef = IsSprinting ? 1.7f : 1f;
-            float vMax = 8f * SpeedCoef; 
-            float fAcceleration = 0.2f; 
+            // MUTATEUR "Vitesse de course" : marche ET sprint (ni le dash ni la glissade).
+            float vMax = 8f * SpeedCoef * MatchRules.VitesseMul;
+            float fAcceleration = 0.2f;
             float rollCible = 0f;
 
             if (IsWallRunning)
@@ -1286,7 +1394,7 @@ static void InitBarrels()
                 hauteurVoulue = 0.8f; 
                 
                 // CORRECTION : On réapplique le multiplicateur de sprint ici !
-                vMax = 8f * SpeedCoef; 
+                vMax = 8f * SpeedCoef * MatchRules.VitesseMul;
                 
                 // Air Control quand on est debout en l'air
                 fAcceleration = capteurSol.toucheSol ? 0.2f : 0.02f; 
@@ -1305,6 +1413,11 @@ static void InitBarrels()
                 // Tes touches ZQSD vont "tirer" ta trajectoire vers la caméra sans perdre l'élan.
                 vMax = vitesseHorizontale; 
             }
+
+            // MUTATEUR "Glisse du sol" : on divise l'accélération ET le freinage au sol.
+            // À 100 % le facteur tombe à 0.05 : on met une éternité à lancer ET à s'arrêter.
+            // Aucun effet en l'air (le contrôle aérien reste celui du jeu de base).
+            if (capteurSol.toucheSol) fAcceleration *= MatchRules.GlisseFacteur;
 
             // --- CALCUL FINAL ---
             // CORRECTION 2 : On retire "* SpeedCoef" ici, car il est déjà dans le vMax de base !
@@ -1489,6 +1602,22 @@ static void InitBarrels()
             survivalTime += deltaTime;
             enemySpawnTimer -= deltaTime;
 
+            // ==========================================
+            // MUTATEUR "Régénération" : soin auto après 5 s sans prendre de dégâts.
+            // (tempsSansDegats est remis à zéro par Player.TakeDamage)
+            // ==========================================
+            tempsSansDegats += deltaTime;
+            if (MatchRules.RegenParSec > 0f && tempsSansDegats >= 5f && localPlayer.Health < localPlayer.MaxHealth)
+            {
+                regenAccumulateur += MatchRules.RegenParSec * deltaTime;
+                int pvRendus = (int)regenAccumulateur;
+                if (pvRendus > 0) { localPlayer.Heal(pvRendus); regenAccumulateur -= pvRendus; }
+            }
+            else regenAccumulateur = 0f;
+
+            // MUTATEUR "Modificateur aléatoire" : un réglage tiré au sort toutes les 60 s.
+            TickModificateurAleatoire(deltaTime);
+
             // Si le temps est écoulé, et qu'il n'y a pas déjà trop de zombies (ex: limite de 30)
             // EN LIGNE : pas de zombies, c'est du PvP !
             // (enemySpawnPoints vide = aucun zombie possible : c'est le cas du TUTO)
@@ -1498,7 +1627,7 @@ static void InitBarrels()
                 int randomSpawnIndex = random.Next(enemySpawnPoints.Count);
 
                 // On crée le zombie (recalé sur la grille de navigation)
-                enemiesList.Add(new Enemy(SpawnZombieSur(enemySpawnPoints[randomSpawnIndex]), 100, 4.0f));
+                enemiesList.Add(CreerZombie(enemySpawnPoints[randomSpawnIndex]));
                 
                 // On relance le chrono d'apparition
                 enemySpawnTimer = timeBetweenSpawns;
@@ -1518,7 +1647,13 @@ static void InitBarrels()
         // On envoie la position de la caméra pour le brouillard 
         Raylib.SetShaderValue(lightShader, viewPosLoc, camera.Position, ShaderUniformDataType.Vec3);
         Raylib.SetShaderValue(lightShader, Program.applyFogLoc, new int[] { 1 }, ShaderUniformDataType.Int);
-        
+
+        // MUTATEUR "Distance de vue" : le brouillard se referme (60 m) ou s'ouvre (600 m).
+        // On garde la proportion d'origine du jeu (début = 27 % de la fin, soit 40/150).
+        float porteeVue = MatchRules.DistanceVue;
+        Raylib.SetShaderValue(lightShader, Program.fogStartLoc, porteeVue * 0.27f, ShaderUniformDataType.Float);
+        Raylib.SetShaderValue(lightShader, Program.fogEndLoc, porteeVue, ShaderUniformDataType.Float);
+
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Color.SkyBlue);
         Color couleurZenith = new Color(20, 25, 45, 255);   // Bleu très sombre en haut
@@ -1925,8 +2060,10 @@ static void InitBarrels()
             // ==========================================
             Raylib.DrawCircle(Raylib.GetScreenWidth() / 2, Raylib.GetScreenHeight() / 2, 3, Color.Green); // Réticule
             
+            // Mutateur "Munitions" : le chargeur affiché est celui du match, et "INF"
+            // remplace le total quand les munitions infinies sont activées.
             string ammoStr = currentWeapon.ammo.ToString();
-            string maxAmmoStr = currentWeapon.maxammo.ToString();
+            string maxAmmoStr = MatchRules.MunitionsInfinies ? "INF" : currentWeapon.MaxAmmoEffectif.ToString();
 
             int tailleGrandTexte = 70;
             int taillePetitTexte = 35;
@@ -1990,6 +2127,9 @@ static void InitBarrels()
             //infos 
             Raylib.DrawText("le moteur tourne.", 10,10,20, Color.DarkGreen);
             Raylib.DrawText($"Position XYZ : X={posCube.X:F2} Y={posCube.Y:F2} Z={posCube.Z:F2}", 10,40,20, Color.DarkGreen);
+            // Les mutateurs actifs, pour savoir tout de suite avec quelles règles on joue
+            Raylib.DrawText($"Mutateurs : {MatchRules.Resume(4)}", 10, HauteurFenetre - 30, 18,
+                            MatchRules.ReglesModifiees() ? Color.Gold : Color.DarkGreen);
             Raylib.DrawText($"Hauteur du cube : {posCube.Y:F2}", 10,70,20,Color.DarkGreen);
             if (NbJump >NbJumpMax)
             {
@@ -2145,10 +2285,10 @@ static void InitBarrels()
 
             Color missingWall = new Color(150, 150, 150, 50);
             Color WallColor = new Color(255, 140, 60, 255);
-            int WallPixel = 100*wallChrono/(FPS*10);
+            int WallPixel = Math.Min(100, 100 * wallChrono / WallChronoMax);
 
             Raylib.DrawRectangle(100, HauteurFenetre - 250, 100,40,missingWall); //arriere plan pour si on enleve la vie on voit encore la barre
-            if (wallChrono >= 10*FPS)// = 10s
+            if (wallChrono >= WallChronoMax) // mutateur "Recharge du mur"
             {
                 Raylib.DrawRectangle(100, HauteurFenetre - 250, WallPixel,40,WallColor);
             } else

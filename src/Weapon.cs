@@ -26,6 +26,28 @@ public class Weapon
     public bool requiresReload; // true si l'arme a besoin de recharger, false pour les armes infinies
     private bool reloadSoundPlayed = false; // Pour jouer le son une seule fois
 
+    // ========================================================
+    // LES MUTATEURS DE MATCH (voir MatchRules)
+    // ========================================================
+    // damage / maxammo / fireRate restent les valeurs D'ORIGINE de l'arme : on ne les
+    // écrase jamais, sinon un match "dégâts x3" laisserait l'arme abîmée pour la partie
+    // suivante. Tout le jeu passe donc par ces trois propriétés.
+
+    /// <summary>Dégâts après le mutateur "Dégâts" (jamais moins de 1).</summary>
+    public int DegatsEffectifs => Math.Max(1, (int)MathF.Round(damage * MatchRules.DegatsMul));
+
+    /// <summary>Taille du chargeur après le mutateur "Munitions" (jamais moins de 1).</summary>
+    public int MaxAmmoEffectif => Math.Max(1, (int)MathF.Round(maxammo * (MatchRules.MunitionsInfinies ? 1f : MatchRules.MunitionsMul)));
+
+    /// <summary>Délai entre deux tirs après le mutateur "Cadence de tir".</summary>
+    public float CadenceEffective => fireRate / MathF.Max(0.05f, MatchRules.CadenceMul);
+
+    /// <summary>Faux quand les munitions infinies sont activées : plus de recharge du tout.</summary>
+    public bool BesoinDeRecharger => requiresReload && !MatchRules.MunitionsInfinies;
+
+    /// <summary>Rayon d'explosion du bazooka après le mutateur "Puissance explosions".</summary>
+    public static float RayonExplosion => 6f * MatchRules.ExplosionMul;
+
     // constructeur
     public Weapon(string nom, int degats, int portee, float cadence, int munitionsMax, int tempsRecharge, Model modele3D, Sound son, float power, bool needsReload = true)
     {
@@ -56,11 +78,11 @@ public class Weapon
 
         // 1. Vérification : A-t-on le droit de tirer ?
         // Pour les armes qui ne se rechargent pas, ignorer la vérification des munitions
-        bool outOfAmmo = requiresReload && ammo <= 0;
-        if (outOfAmmo || isReloading || (float)Raylib.GetTime() - lastShotTime < fireRate)
+        bool outOfAmmo = BesoinDeRecharger && ammo <= 0;
+        if (outOfAmmo || isReloading || (float)Raylib.GetTime() - lastShotTime < CadenceEffective)
         {
             // Jouer le son no-ammo si on essaie de tirer sans munitions
-            if (outOfAmmo && !isReloading && (float)Raylib.GetTime() - lastShotTime >= fireRate)
+            if (outOfAmmo && !isReloading && (float)Raylib.GetTime() - lastShotTime >= CadenceEffective)
             {
                 Program.PlaySoundWithPriority(Program.noAmmoSound, Program.SoundPriority.Low);
             }
@@ -77,11 +99,14 @@ public class Weapon
         lastShotTime = (float)Raylib.GetTime();
         
         // Décrémenter les munitions seulement si l'arme en nécessite
-        if (requiresReload)
+        // (le mutateur "Munitions : INFINIES" met BesoinDeRecharger à faux)
+        if (BesoinDeRecharger)
             ammo--;
 
-        // 3. Le recul physique sur le joueur
-        float forceRecul = 1f;
+        // 3. Le recul physique sur le joueur — mutateur "Recul des armes".
+        // Les armes à force = 0 (sniper, karambit, pistolet) restent sans recul : le
+        // multiplicateur amplifie ce qui existe, il n'en invente pas.
+        float forceRecul = 1f * MatchRules.ReculMul;
         playerBody.Velocity.Linear -= direction * forceRecul * force;
 
         // ==========================================
@@ -135,10 +160,14 @@ public class Weapon
                 if (!enemy.isAlive) continue;
                 
                 // ON CRÉE LA BOÎTE VIRTUELLE !
-                // La forme rouge allait de Y-1 à Y+1. On garde la base, mais on monte le sommet à Y+1.5 !
+                // Elle épouse EXACTEMENT la capsule physique : Capsule(rayon 0.5, longueur 1)
+                // occupe Y-1 à Y+1 autour du centre. Le sommet montait avant à Y+1.5, ce qui
+                // englobait le chapeau (ancré à +0.5, calotte au-dessus du crâne) : on pouvait
+                // donc tuer quelqu'un en tirant dans son couvre-chef. Les cosmétiques sont
+                // PUREMENT visuels — voir Cosmetics.DessinerPersonnageComplet.
                 Vector3 posPhysique = enemy.GetPosition();
                 Vector3 minBox = posPhysique - new Vector3(0.5f, 1f, 0.5f);
-                Vector3 maxBox = posPhysique + new Vector3(0.5f, 1.5f, 0.5f); 
+                Vector3 maxBox = posPhysique + new Vector3(0.5f, 1f, 0.5f);
                 BoundingBox virtualHitbox = new BoundingBox(minBox, maxBox);
 
                 // Raylib fait les maths complexes pour nous !
@@ -160,7 +189,7 @@ public class Weapon
             {
                 bool etatAvant = ennemiTouche.isAlive;
                 // On passe la position du tireur : le zombie blessé AGGRO vers l'origine du tir !
-                ennemiTouche.TakeDamage(damage, physiqueStart);
+                ennemiTouche.TakeDamage(DegatsEffectifs, physiqueStart);
                 
                 if (etatAvant && !ennemiTouche.isAlive) Program.TriggerHitmarker(true); 
                 else if (etatAvant) Program.TriggerHitmarker(false);
@@ -177,8 +206,8 @@ public class Weapon
         bool aToucheQuelqueChose = (distanceEffectiveMur < range || distanceEffectiveEnnemi < range);
         if (isBazooka && aToucheQuelqueChose)
         {
-            float explosionRadius = 6f;
-            int explosionResult = ExplodeAt(impactPoint, explosionRadius, damage, enemiesList);
+            float explosionRadius = RayonExplosion; // mutateur "Puissance explosions"
+            int explosionResult = ExplodeAt(impactPoint, explosionRadius, DegatsEffectifs, enemiesList);
             
             bool brokeAnyBarrel = Program.BreakBarrelsInRadius(impactPoint, explosionRadius);
             if (brokeAnyBarrel) Program.SwitchWeaponFromBarrel();
@@ -198,8 +227,10 @@ public class Weapon
             {
                 if (!enemy.isAlive) continue;
                 
-                // CORRECTION MÊLÉE : On centre sur la nouvelle hitbox (Le milieu de la boîte est à Y + 0.25f)
-                Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.25f, 0);
+                // MÊLÉE : on vise le milieu de la hitbox. Elle épouse la capsule (Y-1 à Y+1),
+                // son centre est donc la position du corps — plus le +0.25f d'avant, qui
+                // décalait la mêlée vers le chapeau.
+                Vector3 enemyCenter = enemy.GetPosition();
                 float dist = Vector3.Distance(physiqueStart, enemyCenter);
                 if (dist <= range)
                 {
@@ -209,7 +240,7 @@ public class Weapon
                     if (dot > 0.5f)
                     {
                         bool etatAvant = enemy.isAlive;
-                        enemy.TakeDamage(damage, physiqueStart);
+                        enemy.TakeDamage(DegatsEffectifs, physiqueStart);
                         if (etatAvant && !enemy.isAlive) Program.TriggerHitmarker(true);
                         else if (etatAvant) Program.TriggerHitmarker(false);
                     }
@@ -228,8 +259,8 @@ public class Weapon
         foreach (Enemy enemy in enemiesList)
         {
             if (!enemy.isAlive) continue;
-            // Le centre de la nouvelle hitbox virtuelle
-            Vector3 enemyCenter = enemy.GetPosition() + new Vector3(0, 0.25f, 0);
+            // Le centre de la hitbox virtuelle = le centre de la capsule physique
+            Vector3 enemyCenter = enemy.GetPosition();
             float distToEnemy = Vector3.Distance(center, enemyCenter);
             
             if (distToEnemy <= radius)
@@ -250,7 +281,8 @@ public class Weapon
     public void Reload()
     {
         // Ne pas permettre le rechargement si l'arme ne le nécessite pas
-        if (!requiresReload)
+        // (mutateur "Munitions : INFINIES" compris : on ne recharge plus jamais)
+        if (!BesoinDeRecharger)
             return;
 
         // Recharge uniquement si on appuie sur R ET qu'on n'est pas déjà en train de recharger
@@ -274,7 +306,7 @@ public class Weapon
             // Vérifier si le rechargement est terminé
             if ((float)Raylib.GetTime() - reloadStartTime >= reloadtime)
             {
-                ammo = maxammo;
+                ammo = MaxAmmoEffectif;
                 isReloading = false;
             }
         }

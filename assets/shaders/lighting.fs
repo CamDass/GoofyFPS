@@ -11,8 +11,13 @@ uniform vec4 colDiffuse;
 uniform vec3 lightPos;
 uniform vec4 lightColor;
 
-uniform vec3 viewPos; 
+uniform vec3 viewPos;
 uniform bool applyFog;
+
+// Portée du brouillard, pilotée par le mutateur "Distance de vue" (MatchRules).
+// Valeurs d'origine du jeu : 40 / 150. Le C# les repose à chaque frame.
+uniform float fogStart;
+uniform float fogEnd;
 
 out vec4 finalColor;
 
@@ -71,12 +76,13 @@ void main()
         // Calcul de la distance entre tes yeux et le mur
         float dist = length(viewPos - fragPosition);
         
-        // Réglages du brouillard (Tu pourras modifier ces chiffres !)
-        float fogStart = 40.0; // Le brouillard commence à 25 mètres
-        float fogEnd = 150.0;   // On ne voit plus rien à 100 mètres
-        
+        // Sécurité : si les uniformes n'ont pas encore été posés (0.0), on retombe
+        // sur les réglages historiques plutôt que de tout noyer dans le brouillard.
+        float debut = fogEnd > 1.0 ? fogStart : 40.0;
+        float fin   = fogEnd > 1.0 ? fogEnd   : 150.0;
+
         // On calcule un pourcentage d'opacité du brouillard (entre 0.0 et 1.0)
-        float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
+        float fogFactor = clamp((dist - debut) / max(fin - debut, 1.0), 0.0, 1.0);
         
         // Couleur du brouillard (C'est exactement le orange de ton Horizon de l'Étape 4 !)
         // Linéarisée pour rester dans le même espace que le reste du calcul (même rendu à l'écran).

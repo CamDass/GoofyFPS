@@ -27,7 +27,10 @@ public class Player
         if (!IsAlive) return; // On ne tape pas un cadavre !
 
         Health -= amount;
-        
+
+        // Mutateur "Régénération" : toute blessure relance le compte à rebours de 5 s.
+        Program.tempsSansDegats = 0f;
+
         // Effet visuel : overlay rouge
         Program.damageOverlayOpacity = 0.4f; // 40% d'opacité
         

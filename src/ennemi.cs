@@ -54,6 +54,8 @@ public class Enemy
     public int health;
     public float speed;
     public bool isAlive;
+    // Mutateur "Zombies explosifs" : tiré une fois à la naissance, ce zombie explose en mourant.
+    public bool explosif;
     public Vector3 regard = new Vector3(0, 0, 1); // direction "visuelle" LISSÉE (pour le rendu)
 
     public Sound attackSound;
@@ -166,7 +168,8 @@ public class Enemy
         {
             attaqueCeFrame = true;
             Program.PlaySound3D(attackSound, maPos, 15f);
-            Program.localPlayer.TakeDamage(10);
+            // La claque du zombie suit le mutateur "Dégâts", comme les armes.
+            Program.localPlayer.TakeDamage(Math.Max(1, (int)MathF.Round(10f * MatchRules.DegatsMul)));
             attackCooldown = 0.5f;
 
             // LE KNOCKBACK (réduit pour éviter les envolées verticales)
@@ -517,14 +520,17 @@ public class Enemy
 
         // Balistique : on monte assez haut pour passer (marge 2.5 m/s), puis on résout
         // le temps de vol t tel que dy = vy*t - g*t²/2, et la vitesse horizontale = dH/t.
-        float vy = MathF.Sqrt(2f * GRAVITE * MathF.Max(dy, 0f)) + 2.5f;
-        float t = (vy + MathF.Sqrt(vy * vy - 2f * GRAVITE * dy)) / GRAVITE;
+        // g suit le mutateur "Gravité" : sinon, en gravité lunaire, les zombies visent
+        // beaucoup trop haut et ratent systématiquement leur plateforme.
+        float g = GRAVITE * MatchRules.GraviteMul;
+        float vy = MathF.Sqrt(2f * g * MathF.Max(dy, 0f)) + 2.5f;
+        float t = (vy + MathF.Sqrt(vy * vy - 2f * g * dy)) / g;
         float vH = dH / t;
         if (vH > SAUT_VITESSE_H_MAX)
         {
             // Trop loin pour ce bond-là : on rallonge le temps de vol en sautant plus haut
             t = dH / SAUT_VITESSE_H_MAX;
-            vy = dy / t + 0.5f * GRAVITE * t;
+            vy = dy / t + 0.5f * g * t;
             vH = SAUT_VITESSE_H_MAX;
         }
 

@@ -462,7 +462,9 @@ partial class Program
         if (isServer && peer != null && IdExpediteur(peer, out int tireurId))
         {
             float maintenant = (float)Raylib.GetTime();
-            float cadence = weapons[packet.WeaponIndex].fireRate;
+            // La cadence de référence suit le mutateur "Cadence de tir" : sinon, un match
+            // en cadence x3 verrait tous les tirs légitimes rejetés par l'anti-triche.
+            float cadence = weapons[packet.WeaponIndex].CadenceEffective;
             if (dernierTirParJoueur.TryGetValue(tireurId, out float dernier)
                 && maintenant - dernier < cadence * NetConfig.ToleranceCadenceTir)
             {
@@ -511,17 +513,21 @@ partial class Program
             // Phase 3 : on bride les dégâts au maximum de l'arme que le tireur tient
             // réellement (vue par l'hôte via son dernier état). Un client modifié ne
             // peut donc pas envoyer un "one-shot" avec un pistolet.
+            // Le plafond suit le mutateur "Dégâts" (DegatsEffectifs) : en match x3, les
+            // vrais tirs passent, et un client modifié reste bridé au même maximum.
             int maxDegats = 300;
             if (remotePlayers.TryGetValue(senderId, out RemotePlayer tireur)
                 && tireur.WeaponIndex >= 0 && tireur.WeaponIndex < weapons.Count)
-                maxDegats = weapons[tireur.WeaponIndex].damage;
+                maxDegats = weapons[tireur.WeaponIndex].DegatsEffectifs;
             if (packet.Damage > maxDegats)
             {
                 Console.WriteLine($"[SÉCU] Dégâts {packet.Damage} > max {maxDegats} du joueur {senderId} -> bridés.");
                 packet.Damage = maxDegats;
             }
         }
-        packet.Damage = Math.Clamp(packet.Damage, 0, 300);
+        // Garde-fou absolu (S3). Le plafond doit rester au-dessus du pire cas légitime :
+        // arme la plus forte (100) x mutateur "Dégâts" au maximum (x5) = 500.
+        packet.Damage = Math.Clamp(packet.Damage, 0, 1000);
 
         if (packet.TargetId == myPlayerId)
         {
@@ -1080,7 +1086,8 @@ partial class Program
             // Sa barre de vie
             int barWidth = 60;
             int barHeight = 6;
-            float hpPercent = Math.Clamp(rp.Health / 100f, 0f, 1f);
+            // La barre se remplit par rapport à la vie max DU MATCH (mutateur "Vie maximale")
+            float hpPercent = Math.Clamp(rp.Health / (float)Math.Max(1, MatchRules.VieMax), 0f, 1f);
             int posX = (int)screenPos.X - barWidth / 2;
             int posY = (int)screenPos.Y;
             Raylib.DrawRectangle(posX, posY, barWidth, barHeight, Color.Red);
@@ -1129,8 +1136,12 @@ partial class Program
             {
                 if (!rp.HasState || rp.Health <= 0) continue;
 
+                // La MÊME boîte que pour les zombies (Weapon.Shoot) : elle épouse la
+                // capsule physique (Y-1 à Y+1). Elle s'arrête au sommet du crâne, donc
+                // un tir dans le chapeau ne touche personne : les cosmétiques ne portent
+                // aucune hitbox, ils ne bloquent rien et n'encaissent rien.
                 Vector3 minBox = rp.Position - new Vector3(0.5f, 1f, 0.5f);
-                Vector3 maxBox = rp.Position + new Vector3(0.5f, 1.5f, 0.5f);
+                Vector3 maxBox = rp.Position + new Vector3(0.5f, 1f, 0.5f);
                 BoundingBox hitbox = new BoundingBox(minBox, maxBox);
 
                 RayCollision collision = Raylib.GetRayCollisionBox(rayonTir, hitbox);
@@ -1143,7 +1154,7 @@ partial class Program
 
             if (meilleureCible != null)
             {
-                EnvoyerDegats(meilleureCible.Id, arme.damage);
+                EnvoyerDegats(meilleureCible.Id, arme.DegatsEffectifs);
                 TriggerHitmarker(false);
             }
         }
@@ -1155,14 +1166,15 @@ partial class Program
             {
                 if (!rp.HasState || rp.Health <= 0) continue;
 
-                Vector3 centre = rp.Position + new Vector3(0, 0.25f, 0);
+                // Le centre de la hitbox = le centre du corps (la boîte va de Y-1 à Y+1)
+                Vector3 centre = rp.Position;
                 float dist = Vector3.Distance(origine, centre);
                 if (dist <= arme.range)
                 {
                     Vector3 versLui = Vector3.Normalize(centre - origine);
                     if (Vector3.Dot(direction, versLui) > 0.5f)
                     {
-                        EnvoyerDegats(rp.Id, arme.damage);
+                        EnvoyerDegats(rp.Id, arme.DegatsEffectifs);
                         TriggerHitmarker(false);
                     }
                 }
@@ -1173,13 +1185,13 @@ partial class Program
         if (isBazooka)
         {
             Vector3 impact = origine + direction * distanceTir;
-            float explosionRadius = 6f;
+            float explosionRadius = Weapon.RayonExplosion; // mutateur "Puissance explosions"
             foreach (RemotePlayer rp in remotePlayers.Values)
             {
                 if (!rp.HasState || rp.Health <= 0) continue;
                 if (Vector3.Distance(impact, rp.Position) <= explosionRadius)
                 {
-                    EnvoyerDegats(rp.Id, arme.damage);
+                    EnvoyerDegats(rp.Id, arme.DegatsEffectifs);
                     TriggerHitmarker(false);
                 }
             }

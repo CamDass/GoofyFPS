@@ -453,8 +453,13 @@ partial class Program
                 }
                 ApplyMapTextures();
                 LoadMapSpawns(n);
-                // Réglages normaux (le tuto les modifie de son côté)
-                Program.maxZombies = 40;
+                // Les mutateurs prennent effet AVANT InitBarrels/InitEnnemis : ce sont eux
+                // qui fixent la gravité, la vie max, le nombre de barils et de zombies.
+                MatchRules.Appliquer();
+                // Après Appliquer : on repart à la vie MAX DU MATCH (sinon un passage de
+                // 100 à 250 PV dans les règles nous ferait démarrer à 100/250).
+                localPlayer.Respawn();
+                Program.chaosTimer = Program.ChaosPeriode;
                 Program.modeTuto = false;
                 barrelRespawnSeconds = 30f;
                 InitBarrels();
@@ -479,12 +484,27 @@ partial class Program
         int optY = startY + hauteurMap + 45;
 
         // Bouton TUTO
-        Rectangle boxTuto = new Rectangle(centreX - 95, optY, 190, 55);
+        Rectangle boxTuto = new Rectangle(centreX - 205, optY, 190, 55);
         bool focusTuto = MenuNav.Item(boxTuto, out bool clicTuto);
         Raylib.DrawRectangleRec(boxTuto, focusTuto ? Color.LightGray : Color.Gray);
         Raylib.DrawRectangleLinesEx(boxTuto, 3, focusTuto ? Color.White : Color.Black);
         int wTuto = Raylib.MeasureText("TUTO", 30);
-        Raylib.DrawText("TUTO", centreX - wTuto / 2, (int)boxTuto.Y + 13, 30, focusTuto ? Color.Black : Color.White);
+        Raylib.DrawText("TUTO", (int)boxTuto.X + (190 - wTuto) / 2, (int)boxTuto.Y + 13, 30, focusTuto ? Color.Black : Color.White);
+
+        // Bouton RÈGLES : les mêmes mutateurs qu'en ligne, mais pour ta partie solo
+        // (c'est là que les réglages "zombies" prennent tout leur sens).
+        Rectangle boxReglesSolo = new Rectangle(centreX + 15, optY, 190, 55);
+        bool focusRegles = MenuNav.Item(boxReglesSolo, out bool clicRegles);
+        Raylib.DrawRectangleRec(boxReglesSolo, focusRegles ? Color.LightGray : Color.Gray);
+        Raylib.DrawRectangleLinesEx(boxReglesSolo, 3, focusRegles ? Color.White : Color.Black);
+        int wRegles = Raylib.MeasureText("RÈGLES", 30);
+        Raylib.DrawText("RÈGLES", (int)boxReglesSolo.X + (190 - wRegles) / 2, (int)boxReglesSolo.Y + 13, 30,
+                        focusRegles ? Color.Black : (MatchRules.ReglesModifiees() ? Color.Gold : Color.White));
+        if (clicRegles)
+        {
+            Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
+            isReglesOpen = true;
+        }
         if (clicTuto)
         {
             // TUTORIEL : partie solo normale sur maptuto.glb, spawn fixe, sans aucun zombie.
@@ -518,6 +538,12 @@ partial class Program
             // Le tuto garde toujours ses zombies (section test des armes), quel que soit l'interrupteur.
             enemySpawnPoints.Clear();
             enemySpawnPoints.Add(new Vector3(11.5f, 15.8f, -223.4f));
+
+            // LE TUTO IGNORE LES MUTATEURS : on apprend le jeu avec les réglages d'usine
+            // (une gravité lunaire ou des munitions à 1 balle rendraient les paliers faux).
+            MatchRules.Reinitialiser();
+            MatchRules.Appliquer();
+            localPlayer.Respawn();
             Program.zombiesActifs = true;
             Program.maxZombies = 3;
 
@@ -547,20 +573,34 @@ partial class Program
 
         Rectangle boxSwitch = new Rectangle(centreX - 45, labelZY + 32, 90, 40);
         bool focusSwitch = MenuNav.Item(boxSwitch, out bool clicSwitch);
+
+        // L'interrupteur et le mutateur "Zombies max" sont LE MÊME réglage : on bascule
+        // entre 0 (aucun zombie) et la valeur par défaut. Impossible d'avoir un
+        // interrupteur sur ON et un curseur à 0 qui se contredisent.
+        MatchRules.Regle regleZombies = MatchRules.Get("zombies");
+        bool zombiesOn = MatchRules.ZombiesMax > 0;
         if (clicSwitch)
         {
-            Program.zombiesActifs = !Program.zombiesActifs;
+            MatchRules.Poser(regleZombies, zombiesOn ? 0f : regleZombies.Defaut);
+            MatchRules.Appliquer();
+            zombiesOn = MatchRules.ZombiesMax > 0;
             Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
         }
+
         // Interrupteur CARRÉ : piste rectangulaire (vert = activé, gris = désactivé) +
         // bouton carré coulissant (gauche = OFF, droite = ON) + contour blanc si focalisé.
-        Color pisteColor = Program.zombiesActifs ? new Color(70, 180, 70, 255) : new Color(90, 90, 90, 255);
+        Color pisteColor = zombiesOn ? new Color(70, 180, 70, 255) : new Color(90, 90, 90, 255);
         Raylib.DrawRectangleRec(boxSwitch, pisteColor);
         Raylib.DrawRectangleLinesEx(boxSwitch, focusSwitch ? 3 : 2, focusSwitch ? Color.White : Color.Black);
         int knobSize = (int)boxSwitch.Height - 8;
         int knobY = (int)boxSwitch.Y + 4;
-        int knobX = Program.zombiesActifs ? (int)(boxSwitch.X + boxSwitch.Width - knobSize - 4) : (int)(boxSwitch.X + 4);
+        int knobX = zombiesOn ? (int)(boxSwitch.X + boxSwitch.Width - knobSize - 4) : (int)(boxSwitch.X + 4);
         Raylib.DrawRectangle(knobX, knobY, knobSize, knobSize, Color.White);
+
+        // Rappel des mutateurs actifs, sous l'interrupteur
+        string resumeSolo = MatchRules.Resume(3);
+        Raylib.DrawText(resumeSolo, centreX - Raylib.MeasureText(resumeSolo, 20) / 2, (int)boxSwitch.Y + 54, 20,
+                        MatchRules.ReglesModifiees() ? new Color(180, 130, 30, 255) : Color.DarkGray);
 
         // ========================================================
         // 6. BOUTON RETOUR
@@ -632,11 +672,14 @@ partial class Program
         // ==========================================
         // 2. LES ONGLETS (Navigation)
         // ==========================================
-        Rectangle btnOnglet1 = new Rectangle(ecranLargeur / 2 - 220, 120, 200, 40);
-        Rectangle btnOnglet2 = new Rectangle(ecranLargeur / 2 + 20, 120, 200, 40);
+        // Trois onglets : GÉNÉRAL / RACCOURCIS / RÈGLES DU MATCH (lecture seule).
+        Rectangle btnOnglet1 = new Rectangle(ecranLargeur / 2 - 330, 120, 210, 40);
+        Rectangle btnOnglet2 = new Rectangle(ecranLargeur / 2 - 105, 120, 210, 40);
+        Rectangle btnOnglet3 = new Rectangle(ecranLargeur / 2 + 120, 120, 210, 40);
 
         bool focusOnglet1 = MenuNav.Item(btnOnglet1, out bool clicOnglet1);
         bool focusOnglet2 = MenuNav.Item(btnOnglet2, out bool clicOnglet2);
+        bool focusOnglet3 = MenuNav.Item(btnOnglet3, out bool clicOnglet3);
 
         // Onglet 1 — Paramètres Généraux (contour blanc = focalisé au clavier/manette)
         Color couleurOnglet1 = (ongletOptionActif == 0) ? Color.Red : Color.DarkGray;
@@ -652,8 +695,18 @@ partial class Program
         int w2 = Raylib.MeasureText("RACCOURCIS", 18);
         Raylib.DrawText("RACCOURCIS", (int)btnOnglet2.X + ((int)btnOnglet2.Width - w2) / 2, (int)btnOnglet2.Y + 11, 18, Color.White);
 
+        // Onglet 3 — Règles du match (toujours consultable, jamais modifiable ici :
+        // en pleine partie on VOIT les mutateurs choisis par l'hôte, on ne les change pas)
+        Color couleurOnglet3 = (ongletOptionActif == 2) ? Color.Red : Color.DarkGray;
+        Raylib.DrawRectangleRec(btnOnglet3, couleurOnglet3);
+        Raylib.DrawRectangleLinesEx(btnOnglet3, focusOnglet3 ? 3 : 2, focusOnglet3 ? Color.White : Color.Black);
+        int w3 = Raylib.MeasureText("RÈGLES", 18);
+        Raylib.DrawText("RÈGLES", (int)btnOnglet3.X + ((int)btnOnglet3.Width - w3) / 2, (int)btnOnglet3.Y + 11, 18,
+                        MatchRules.ReglesModifiees() ? Color.Gold : Color.White);
+
         if (clicOnglet1) ongletOptionActif = 0;
         if (clicOnglet2) ongletOptionActif = 1;
+        if (clicOnglet3) ongletOptionActif = 2;
 
         
 
@@ -718,9 +771,16 @@ partial class Program
                 if (MenuNav.Left)  Settings.MouseSensitivity = Math.Clamp(Settings.MouseSensitivity - 0.0005f, 0.001f, 0.01f);
             }
         }
-        else // --- PAGE RACCOURCIS ---
+        else if (ongletOptionActif == 1) // --- PAGE RACCOURCIS ---
         {
             DrawKeybindsMenu(debutX, debutY, ecranLargeur, ecranHauteur, souris);
+        }
+        else // --- PAGE RÈGLES DU MATCH (lecture seule) ---
+        {
+            // Même panneau que dans le salon, mais sans son fond, son titre ni son
+            // bouton FERMER : il s'insère sous les onglets des Paramètres.
+            DessinerPanneauRegles(editable: false, dessinerFond: false, avecTitre: false,
+                                  avecBoutonFermer: false, yDepart: 175);
         }
 
         // ==========================================
@@ -1310,6 +1370,9 @@ partial class Program
         // (screenId distinct par écran/onglet -> le focus repart du 1er bouton en changeant d'écran)
         int navScreenId = (int)Program.currentState * 1000;
         if (Program.currentState == Program.GameState.Options) navScreenId += ongletOptionActif;
+        // Le panneau des règles est un calque : c'est un "écran" à part entière pour la
+        // navigation (sinon le focus resterait sur les boutons cachés derrière).
+        if (isReglesOpen) navScreenId += 500;
         // (Skin : on NE remet PAS le focus en changeant d'onglet -> MenuCustomization gère le focus
         //  lui-même pour rester dans la catégorie validée.)
         MenuNav.Begin(navScreenId, Program.currentState == Program.GameState.Options);
@@ -1428,6 +1491,17 @@ partial class Program
 
             case Program.GameState.ChoiceMap:
                 // --- 4. TA SÉLECTION DE MAP ---
+                // En solo, les mutateurs sont réglables : c'est ta partie.
+                if (isReglesOpen)
+                {
+                    Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
+                    if (DessinerPanneauRegles(true))
+                    {
+                        Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                        isReglesOpen = false;
+                    }
+                    break;
+                }
                 ChoiceMap();
                 break;
 
@@ -1590,7 +1664,22 @@ partial class Program
             
             case Program.GameState.Lobby:
                 Raylib.DrawTextureEx(BlurBackground, BackgroundPos, 0f, 1f, Color.White);
-                
+
+                // ==========================================
+                // LE PANNEAU DES RÈGLES (modal plein écran)
+                // ==========================================
+                // Seul l'HÔTE peut régler ; le joueur qui a rejoint voit exactement les
+                // mêmes valeurs, mais sans les boutons [-] / [+].
+                if (isReglesOpen)
+                {
+                    if (DessinerPanneauRegles(Program.isServer))
+                    {
+                        Program.PlaySoundWithPriority(unselect, Program.SoundPriority.Low);
+                        isReglesOpen = false;
+                    }
+                    break;
+                }
+
                 // 1. AFFICHAGE DU NOM DE LA PARTIE (Dynamique)
                 string titreSalon = $"{Program.hostMatchName.ToUpper()}";
                 Raylib.DrawText(titreSalon, Raylib.GetScreenWidth()/2 - Raylib.MeasureText(titreSalon, 40)/2, 60, 40, Color.Black);
@@ -1713,12 +1802,20 @@ partial class Program
                 // LES BOUTONS D'ACTION (En bas)
                 // ==========================================
                 
-                // Bouton OPTIONS (Commun)
-                if (DrawButton((int)zoneMap.X, (int)zoneMap.Y + (int)zoneMap.Height + 30, 250, 60, "OPTIONS"))
+                // Bouton RÈGLES (commun) — c'était l'ancien bouton "OPTIONS" qui ouvrait
+                // un calque que personne ne dessinait dans le salon (donc sans effet).
+                // Il ouvre maintenant les mutateurs de match : réglables par l'hôte,
+                // consultables par tout le monde.
+                string libelleRegles = Program.isServer ? "RÈGLES DU MATCH" : "VOIR LES RÈGLES";
+                if (DrawButton((int)zoneMap.X, (int)zoneMap.Y + (int)zoneMap.Height + 30, 320, 60, libelleRegles))
                 {
                     Program.PlaySoundWithPriority(select, Program.SoundPriority.Low);
-                    isOptionsMenuOpen = true;
+                    isReglesOpen = true;
                 }
+                // Un rappel des réglages non standard, directement sous le bouton
+                Raylib.DrawText(MatchRules.Resume(2), (int)zoneMap.X + 4,
+                                (int)zoneMap.Y + (int)zoneMap.Height + 96, 18,
+                                MatchRules.ReglesModifiees() ? Color.Gold : Color.LightGray);
 
                 // Bouton central d'action (LANCER pour l'host, PRÊT pour le client)
                 if (Program.isServer)

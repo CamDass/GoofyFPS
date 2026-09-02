@@ -143,6 +143,8 @@ public partial class Program
     static int lightColorLoc;
     static int viewPosLoc;
     public static int applyFogLoc;
+    // Portée du brouillard (mutateur "Distance de vue")
+    public static int fogStartLoc, fogEndLoc;
 
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
@@ -229,7 +231,7 @@ public partial class Program
 
     // Variables de mouvement
     static int NbJump = 2; 
-    static int NbJumpMax = 1; 
+    public static int NbJumpMax = 1; 
 
     static bool CanDash = true;
     static float dashChrono = 0;
@@ -253,6 +255,8 @@ public partial class Program
     // GESTIONNAIRE DE SURVIE ET SPAWNS
     // ========================================================
     public static float survivalTime = 0f;
+    // Temps écoulé depuis le dernier dégât reçu (mutateur "Régénération").
+    public static float tempsSansDegats = 0f;
     // Solo : active/désactive l'apparition des zombies (réglé par l'interrupteur du menu Solo).
     public static bool zombiesActifs = true;
     // Nombre max de zombies simultanés (40 en solo normal, 3 dans le tuto).
@@ -691,6 +695,8 @@ public partial class Program
         netProcessor.SubscribeReusable<Packets.ToggleReadyPacket, NetPeer>(OnReadyPacketReceived);
         netProcessor.SubscribeNetSerializable<Packets.LobbyStatePacket, NetPeer>(OnLobbyStateReceived);
         netProcessor.SubscribeReusable<Packets.StartGamePacket, NetPeer>(OnStartGameReceived);
+        // Les mutateurs de match (gravité, dégâts, armes autorisées...) : hôte -> clients
+        netProcessor.SubscribeNetSerializable<Packets.MatchRulesPacket, NetPeer>(OnMatchRulesReceived);
         // Abonnements aux paquets de la partie en cours (positions, tirs, dégâts...)
         EnregistrerPaquetsEnJeu();
 
@@ -960,6 +966,11 @@ public partial class Program
 
         // On envoie le colis à tous les clients connectés
         netManager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
+
+        // Le salon vient de changer (arrivée, départ, map...) : on en profite pour
+        // resynchroniser les mutateurs. Un nouveau venu voit donc tout de suite les
+        // règles de l'hôte dans son panneau (en lecture seule).
+        HoteDiffuserRegles();
     }
 
 
@@ -974,8 +985,11 @@ public partial class Program
     remoteShots.Clear();
     killCount = 0; deathCount = 0;
     modeTuto = false;      // sécurité : on sort du mode tuto en rejoignant une partie en ligne
-    maxZombies = 40;
-    localPlayer.Respawn(); // On repart avec toute sa vie
+
+    // Les mutateurs de l'hôte sont déjà arrivés (ils partent AVANT le StartGame et
+    // AVANT le MatchInfo du hot-join) : on les applique avant de peupler la map.
+    MatchRules.Appliquer();
+    localPlayer.Respawn(); // On repart avec toute sa vie (à la vie max du match)
 
     // Les chemins de tes maps
     string[] ModelMapPath = { "assets/models/maps/test.glb", "assets/models/maps/map.glb", "assets/models/maps/sandbox.glb", "assets/models/maps/blockmap.glb" };
@@ -1187,6 +1201,10 @@ public static void GenererPhysiqueMap(Model modele)
         // dotnet run -- --skintest [filtre] : aligne tous les chapeaux/visages et screenshot
         // (le filtre ajoute un gros plan du chapeau correspondant, ex: --skintest robot)
         if (args.Length > 0 && args[0] == "--skintest") { LancerSkinTest(args.Length > 1 ? args[1] : ""); return; }
+        // dotnet run -- --reglestest : rend le panneau des mutateurs (hôte / client / preset)
+        if (args.Length > 0 && args[0] == "--reglestest") { LancerReglesTest(); return; }
+        // dotnet run -- --hitboxtest : la hitbox de tir face aux chapeaux (purement cosmétiques)
+        if (args.Length > 0 && args[0] == "--hitboxtest") { LancerHitboxTest(); return; }
 
         //Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
         Raylib.InitWindow(LargeurFenetre, HauteurFenetre, "GoofyFPS");
@@ -1310,6 +1328,8 @@ public static void GenererPhysiqueMap(Model modele)
         lightColorLoc = Raylib.GetShaderLocation(lightShader, "lightColor");
         viewPosLoc = Raylib.GetShaderLocation(lightShader, "viewPos");
         applyFogLoc = Raylib.GetShaderLocation(lightShader, "applyFog");
+        fogStartLoc = Raylib.GetShaderLocation(lightShader, "fogStart");
+        fogEndLoc = Raylib.GetShaderLocation(lightShader, "fogEnd");
         
         // APPLICATION DE LA LUMIÈRE SUR TOUTE LA CARTE ET LES ARMES
         unsafe
@@ -1460,6 +1480,25 @@ public static void GenererPhysiqueMap(Model modele)
         // Aucun impact en usage normal.
         // ==========================================
         bool modeTestAuto = Environment.GetEnvironmentVariable("GOOFY_AUTOHOST") == "1";
+
+        // GOOFY_RULES="gravite=0.35,vie=25,munitions=0" : pose des mutateurs sans passer
+        // par le menu. Sert aux tests bout-en-bout de la synchro hôte -> client.
+        string reglesTest = Environment.GetEnvironmentVariable("GOOFY_RULES");
+        if (!string.IsNullOrEmpty(reglesTest))
+        {
+            foreach (string paire in reglesTest.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string[] kv = paire.Split('=');
+                if (kv.Length != 2 || !float.TryParse(kv[1], System.Globalization.NumberStyles.Float,
+                                                      System.Globalization.CultureInfo.InvariantCulture, out float v))
+                { Console.WriteLine($"[TEST-AUTO] Règle illisible : \"{paire}\""); continue; }
+                MatchRules.Regle r = MatchRules.Get(kv[0].Trim());
+                if (r == null) { Console.WriteLine($"[TEST-AUTO] Règle inconnue : \"{kv[0]}\""); continue; }
+                MatchRules.Poser(r, v);
+            }
+            MatchRules.Appliquer();
+            Console.WriteLine($"[TEST-AUTO] Mutateurs imposés : {MatchRules.Resume(6)}");
+        }
         // Réglages de match pour les tests auto (limite de temps / de score courtes)
         if (int.TryParse(Environment.GetEnvironmentVariable("GOOFY_MATCHTIME"), out int mt)) matchTimeLimitConfig = mt;
         if (int.TryParse(Environment.GetEnvironmentVariable("GOOFY_SCORELIMIT"), out int sl)) matchScoreLimitConfig = sl;

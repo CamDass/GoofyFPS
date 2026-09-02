@@ -202,6 +202,38 @@ public class Packets
         public int ElapsedSec { get; set; }
     }
 
+    // HÔTE -> TOUS : LES MUTATEURS DE MATCH (gravité, dégâts, munitions, armes...)
+    // Le corps du paquet est simplement la liste des valeurs de MatchRules.Liste, DANS
+    // L'ORDRE DE DÉCLARATION. C'est pour ça qu'on n'insère jamais une règle au milieu de
+    // la liste : on l'ajoute à la fin, et une version plus ancienne se contente d'ignorer
+    // les valeurs qu'elle ne connaît pas (les siennes restent à leur défaut).
+    // S3 : compteur plafonné avant allocation, valeurs re-bornées à la réception.
+    public struct MatchRulesPacket : INetSerializable
+    {
+        public const int MaxRegles = 64;
+
+        public byte Version;
+        public float[] Valeurs;
+
+        public void Serialize(NetDataWriter writer)
+        {
+            writer.Put(MatchRules.VersionReseau);
+            int n = Valeurs?.Length ?? 0;
+            if (n > MaxRegles) n = MaxRegles;
+            writer.Put((byte)n);
+            for (int i = 0; i < n; i++) writer.Put(Valeurs[i]);
+        }
+
+        public void Deserialize(NetDataReader reader)
+        {
+            Version = reader.GetByte();
+            int n = reader.GetByte();
+            if (n > MaxRegles) n = MaxRegles;
+            Valeurs = new float[n];
+            for (int i = 0; i < n; i++) Valeurs[i] = reader.GetFloat();
+        }
+    }
+
     // HÔTE -> CLIENT (hot-join) : les murs déjà posés, par lots (S4 : borné à 30/paquet)
     public struct WallBatchPacket : INetSerializable
     {
