@@ -1,5 +1,6 @@
 bin/
 obj/
+publish/
 skin.cfg
 skintest-hats.png
 skintest-faces.png
