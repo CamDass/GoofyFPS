@@ -760,7 +760,38 @@ static void InitBarrels()
             Raylib.EndDrawing();
 
             if (deathRespawnTimer > 0)
+            {
+                // On continue de faire tourner la physique ET le réseau pendant le
+                // countdown (même code que le tick unifié 64 Hz plus bas, dupliqué ici
+                // avec sa propre BodyReference car `espionCube` n'est pas encore
+                // déclarée à ce stade de la frame). Sans ça, `simulation.Timestep` et
+                // `TickReseauEnJeu` ne tournent plus du tout pendant les 1.5s de mort :
+                // toute la simulation se fige, et côté hôte, plus personne ne reçoit le
+                // snapshot du monde (tout le monde se fige en ligne, pas seulement celui
+                // qui vient de mourir). On ne fait ça que tant qu'on reste mort : la
+                // frame du respawn retombe plus bas dans le tick unifié habituel, pour
+                // ne pas consommer deltaTime deux fois.
+                if (!isPaused || isOnline)
+                {
+                    BodyReference corpsDuMort = simulation.Bodies.GetBodyReference(PlayerId);
+                    tickAccumulateur += deltaTime;
+                    if (tickAccumulateur > 0.25f) tickAccumulateur = 0.25f;
+
+                    while (tickAccumulateur >= NetConfig.TickDt)
+                    {
+                        tickAccumulateur -= NetConfig.TickDt;
+                        posJoueurTickPrec = lissageCamInitialise ? posJoueurTickCour : corpsDuMort.Pose.Position;
+                        simulation.Timestep(NetConfig.TickDt);
+                        posJoueurTickCour = corpsDuMort.Pose.Position;
+                        lissageCamInitialise = true;
+
+                        if (isOnline)
+                            TickReseauEnJeu(posJoueurTickCour, CameraYaw, CameraPitch);
+                    }
+                }
+
                 return;
+            }
 
             if (isOnline)
                 AnnoncerMaMort();
@@ -774,7 +805,10 @@ static void InitBarrels()
             joueurVivant.Pose.Position = nouveauSpawn;
             joueurVivant.Velocity.Linear = Vector3.Zero;
             joueurVivant.Velocity.Angular = Vector3.Zero;
-                
+
+            // Pas de `return` ici : IsAlive vient de repasser à `true`, donc le reste de
+            // la frame (mouvement, rendu) s'exécute normalement à partir du nouveau spawn,
+            // exactement comme avant ce correctif.
         }
 
         // Le changement d'arme se fait désormais uniquement via les barrils touchés
