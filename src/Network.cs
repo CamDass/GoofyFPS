@@ -42,6 +42,7 @@ partial class Program
         public float Yaw;
         public float Pitch;
         public int Health = 100;
+        public bool IsAlive = true;
         public bool HasState;           // Tant qu'on n'a reçu aucune position, on ne le dessine pas
         public int Kills;
         public int Deaths;
@@ -564,7 +565,11 @@ partial class Program
         }
         else
         {
-            ObtenirJoueurDistant(packet.VictimId).Deaths++;
+            RemotePlayer victime = ObtenirJoueurDistant(packet.VictimId);
+            victime.Deaths++;
+            victime.IsAlive = false;
+            victime.HasState = false;
+            victime.Tampon.Clear();
         }
 
         if (packet.KillerId == myPlayerId)
@@ -787,6 +792,8 @@ partial class Program
         rp.Pitch = pitch;
         rp.Lean = lean;
         rp.Health = resultatDiscret.Health;
+        if (!rp.IsAlive && rp.Health >= Math.Max(1, MatchRules.VieMax))
+            rp.IsAlive = true;
         rp.WeaponIndex = resultatDiscret.WeaponIndex;
         rp.IsAiming = resultatDiscret.Vise;
         // Détection du DÉBUT d'un rechargement (front montant) -> on lance l'animation localement
@@ -855,7 +862,7 @@ partial class Program
     {
         foreach (RemotePlayer rp in remotePlayers.Values)
         {
-            if (!rp.HasState) continue;
+            if (!rp.HasState || !rp.IsAlive) continue;
 
             // Le personnage complet avec son skin : couleur, chapeau et tête !
             // (+ le penchement wall-run, purement visuel)
@@ -1069,7 +1076,7 @@ partial class Program
     {
         foreach (RemotePlayer rp in remotePlayers.Values)
         {
-            if (!rp.HasState) continue;
+            if (!rp.HasState || !rp.IsAlive) continue;
 
             Vector3 tete = rp.Position + new Vector3(0, 1.4f, 0);
             Vector3 versJoueur = tete - cam.Position;
