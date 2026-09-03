@@ -64,6 +64,7 @@ public class Player
     {
         IsAlive = false;
         Health = 0;
+        Program.deathRespawnTimer = 1.5f;
         Program.deathCount += 1;
         Console.WriteLine("[INFO] Le joueur est mort !");
     }

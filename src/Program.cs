@@ -148,6 +148,7 @@ public partial class Program
 
     // Overlay de dégâts
     public static float damageOverlayOpacity = 0f;
+    public static float deathRespawnTimer = 0f;
     public static Sound hitSound, weaponSwitchSound, reloadSound, noAmmoSound, groundImpactSound;
     public static Sound hitmarkerSound, killSound;
     public static Sound dashNotifSound, wallNotifSound;

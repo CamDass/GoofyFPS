@@ -738,63 +738,46 @@ static void InitBarrels()
             }
         }
 
+        float deltaTime = Raylib.GetFrameTime();
+
         if (!localPlayer.IsAlive)
         {
-            if (!isOnline)
-            {
-                Raylib.BeginDrawing();
-                Raylib.ClearBackground(Color.Black);
-                Raylib.DrawText("VOUS ÊTES MORT...", LargeurFenetre / 2 - 200, HauteurFenetre / 2 - 50, 50, Color.Red);
-                Raylib.DrawText($"Vous avez survécu {MathF.Floor(survivalTime)} secondes", LargeurFenetre / 2 - 210, HauteurFenetre / 2 + 25, 30, Color.White);
-                Raylib.DrawText("Appuyez sur ENTREE pour quitter", LargeurFenetre / 2 - 200, HauteurFenetre / 2 + 100, 25, Color.LightGray);
-                Raylib.EndDrawing();
+            deathRespawnTimer -= deltaTime;
 
-                if (KeyBinds.IsMenuConfirmPressed())
-                {
-                    localPlayer.Respawn();
+            Raylib.BeginDrawing();
+            Raylib.ClearBackground(Color.Black);
 
-                    BodyReference joueurMort = simulation.Bodies.GetBodyReference(PlayerId);
-                    joueurMort.Pose.Position = new Vector3(0, 50, 0); 
-                    joueurMort.Velocity.Linear = Vector3.Zero;
-                    
-                    Program.currentState = Program.GameState.MainMenu; 
-                    Raylib.EnableCursor();
-                    Raylib.StopSound(Program.windSound);
-                }
-                
-                // 3. IMPORTANT : On stoppe l'exécution de BouclePrincipale ici pour figer le jeu
+            const string messageMort = "Vous êtes mort";
+            int messageLargeur = Raylib.MeasureText(messageMort, 50);
+            Raylib.DrawText(messageMort, (LargeurFenetre - messageLargeur) / 2, HauteurFenetre / 2 - 50, 50, Color.Red);
+
+            string compteARebours = deathRespawnTimer > 0
+                ? $"Réapparition dans {MathF.Ceiling(deathRespawnTimer)}"
+                : "Réapparition...";
+            int compteLargeur = Raylib.MeasureText(compteARebours, 30);
+            Raylib.DrawText(compteARebours, (LargeurFenetre - compteLargeur) / 2, HauteurFenetre / 2 + 25, 30, Color.White);
+
+            Raylib.EndDrawing();
+
+            if (deathRespawnTimer > 0)
                 return;
-            }
-            else
-            {
-                // 0. On annonce notre mort aux autres joueurs (pour le tableau des scores)
+
+            if (isOnline)
                 AnnoncerMaMort();
 
-                // 1. On réinitialise la vie du joueur
-                localPlayer.Respawn();
+            localPlayer.Respawn();
 
-                // 2. On choisit un index au hasard dans ta liste de spawns existante
-                int indexAleatoire = Raylib.GetRandomValue(0, listeSpawns.Count - 1);
-                Vector3 nouveauSpawn = listeSpawns[indexAleatoire];
-
-                // 3. On récupère le corps physique de ton joueur dans BEPU
-                BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
-                
-                // 4. On le téléporte aux nouvelles coordonnées
-                joueurVivant.Pose.Position = nouveauSpawn;
-                
-                // 5. TRÈS IMPORTANT : On remet sa vitesse à zéro ! 
-                // S'il est mort en tombant dans le vide, il faut annuler sa vitesse de chute 
-                // sinon il va s'écraser au sol dès son apparition.
-                joueurVivant.Velocity.Linear = Vector3.Zero;
-                joueurVivant.Velocity.Angular = Vector3.Zero;
-            }
+            Vector3 nouveauSpawn = listeSpawns.Count > 0
+                ? listeSpawns[Raylib.GetRandomValue(0, listeSpawns.Count - 1)]
+                : new Vector3(0, 10, 0);
+            BodyReference joueurVivant = simulation.Bodies.GetBodyReference(PlayerId);
+            joueurVivant.Pose.Position = nouveauSpawn;
+            joueurVivant.Velocity.Linear = Vector3.Zero;
+            joueurVivant.Velocity.Angular = Vector3.Zero;
                 
         }
 
         // Le changement d'arme se fait désormais uniquement via les barrils touchés
-
-        float deltaTime = Raylib.GetFrameTime(); 
 
         // ==========================================
         // LE MOTEUR AUDIO DUCKING (Effet Bouchon d'oreille)
